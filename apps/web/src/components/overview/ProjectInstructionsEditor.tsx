@@ -21,6 +21,7 @@ import { Button } from "../ui/button";
 import { Label } from "../ui/label";
 import { Spinner } from "../ui/spinner";
 import { Textarea } from "../ui/textarea";
+import { ProjectModelDefaultsFields } from "./ProjectModelDefaults";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 
 const FIELDS = [
@@ -94,6 +95,7 @@ export function ProjectInstructionsEditor(props: {
 
   return (
     <div data-project-instructions className="flex flex-col gap-4">
+      <ProjectModelDefaultsFields environmentId={environmentId} projectId={projectId} />
       {FIELDS.map(({ key, label, placeholder }) => {
         const length = shown[key].length;
         return (

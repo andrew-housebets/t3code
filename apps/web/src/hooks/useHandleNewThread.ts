@@ -15,6 +15,7 @@ import {
 } from "../composerDraftStore";
 import { newDraftId, newThreadId } from "../lib/utils";
 import { useCoordinatorStore } from "../components/overview/coordinatorStore";
+import { readCoordinatorModelDefault } from "../components/overview/projectModelDefaults";
 import { orderItemsByPreferredIds } from "../components/Sidebar.logic";
 import {
   deriveLogicalProjectKeyFromSettings,
@@ -127,6 +128,13 @@ export function createNewThreadHandler(router: AnyRouter) {
     // Never over text the user wrote: a draft can gain some while this awaits.
     const seedDraft = (draftId: DraftId) => {
       useCoordinatorStore.getState().markDraft(draftId, options?.coordinator === true);
+      if (options?.coordinator === true) {
+        void readCoordinatorModelDefault(projectRef.environmentId, projectRef.projectId).then(
+          (selection) => {
+            if (selection !== null) setModelSelection(draftId, selection, { explicit: true });
+          },
+        );
+      }
       if (options?.prompt === undefined) return;
       if (composerDraftHasUserContent(getComposerDraft(draftId))) return;
       setPrompt(draftId, options.prompt);

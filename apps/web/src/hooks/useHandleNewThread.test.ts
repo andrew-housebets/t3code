@@ -234,6 +234,9 @@ vi.mock("../state/entities", () => {
   };
 });
 vi.mock("../state/projects", () => ({ defaultProjectFallbackReadyAtom: () => true }));
+vi.mock("../components/overview/projectModelDefaults", () => ({
+  readCoordinatorModelDefault: async () => null,
+}));
 vi.mock("../state/olderSettledShelf", () => ({ readUnloadedThreadCount: () => 0 }));
 vi.mock("../state/presentation", () => ({
   environmentSummaries: { connectedEnvironmentIdsAtom: "connected-environment-ids" },

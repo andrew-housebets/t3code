@@ -180,6 +180,20 @@ export function createProjectEnvironmentAtoms<R, E>(
         key: ({ environmentId, input }) => JSON.stringify([environmentId, input.projectId]),
       },
     }),
+    readModelDefaults: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:projects:read-model-defaults",
+      tag: WS_METHODS.projectContextReadModelDefaults,
+      staleTimeMs: 0,
+    }),
+    writeModelDefaults: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:projects:write-model-defaults",
+      tag: WS_METHODS.projectContextWriteModelDefaults,
+      scheduler: projectScheduler,
+      concurrency: {
+        mode: "serial",
+        key: ({ environmentId, input }) => JSON.stringify([environmentId, input.projectId]),
+      },
+    }),
     readContext: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:projects:read-context",
       tag: WS_METHODS.projectContextRead,
