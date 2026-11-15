@@ -46,6 +46,8 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.projectsCreateFromThread]: AuthOrchestrationOperateScope,
   // Every thread the project delegates afterwards starts with what this writes.
   [WS_METHODS.projectContextWrite]: AuthOrchestrationOperateScope,
+  // Every coordinator draft and delegated thread in the project starts on what this saves.
+  [WS_METHODS.projectContextWriteModelDefaults]: AuthOrchestrationOperateScope,
   // Both write files on the host, into the project's Library.
   [WS_METHODS.projectContextAddLibraryFile]: AuthFilesystemWriteScope,
   [WS_METHODS.projectContextRemoveLibraryFile]: AuthFilesystemWriteScope,

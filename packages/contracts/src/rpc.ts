@@ -423,6 +423,8 @@ import {
   ProjectLibraryAddResult,
   ProjectLibraryFileExistsError,
   ProjectLibraryRemoveInput,
+  ProjectModelDefaults,
+  ProjectModelDefaultsWriteInput,
 } from "./projectContext.ts";
 
 export const WS_METHODS = {
@@ -435,6 +437,8 @@ export const WS_METHODS = {
   projectContextListArtifacts: "projectContext.listArtifacts",
   projectContextAddLibraryFile: "projectContext.addLibraryFile",
   projectContextRemoveLibraryFile: "projectContext.removeLibraryFile",
+  projectContextReadModelDefaults: "projectContext.readModelDefaults",
+  projectContextWriteModelDefaults: "projectContext.writeModelDefaults",
   projectContextRead: "projectContext.read",
   projectContextWrite: "projectContext.write",
   projectsMutate: "projects.mutate",
@@ -1439,6 +1443,21 @@ const WsProjectContextRemoveLibraryFileRpc = Rpc.make(WS_METHODS.projectContextR
   error: Schema.Union([ProjectContextError, EnvironmentAuthorizationError]),
 });
 
+const WsProjectContextReadModelDefaultsRpc = Rpc.make(WS_METHODS.projectContextReadModelDefaults, {
+  payload: ProjectContextInput,
+  success: ProjectModelDefaults,
+  error: Schema.Union([ProjectContextError, EnvironmentAuthorizationError]),
+});
+
+const WsProjectContextWriteModelDefaultsRpc = Rpc.make(
+  WS_METHODS.projectContextWriteModelDefaults,
+  {
+    payload: ProjectModelDefaultsWriteInput,
+    success: ProjectModelDefaults,
+    error: Schema.Union([ProjectContextError, EnvironmentAuthorizationError]),
+  },
+);
+
 const WsProjectContextReadRpc = Rpc.make(WS_METHODS.projectContextRead, {
   payload: ProjectContextInput,
   success: ProjectContextFiles,
@@ -2293,6 +2312,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectContextListArtifactsRpc,
   WsProjectContextAddLibraryFileRpc,
   WsProjectContextRemoveLibraryFileRpc,
+  WsProjectContextReadModelDefaultsRpc,
+  WsProjectContextWriteModelDefaultsRpc,
   WsProjectContextReadRpc,
   WsProjectContextWriteRpc,
   WsProjectsMutateRpc,

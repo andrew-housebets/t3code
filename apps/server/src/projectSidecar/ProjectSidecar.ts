@@ -4,11 +4,13 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Migrator from "effect/sql/Migrator";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
+import { ModelSelection, type ProjectModelDefaults } from "@t3tools/contracts";
 
 import * as ServerConfig from "../config.ts";
 
@@ -49,6 +51,15 @@ export interface ProjectLibraryFile {
   readonly sizeBytes: number | null;
 }
 
+const NO_MODEL_DEFAULTS: ProjectModelDefaults = {
+  coordinatorModelSelection: null,
+  threadModelSelection: null,
+};
+
+const ModelSelectionJson = Schema.fromJsonString(ModelSelection);
+const decodeModelSelection = Schema.decodeUnknownOption(ModelSelectionJson);
+const encodeModelSelection = Schema.encodeEffect(ModelSelectionJson);
+
 const projectArtifactId = (source: ProjectArtifactSource, path: string) =>
   `${source === "html_render" ? "render" : "file"}:${path}`;
 
@@ -77,6 +88,14 @@ export class ProjectSidecar extends Context.Reference<{
     projectId: string,
     ids: ReadonlyArray<string>,
   ) => Effect.Effect<void, ProjectSidecarError>;
+  /** A stored selection that no longer decodes reads as null. */
+  readonly getModelDefaults: (
+    projectId: string,
+  ) => Effect.Effect<ProjectModelDefaults, ProjectSidecarError>;
+  readonly setModelDefaults: (
+    projectId: string,
+    defaults: ProjectModelDefaults,
+  ) => Effect.Effect<ProjectModelDefaults, ProjectSidecarError>;
   /** Drops rows of projects or threads that no longer exist, unless written at or after `before`. */
   readonly prune: (live: {
     readonly projectIds: ReadonlyArray<string>;
@@ -89,6 +108,11 @@ export class ProjectSidecar extends Context.Reference<{
     listArtifacts: () => Effect.succeed([]),
     syncLibraryFiles: () => Effect.void,
     removeArtifacts: () => Effect.void,
+    getModelDefaults: () => Effect.succeed(NO_MODEL_DEFAULTS),
+    setModelDefaults: () =>
+      Effect.fail(
+        new ProjectSidecarError({ operation: "save model defaults", cause: "unavailable" }),
+      ),
     prune: () => Effect.succeed(0),
   }),
 }) {}
@@ -293,6 +317,47 @@ const make = Effect.gen(function* () {
     );
   });
 
+  const getModelDefaults = Effect.fn("ProjectSidecar.getModelDefaults")(function* (
+    projectId: string,
+  ) {
+    const [row] = yield* sql<{
+      readonly thread_model_selection_json: string | null;
+      readonly coordinator_model_selection_json: string | null;
+    }>`
+      SELECT thread_model_selection_json, coordinator_model_selection_json
+      FROM project_settings WHERE project_id = ${projectId}
+    `.pipe(failed("read model defaults"));
+    const decoded = (json: string | null | undefined) =>
+      json == null ? null : Option.getOrNull(decodeModelSelection(json));
+    return {
+      coordinatorModelSelection: decoded(row?.coordinator_model_selection_json),
+      threadModelSelection: decoded(row?.thread_model_selection_json),
+    };
+  });
+
+  const setModelDefaults = Effect.fn("ProjectSidecar.setModelDefaults")(function* (
+    projectId: string,
+    defaults: ProjectModelDefaults,
+  ) {
+    const now = yield* nowIso;
+    const encoded = (selection: ModelSelection | null) =>
+      selection === null ? Effect.succeed(null) : encodeModelSelection(selection);
+    yield* Effect.gen(function* () {
+      const thread = yield* encoded(defaults.threadModelSelection);
+      const coordinator = yield* encoded(defaults.coordinatorModelSelection);
+      yield* sql`
+        INSERT INTO project_settings
+          (project_id, thread_model_selection_json, coordinator_model_selection_json, updated_at)
+        VALUES (${projectId}, ${thread}, ${coordinator}, ${now})
+        ON CONFLICT (project_id) DO UPDATE SET
+          thread_model_selection_json = excluded.thread_model_selection_json,
+          coordinator_model_selection_json = excluded.coordinator_model_selection_json,
+          updated_at = excluded.updated_at
+      `;
+    }).pipe(failed("save model defaults"));
+    return defaults;
+  });
+
   const prune = Effect.fn("ProjectSidecar.prune")(function* (live: {
     readonly projectIds: ReadonlyArray<string>;
     readonly threadIds: ReadonlyArray<string>;
@@ -325,7 +390,15 @@ const make = Effect.gen(function* () {
     }).pipe(failed("prune"));
   });
 
-  return { recordArtifacts, listArtifacts, syncLibraryFiles, removeArtifacts, prune };
+  return {
+    recordArtifacts,
+    listArtifacts,
+    syncLibraryFiles,
+    removeArtifacts,
+    getModelDefaults,
+    setModelDefaults,
+    prune,
+  };
 });
 
 const layerClient = Layer.unwrap(

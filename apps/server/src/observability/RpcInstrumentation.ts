@@ -161,6 +161,8 @@ const RPC_AGGREGATES = {
   [WS_METHODS.projectContextListArtifacts]: "workspace",
   [WS_METHODS.projectContextAddLibraryFile]: "workspace",
   [WS_METHODS.projectContextRemoveLibraryFile]: "workspace",
+  [WS_METHODS.projectContextReadModelDefaults]: "workspace",
+  [WS_METHODS.projectContextWriteModelDefaults]: "workspace",
   [WS_METHODS.projectContextRead]: "workspace",
   [WS_METHODS.projectContextWrite]: "workspace",
   [WS_METHODS.projectsListIgnoredFiles]: "workspace",

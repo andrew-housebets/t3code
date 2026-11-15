@@ -170,6 +170,7 @@ import {
 } from "./orchestration-v2/WireProjection.ts";
 import { dedupeSnapshotBodies } from "@t3tools/shared/orchestrationV2DedupedBodies";
 import * as ProjectContext from "./projectContext/ProjectContext.ts";
+import * as ProjectSidecar from "./projectSidecar/ProjectSidecar.ts";
 import * as ProjectStore from "./orchestration-v2/ProjectStore.ts";
 import * as ThreadSearch from "./orchestration-v2/ThreadSearch.ts";
 import * as OrchestrationEventStore from "./persistence/OrchestrationEventStore.ts";
@@ -1443,6 +1444,7 @@ export const layerWsRpc = (
       const projectContext = yield* ProjectContext.ProjectContext.pipe(
         Effect.provide(ProjectContext.layer),
       );
+      const projectSidecar = yield* ProjectSidecar.ProjectSidecar;
       const projectContextError = (projectId: string) => (cause: { readonly message: string }) =>
         new ProjectContextError({ message: cause.message, projectId, cause });
       const projectService = yield* ProjectService.ProjectService;
@@ -2974,6 +2976,14 @@ export const layerWsRpc = (
           projectContext
             .removeLibraryFile(input)
             .pipe(Effect.mapError(projectContextError(input.projectId))),
+        [WS_METHODS.projectContextReadModelDefaults]: (input) =>
+          projectSidecar
+            .getModelDefaults(input.projectId)
+            .pipe(Effect.mapError(projectContextError(input.projectId))),
+        [WS_METHODS.projectContextWriteModelDefaults]: ({ projectId, defaults }) =>
+          projectSidecar
+            .setModelDefaults(projectId, defaults)
+            .pipe(Effect.mapError(projectContextError(projectId))),
         [WS_METHODS.projectContextRead]: (input) =>
           projectContext
             .readFiles(input.projectId)

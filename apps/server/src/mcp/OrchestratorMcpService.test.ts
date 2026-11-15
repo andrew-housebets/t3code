@@ -75,6 +75,7 @@ import type { McpInvocationScope } from "./McpInvocationContext.ts";
 import { idleThreadProjection, liveThreadShell } from "./McpToolAccess.testkit.ts";
 import * as OrchestratorMcpService from "./OrchestratorMcpService.ts";
 import * as ProjectContext from "../projectContext/ProjectContext.ts";
+import * as ProjectSidecar from "../projectSidecar/ProjectSidecar.ts";
 import { resolveRuntimeMode } from "./delegatedTaskModes.ts";
 import type { ProjectionRecordFilter } from "../orchestration-v2/ProjectionStore.ts";
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
@@ -2665,17 +2666,30 @@ describe("OrchestratorMcpService provider resolution", () => {
   );
 
   it.effect.each([
-    { name: "a coordinator that names no isolation", tags: ["coordinator"], worktree: true },
+    {
+      name: "a coordinator that names no isolation",
+      tags: ["coordinator"],
+      worktree: true,
+      model: "gpt-5.4-mini",
+    },
     {
       name: "a coordinator asking for the shared checkout",
       tags: ["coordinator"],
       isolation: "shared" as const,
       worktree: true,
+      model: "gpt-5.4-mini",
     },
-    { name: "any other parent", tags: [], worktree: false },
+    {
+      name: "a coordinator naming a model",
+      tags: ["coordinator"],
+      worktree: true,
+      target: { model: "gpt-5.4" },
+      model: "gpt-5.4",
+    },
+    { name: "any other parent", tags: [], worktree: false, model: "gpt-5.4" },
   ])(
-    "delegation from $name gives the child a worktree: $worktree",
-    ({ tags, isolation, worktree }) =>
+    "delegation from $name gives the child a worktree: $worktree, and model $model",
+    ({ tags, isolation, worktree, target, model }) =>
       Effect.gen(function* () {
         const dispatched = yield* Ref.make<ReadonlyArray<unknown>>([]);
         const task = {
@@ -2758,6 +2772,16 @@ describe("OrchestratorMcpService provider resolution", () => {
                 Effect.succeed(`<project_context>rules</project_context>\n\n---\n\n${prompt}`),
             }),
           ),
+          Layer.provide(
+            Layer.succeed(ProjectSidecar.ProjectSidecar, {
+              ...ProjectSidecar.ProjectSidecar.defaultValue(),
+              getModelDefaults: () =>
+                Effect.succeed({
+                  coordinatorModelSelection: null,
+                  threadModelSelection: { instanceId: codexInstanceId, model: "gpt-5.4-mini" },
+                }),
+            }),
+          ),
           Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
           Layer.provide(
             Layer.mock(GitVcsDriver.GitVcsDriver)({
@@ -2774,12 +2798,15 @@ describe("OrchestratorMcpService provider resolution", () => {
             mode: "async",
             clientRequestId: "delegate-coordinator-isolation",
             ...(isolation === undefined ? {} : { isolation }),
+            ...(target === undefined ? {} : { target: yield* decodeTarget(target) }),
           });
           const [request] = (yield* Ref.get(dispatched)) as ReadonlyArray<{
             readonly task: string;
             readonly title?: string;
             readonly workspaceStrategy?: unknown;
+            readonly modelSelection: { readonly model: string };
           }>;
+          assert.equal(request?.modelSelection.model, model);
           assert.deepEqual(
             request?.workspaceStrategy,
             worktree ? { type: "worktree", baseRef: "abc123", startFromOrigin: false } : undefined,

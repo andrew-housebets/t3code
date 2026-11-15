@@ -117,6 +117,7 @@ import { isSnoozed } from "../orchestration-v2/ThreadSettlementService.ts";
 import { userFacingDispatchErrorMessage } from "../orchestration-v2/UserFacingErrors.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProjectContext from "../projectContext/ProjectContext.ts";
+import * as ProjectSidecar from "../projectSidecar/ProjectSidecar.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as ServerSettings from "../serverSettings.ts";
@@ -1260,6 +1261,7 @@ const make = Effect.gen(function* () {
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const remoteDelegation = yield* RemoteDelegation.RemoteDelegation;
   const projectContext = yield* ProjectContext.ProjectContext;
+  const projectSidecar = yield* ProjectSidecar.ProjectSidecar;
 
   const requireProject = (projectId: ProjectId) =>
     projects.getById(projectId).pipe(
@@ -1502,7 +1504,25 @@ const make = Effect.gen(function* () {
       })
       .pipe(Effect.mapError(threadManagementFailure));
 
-  const resolveTargetRechecking = (input: Parameters<typeof resolveTarget>[0]) => {
+  // A coordinator's children start on the project's thread model unless the task names one.
+  const withProjectThreadModel = (parent: Parameters<typeof resolveTarget>[0]["parent"]) =>
+    isCoordinatorThread(parent.thread)
+      ? projectSidecar.getModelDefaults(parent.thread.projectId).pipe(
+          Effect.map(({ threadModelSelection }) =>
+            threadModelSelection === null
+              ? parent
+              : { ...parent, thread: { ...parent.thread, modelSelection: threadModelSelection } },
+          ),
+          Effect.orElseSucceed(() => parent),
+        )
+      : Effect.succeed(parent);
+
+  const resolveTargetRechecking = (input: Parameters<typeof resolveTarget>[0]) =>
+    withProjectThreadModel(input.parent).pipe(
+      Effect.flatMap((parent) => resolveTargetRecheckingFrom({ ...input, parent })),
+    );
+
+  const resolveTargetRecheckingFrom = (input: Parameters<typeof resolveTarget>[0]) => {
     const instanceId =
       input.target?.providerInstanceId ??
       (input.target?.driverKind === undefined

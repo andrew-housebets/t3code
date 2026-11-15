@@ -156,6 +156,8 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.projectContextRemoveLibraryFile]: AuthFilesystemWriteScope,
   [WS_METHODS.projectContextRead]: AuthOrchestrationReadScope,
   [WS_METHODS.projectContextWrite]: AuthOrchestrationOperateScope,
+  [WS_METHODS.projectContextReadModelDefaults]: AuthOrchestrationReadScope,
+  [WS_METHODS.projectContextWriteModelDefaults]: AuthOrchestrationOperateScope,
   [WS_METHODS.projectsListIgnoredFiles]: AuthFilesystemReadScope,
   [WS_METHODS.projectsReadFile]: AuthFilesystemReadScope,
   [WS_METHODS.projectsSearchContents]: AuthFilesystemReadScope,

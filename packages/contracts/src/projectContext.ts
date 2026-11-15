@@ -7,6 +7,7 @@ import {
   ThreadId,
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
+import { ModelSelection } from "./modelSelection.ts";
 
 /** Each standing context file is capped here; the server refuses a longer write. */
 export const PROJECT_CONTEXT_MAX_CHARS = 16_000;
@@ -93,6 +94,21 @@ export const ProjectLibraryRemoveInput = Schema.Struct({
   path: TrimmedNonEmptyString,
 });
 export type ProjectLibraryRemoveInput = typeof ProjectLibraryRemoveInput.Type;
+
+/** Null leaves the usual default in place. */
+export const ProjectModelDefaults = Schema.Struct({
+  /** A new coordinator draft in the project starts on this model. */
+  coordinatorModelSelection: Schema.NullOr(ModelSelection),
+  /** A coordinator's `delegate_task` uses this model when the task names none. */
+  threadModelSelection: Schema.NullOr(ModelSelection),
+});
+export type ProjectModelDefaults = typeof ProjectModelDefaults.Type;
+
+export const ProjectModelDefaultsWriteInput = Schema.Struct({
+  projectId: ProjectId,
+  defaults: ProjectModelDefaults,
+});
+export type ProjectModelDefaultsWriteInput = typeof ProjectModelDefaultsWriteInput.Type;
 
 export class ProjectLibraryFileExistsError extends Schema.TaggedError<ProjectLibraryFileExistsError>()(
   "ProjectLibraryFileExistsError",

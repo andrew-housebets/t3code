@@ -1,4 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { ProviderInstanceId } from "@t3tools/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -111,6 +112,26 @@ it.layer(layerTest, { excludeTestServices: true })("ProjectSidecar", (it) => {
         "file:unowned.md": null,
       });
       assert.lengthOf(yield* sidecar.listArtifacts("project-deleted"), 0);
+    }),
+  );
+
+  it.effect("keeps a project's model defaults", () =>
+    Effect.gen(function* () {
+      const sidecar = yield* ProjectSidecar.ProjectSidecar;
+      const defaults = {
+        coordinatorModelSelection: {
+          instanceId: ProviderInstanceId.make("claudeAgent"),
+          model: "claude-opus-5-5",
+          options: [{ id: "effort", value: "high" }],
+        },
+        threadModelSelection: null,
+      };
+      assert.deepEqual(yield* sidecar.getModelDefaults("project-models"), {
+        coordinatorModelSelection: null,
+        threadModelSelection: null,
+      });
+      yield* sidecar.setModelDefaults("project-models", defaults);
+      assert.deepEqual(yield* sidecar.getModelDefaults("project-models"), defaults);
     }),
   );
 });
