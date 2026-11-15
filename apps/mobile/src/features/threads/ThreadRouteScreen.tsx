@@ -98,6 +98,7 @@ import { EMPTY_ENVIRONMENT_THREAD_STATE } from "@t3tools/client-runtime/state/th
 import { useProjects } from "../../state/entities";
 import {
   projectThreadContentPresentation,
+  SYNCING_MESSAGES_LABEL_DELAY_MS,
   threadSyncStatusLabel,
 } from "./threadContentPresentation";
 import {
@@ -965,6 +966,7 @@ function ThreadRouteContent(
   const threadSyncLabel = useDelayedStatus(
     selectedThread === null ? "" : scopedThreadKey(selectedThread.environmentId, selectedThread.id),
     threadSyncStatusLabel(selectedThreadDetailState.status, contentPresentation.kind),
+    contentPresentation.kind === "ready" ? SYNCING_MESSAGES_LABEL_DELAY_MS : undefined,
   );
   const inspectorHeader = props.inspectorPresentation ? (
     <ThreadInspectorHeader

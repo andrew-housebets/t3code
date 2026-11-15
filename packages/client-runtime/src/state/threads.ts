@@ -38,6 +38,7 @@ import {
   subscribeDynamic,
   subscriptionRetryDelay,
 } from "../rpc/client.ts";
+import type { RpcSession } from "../rpc/session.ts";
 import { parseThreadKey, threadKey } from "./entities.ts";
 import { applyOrchestrationV2ProjectionEvent } from "./orchestrationV2Projection.ts";
 import { THREAD_SNAPSHOT_IDLE_TTL_MS } from "./threadRetention.ts";
@@ -954,15 +955,21 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
     Effect.forkScoped,
   );
 
+  const foregroundCatchUp = yield* Ref.make(false);
+  const subscribedSession = yield* Ref.make<RpcSession | null>(null);
   const foregroundResubscriptions = Option.match(wakeups, {
     onNone: () => Stream.never,
     onSome: (service) =>
-      service.changes.pipe(Stream.filter(ConnectionWakeups.shouldResubscribeAfterWakeup)),
+      service.changes.pipe(
+        Stream.filter(ConnectionWakeups.shouldResubscribeAfterWakeup),
+        Stream.tap(() => Ref.set(foregroundCatchUp, true)),
+      ),
   });
 
-  // Only the first subscription after a warm live resume keeps the retained
-  // status. A replacement session or foreground resubscribe on the same scope
-  // may have missed events, so those show sync progress until confirmed.
+  // Only the first subscription after a warm live resume, and a foreground
+  // catch-up on the live session, keep the live status: the stream replays what
+  // they missed like any other event. A replacement session or a retry shows
+  // sync progress until confirmed.
   const resumingLive = yield* Ref.make(initialState.status === "live");
   // A cold open tries the socket snapshot once. Any later cold attempt, after a
   // failure or a dropped session, asks HTTP, which also tells a missing thread
@@ -1011,8 +1018,17 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
         }
 
         const config = yield* Effect.option(session.initialConfig);
-        yield* Ref.set(awaitingCompletion, true);
-        yield* markSynchronizing;
+        const foreground = yield* Ref.getAndSet(foregroundCatchUp, false);
+        const previousSession = yield* Ref.getAndSet(subscribedSession, session);
+        const catchingUp =
+          foreground &&
+          previousSession === session &&
+          current.status === "live" &&
+          Option.isSome(current.data);
+        if (!catchingUp) {
+          yield* Ref.set(awaitingCompletion, true);
+          yield* markSynchronizing;
+        }
         yield* Ref.set(resumingLive, false);
 
         // A server that pages snapshots sends the same bounded window over the

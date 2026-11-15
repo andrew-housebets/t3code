@@ -614,12 +614,16 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
     Effect.forkScoped,
   );
 
+  const foregroundCatchUp = yield* Ref.make(false);
   const resubscriptions = Stream.merge(
     Stream.fromQueue(reloadRequests),
     Option.match(wakeups, {
       onNone: () => Stream.never,
       onSome: (service) =>
-        service.changes.pipe(Stream.filter(ConnectionWakeups.shouldResubscribeAfterWakeup)),
+        service.changes.pipe(
+          Stream.filter(ConnectionWakeups.shouldResubscribeAfterWakeup),
+          Stream.tap(() => Ref.set(foregroundCatchUp, true)),
+        ),
     }),
   );
 
@@ -651,18 +655,26 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
           sameShellIdentity(early.identity, identity)
             ? earlyExit.value
             : null;
-        yield* Ref.set(activeSubscription, { session, identity });
-        yield* Ref.set(awaitingCompletion, true);
-        yield* setSynchronizing;
+        const foreground = yield* Ref.getAndSet(foregroundCatchUp, false);
+        const previous = yield* Ref.getAndSet(activeSubscription, { session, identity });
 
         // Rows from a recent server snapshot with the same omissions and server build resume
         // from their cursor, in memory or from the cache. Anything else reloads the HTTP
         // snapshot so a valid cursor cannot preserve stale or incomplete data. A `resumable`
         // answer is checked again too: the rows can pass their age limit while the socket opens.
+        const held = yield* SubscriptionRef.get(state);
         const resumingHeldRows =
           loaded?.kind !== "snapshot" &&
-          Option.isSome((yield* SubscriptionRef.get(state)).snapshot) &&
+          Option.isSome(held.snapshot) &&
           canResumeFrom(yield* Ref.get(origin), identity, yield* Clock.currentTimeMillis);
+        // A foreground catch-up on the live session replays what it missed like any other
+        // delta, so the rows stay live; a reload over HTTP still waits for the socket.
+        const catchingUp =
+          foreground && previous?.session === session && held.status === "live" && resumingHeldRows;
+        if (!catchingUp) {
+          yield* Ref.set(awaitingCompletion, true);
+          yield* setSynchronizing;
+        }
         if (!resumingHeldRows && loaded === null) {
           const prepared = yield* SubscriptionRef.get(supervisor.prepared).pipe(
             Effect.flatMap(
