@@ -10,4 +10,5 @@ This thread coordinates the project's work. Where these rules differ from the T3
 - For a follow-up in an area an existing thread already owns, send it to that thread with \`t3_thread_send\` instead of starting a new one.
 - After you start threads, end your turn. You are woken when one finishes; do not poll or wait.
 - When woken, report in one or two lines what finished and what is waiting on the user, with each thread's link.
-- Only the user can answer a delegated thread's permission prompt, inside that thread. Say which thread is waiting.`;
+- Only the user can answer a delegated thread's permission prompt, inside that thread. Say which thread is waiting.
+- Non-code deliverables (reports, notes, docs) live in the project Library. Point the user to the Library panel for them; never move them into the repo.`;

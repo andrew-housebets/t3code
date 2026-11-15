@@ -3,11 +3,20 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
+import * as Option from "effect/Option";
+import type * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
-import { PROJECT_CONTEXT_MAX_CHARS } from "@t3tools/contracts";
+import {
+  PROJECT_CONTEXT_MAX_CHARS,
+  type ProjectLibraryEntry,
+  type ProjectLibraryListing,
+} from "@t3tools/contracts";
 import { formatProjectContextBlock } from "@t3tools/shared/projectContextBlock";
 
 import * as ServerConfig from "../config.ts";
+
+// ponytail: a flat listing capped here; page it if Libraries grow past a few thousand files.
+const LIBRARY_LISTING_LIMIT = 2_000;
 
 const PATH_SEPARATOR_OR_NUL = /[/\\\0]/;
 
@@ -25,7 +34,7 @@ export class ProjectContextLibraryError extends Schema.TaggedError<ProjectContex
   { path: Schema.String, cause: Schema.Defect() },
 ) {
   override get message(): string {
-    return `Failed to create the project Library at ${this.path}.`;
+    return `The project Library at ${this.path} could not be created or read.`;
   }
 }
 
@@ -46,6 +55,10 @@ export class ProjectContext extends Context.Service<
     readonly ensureLibrary: (
       projectId: string,
     ) => Effect.Effect<string, ProjectContextPathError | ProjectContextLibraryError>;
+    /** Every file and folder in the Library, creating it first; symbolic links are left out. */
+    readonly listLibrary: (
+      projectId: string,
+    ) => Effect.Effect<ProjectLibraryListing, ProjectContextPathError | ProjectContextLibraryError>;
     /** The task unchanged when the project has no instructions or memory. */
     readonly taskWithContext: (
       projectId: string,
@@ -130,6 +143,45 @@ const make = Effect.gen(function* () {
     return libraryDir;
   });
 
+  const listLibrary = Effect.fn("ProjectContext.listLibrary")(function* (projectId: string) {
+    const root = yield* ensureLibrary(projectId);
+    const entries: Array<ProjectLibraryEntry> = [];
+    let truncated = false;
+    const walk: (relative: string) => Effect.Effect<void, PlatformError.PlatformError> = Effect.fn(
+      "ProjectContext.walkLibrary",
+    )(function* (relative: string) {
+      const children = yield* fileSystem.readDirectoryEntries(path.join(root, relative));
+      for (const child of children) {
+        if (child.type !== "File" && child.type !== "Directory") continue;
+        if (entries.length >= LIBRARY_LISTING_LIMIT) {
+          truncated = true;
+          return;
+        }
+        const entryPath = relative === "" ? child.name : `${relative}/${child.name}`;
+        const info = yield* fileSystem
+          .stat(path.join(root, entryPath))
+          .pipe(Effect.option, Effect.map(Option.getOrUndefined));
+        entries.push({
+          path: entryPath,
+          kind: child.type === "File" ? "file" : "directory",
+          sizeBytes: child.type === "File" && info !== undefined ? Number(info.size) : null,
+          modifiedAt:
+            info === undefined
+              ? null
+              : Option.match(info.mtime, {
+                  onNone: () => null,
+                  onSome: (date) => date.toISOString(),
+                }),
+        });
+        if (child.type === "Directory") yield* walk(entryPath);
+      }
+    });
+    yield* walk("").pipe(
+      Effect.mapError((cause) => new ProjectContextLibraryError({ path: root, cause })),
+    );
+    return { path: root, entries, truncated };
+  });
+
   const taskWithContext = Effect.fn("ProjectContext.taskWithContext")(function* (
     projectId: string,
     task: string,
@@ -142,7 +194,7 @@ const make = Effect.gen(function* () {
     });
   });
 
-  return ProjectContext.of({ directory, read, ensureLibrary, taskWithContext });
+  return ProjectContext.of({ directory, read, ensureLibrary, listLibrary, taskWithContext });
 });
 
 export const layer = Layer.effect(ProjectContext, make);

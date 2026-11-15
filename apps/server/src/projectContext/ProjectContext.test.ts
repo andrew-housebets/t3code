@@ -86,8 +86,41 @@ it.layer(layerTest, { excludeTestServices: true })("ProjectContext", (it) => {
     (projectId) =>
       Effect.gen(function* () {
         const context = yield* ProjectContext.ProjectContext;
-        const error = yield* context.taskWithContext(projectId, TASK).pipe(Effect.flip);
-        assert.equal(error._tag, "ProjectContextPathError");
+        for (const error of [
+          yield* context.taskWithContext(projectId, TASK).pipe(Effect.flip),
+          yield* context.listLibrary(projectId).pipe(Effect.flip),
+        ]) {
+          assert.equal(error._tag, "ProjectContextPathError");
+        }
       }),
+  );
+
+  it.effect("creates the Library on first listing and lists nested files without links", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const context = yield* ProjectContext.ProjectContext;
+      const empty = yield* context.listLibrary("project:library");
+      assert.isTrue(yield* fileSystem.exists(empty.path));
+      assert.deepEqual(empty.entries, []);
+      assert.strictEqual(
+        empty.path,
+        path.join(yield* context.directory("project:library"), "library"),
+      );
+
+      yield* fileSystem.makeDirectory(path.join(empty.path, "reports"));
+      yield* fileSystem.writeFileString(path.join(empty.path, "reports", "q3.md"), "12345");
+      yield* fileSystem.symlink(path.join(empty.path, "reports"), path.join(empty.path, "loop"));
+      const listed = yield* context.listLibrary("project:library");
+      assert.deepEqual(
+        listed.entries.map(({ path, kind, sizeBytes }) => ({ path, kind, sizeBytes })),
+        [
+          { path: "reports", kind: "directory", sizeBytes: null },
+          { path: "reports/q3.md", kind: "file", sizeBytes: 5 },
+        ],
+      );
+      assert.isString(listed.entries[1]?.modifiedAt);
+      assert.isFalse(listed.truncated);
+    }),
   );
 });

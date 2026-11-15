@@ -71,6 +71,7 @@ import {
   type ProjectFileFailure,
   type ProjectFileOperation,
   type ProjectMutation,
+  ProjectContextError,
   ProjectListEntriesError,
   ProjectReadFileError,
   ProjectSearchContentsError,
@@ -168,6 +169,7 @@ import {
   threadStreamEventItem,
 } from "./orchestration-v2/WireProjection.ts";
 import { dedupeSnapshotBodies } from "@t3tools/shared/orchestrationV2DedupedBodies";
+import * as ProjectContext from "./projectContext/ProjectContext.ts";
 import * as ProjectStore from "./orchestration-v2/ProjectStore.ts";
 import * as ThreadSearch from "./orchestration-v2/ThreadSearch.ts";
 import * as OrchestrationEventStore from "./persistence/OrchestrationEventStore.ts";
@@ -1438,6 +1440,11 @@ export const layerWsRpc = (
       >();
       const applicationEvents = yield* OrchestrationEventStore.OrchestrationEventStore;
       const projectStore = yield* ProjectStore.ProjectStoreV2;
+      const projectContext = yield* ProjectContext.ProjectContext.pipe(
+        Effect.provide(ProjectContext.layer),
+      );
+      const projectContextError = (projectId: string) => (cause: { readonly message: string }) =>
+        new ProjectContextError({ message: cause.message, projectId, cause });
       const projectService = yield* ProjectService.ProjectService;
       const managedFolders = yield* ManagedProjectFolders.ManagedProjectFolders;
       const scratchThreadPromotion = yield* ScratchThreadPromotion.ScratchThreadPromotion;
@@ -2948,6 +2955,10 @@ export const layerWsRpc = (
                 }),
             ),
           ),
+        [WS_METHODS.projectContextListLibrary]: (input) =>
+          projectContext
+            .listLibrary(input.projectId)
+            .pipe(Effect.mapError(projectContextError(input.projectId))),
         [WS_METHODS.projectsListIgnoredFiles]: (input) =>
           workspaceEntries.listIgnoredFiles(input).pipe(
             Effect.mapError(
