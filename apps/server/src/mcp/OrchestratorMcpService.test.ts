@@ -74,6 +74,7 @@ import * as RemoteDelegation from "../peer/RemoteDelegation.ts";
 import type { McpInvocationScope } from "./McpInvocationContext.ts";
 import { idleThreadProjection, liveThreadShell } from "./McpToolAccess.testkit.ts";
 import * as OrchestratorMcpService from "./OrchestratorMcpService.ts";
+import * as ProjectContext from "../projectContext/ProjectContext.ts";
 import { resolveRuntimeMode } from "./delegatedTaskModes.ts";
 import type { ProjectionRecordFilter } from "../orchestration-v2/ProjectionStore.ts";
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
@@ -81,6 +82,11 @@ import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAda
 const decodeTarget = Schema.decodeUnknownEffect(OrchestratorMcpTarget);
 
 const layerOrchestratorService = OrchestratorMcpService.layer.pipe(
+  Layer.provide(
+    Layer.mock(ProjectContext.ProjectContext)({
+      taskWithContext: (_projectId, task) => Effect.succeed(task),
+    }),
+  ),
   Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
   Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
 );
@@ -2658,6 +2664,142 @@ describe("OrchestratorMcpService provider resolution", () => {
     }),
   );
 
+  it.effect.each([
+    { name: "a coordinator that names no isolation", tags: ["coordinator"], worktree: true },
+    {
+      name: "a coordinator asking for the shared checkout",
+      tags: ["coordinator"],
+      isolation: "shared" as const,
+      worktree: true,
+    },
+    { name: "any other parent", tags: [], worktree: false },
+  ])(
+    "delegation from $name gives the child a worktree: $worktree",
+    ({ tags, isolation, worktree }) =>
+      Effect.gen(function* () {
+        const dispatched = yield* Ref.make<ReadonlyArray<unknown>>([]);
+        const task = {
+          id: taskId,
+          threadId: parentThreadId,
+          runId: parentRunId,
+          parentNodeId,
+          origin: "app_owned",
+          createdBy: "agent",
+          driver: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          providerThreadId: null,
+          childThreadId,
+          nativeTaskRef: null,
+          prompt: "Summarize the diff.",
+          title: null,
+          model: "gpt-5.4",
+          status: "running",
+          result: null,
+          startedAt: null,
+          completedAt: null,
+        };
+        const layerDependencies = Layer.mergeAll(
+          NodeServices.layer,
+          NodeCrypto.layer,
+          Layer.mock(ThreadManagementService.ThreadManagementService)({
+            hasReceipt: () => Effect.succeed(false),
+            getThreadRecords: (threadId) =>
+              Ref.get(dispatched).pipe(
+                Effect.map((commands) => {
+                  if (threadId !== parentThreadId) return childProjection;
+                  const parent = parentProjection(commands.length === 0 ? [] : [task]);
+                  return {
+                    ...parent,
+                    thread: { ...parent.thread, worktreePath: null, tags },
+                  } as OrchestrationV2ThreadProjection;
+                }),
+              ),
+            isProviderInstanceEnabledForProject: () => Effect.succeed(true),
+            assertProviderInstanceEnabled: () => Effect.void,
+            dispatch: (command) =>
+              Ref.update(dispatched, (commands) => [...commands, command]).pipe(
+                Effect.as({
+                  sequence: 1,
+                  storedEvents: [
+                    {
+                      sequence: 1,
+                      commandId: null,
+                      event: { type: "subagent.updated", payload: task },
+                    },
+                  ],
+                } as never),
+              ),
+          }),
+          providerRegistryLayer([
+            providerSnapshot({
+              instanceId: codexInstanceId,
+              driver: ProviderDriverKind.make("codex"),
+              model: "gpt-5.4",
+            }),
+          ]),
+          adapterRegistryLayer([codexInstanceId]),
+          Layer.mock(ProjectService.ProjectService)({
+            getById: () =>
+              Effect.succeedSome({
+                id: projectId,
+                title: "Project",
+                workspaceRoot: "/project-root",
+              } as never),
+          }),
+          Layer.mock(SecretRequests.SecretRequests)({}),
+          Layer.mock(RemoteDelegation.RemoteDelegation)({}),
+          Layer.mock(ScheduledTaskService.ScheduledTaskService)({}),
+          ServerSettings.layerTest(),
+        );
+        const layerService = OrchestratorMcpService.layer.pipe(
+          Layer.provide(
+            Layer.mock(ProjectContext.ProjectContext)({
+              taskWithContext: (_projectId, prompt) =>
+                Effect.succeed(`<project_context>rules</project_context>\n\n---\n\n${prompt}`),
+            }),
+          ),
+          Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
+          Layer.provide(
+            Layer.mock(GitVcsDriver.GitVcsDriver)({
+              resolveCommit: () => Effect.succeed({ commitSha: "abc123" } as never),
+            }),
+          ),
+          Layer.provide(layerDependencies),
+        );
+
+        yield* Effect.gen(function* () {
+          const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+          yield* service.delegateTask(scope, {
+            task: "Summarize the diff.",
+            mode: "async",
+            clientRequestId: "delegate-coordinator-isolation",
+            ...(isolation === undefined ? {} : { isolation }),
+          });
+          const [request] = (yield* Ref.get(dispatched)) as ReadonlyArray<{
+            readonly task: string;
+            readonly title?: string;
+            readonly workspaceStrategy?: unknown;
+          }>;
+          assert.deepEqual(
+            request?.workspaceStrategy,
+            worktree ? { type: "worktree", baseRef: "abc123", startFromOrigin: false } : undefined,
+          );
+          assert.isTrue(request?.task.endsWith("\n\n---\n\nSummarize the diff."));
+          assert.equal(request?.title, "Summarize the diff.");
+          if (worktree) {
+            const refused = yield* service
+              .createThreads(scope, { threads: [{ prompt: "Fix it." }] })
+              .pipe(Effect.flip);
+            assert.equal(
+              refused.code,
+              "invalid_request",
+              "create_threads would share its checkout",
+            );
+          }
+        }).pipe(Effect.provide(layerService));
+      }),
+  );
+
   it.effect(
     "retrying an accepted driver-only delegation replays even after the project disables every candidate",
     () =>
@@ -3417,6 +3559,11 @@ describe("OrchestratorMcpService provider resolution", () => {
       saved: ScheduledTask = tasks[0]!,
     ) =>
       OrchestratorMcpService.layer.pipe(
+        Layer.provide(
+          Layer.mock(ProjectContext.ProjectContext)({
+            taskWithContext: (_projectId, task) => Effect.succeed(task),
+          }),
+        ),
         Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
         Layer.provide(
           Layer.mock(GitVcsDriver.GitVcsDriver)({
@@ -3648,6 +3795,11 @@ describe("OrchestratorMcpService provider resolution", () => {
       inputs?: Ref.Ref<ReadonlyArray<ScheduledTaskUpsertInput>>,
     ) =>
       OrchestratorMcpService.layer.pipe(
+        Layer.provide(
+          Layer.mock(ProjectContext.ProjectContext)({
+            taskWithContext: (_projectId, task) => Effect.succeed(task),
+          }),
+        ),
         Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
         Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)(git)),
         Layer.provide(

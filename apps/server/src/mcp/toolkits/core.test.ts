@@ -72,6 +72,11 @@ import * as PeerLinks from "../../peer/PeerLinks.ts";
 const layerOrchestratorToolkit = McpHttpServer.layerOrchestratorToolkit.pipe(
   Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
   Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
+  Layer.provide(
+    ServerConfig.layerTest(process.cwd(), { prefix: "t3-mcp-core-" }).pipe(
+      Layer.provideMerge(NodeServices.layer),
+    ),
+  ),
 );
 
 const declaredFailure = (result: McpSchema.CallToolResult) => {

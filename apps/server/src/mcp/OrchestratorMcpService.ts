@@ -69,6 +69,7 @@ import {
 import { getProviderOptionCurrentValue, withLegacyUltracodeEffort } from "@t3tools/shared/model";
 import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 import { runRanAfter } from "@t3tools/shared/orchestrationV2ThreadError";
+import { isCoordinatorThread } from "@t3tools/shared/coordinatorThread";
 import { formatThreadLink } from "@t3tools/shared/threadLinks";
 import { threadPullRequestUpdatedAtMs } from "@t3tools/shared/threadPullRequests";
 import {
@@ -91,6 +92,7 @@ import * as Stream from "effect/Stream";
 import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterRegistry.ts";
 import {
   subagentResultForRun,
+  subagentThreadTitle,
   delegatedTaskProgress,
 } from "@t3tools/provider-core/server/subagentProjection";
 import {
@@ -114,6 +116,7 @@ import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import { isSnoozed } from "../orchestration-v2/ThreadSettlementService.ts";
 import { userFacingDispatchErrorMessage } from "../orchestration-v2/UserFacingErrors.ts";
 import * as ProjectService from "../project/ProjectService.ts";
+import * as ProjectContext from "../projectContext/ProjectContext.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as ServerSettings from "../serverSettings.ts";
@@ -1256,6 +1259,7 @@ const make = Effect.gen(function* () {
   const gitDriver = yield* GitVcsDriver.GitVcsDriver;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const remoteDelegation = yield* RemoteDelegation.RemoteDelegation;
+  const projectContext = yield* ProjectContext.ProjectContext;
 
   const requireProject = (projectId: ProjectId) =>
     projects.getById(projectId).pipe(
@@ -2683,8 +2687,10 @@ const make = Effect.gen(function* () {
         parent.thread.interactionMode,
         input.interactionMode,
       );
+      // A coordinator's checkout stays read-only, so its children never share it.
+      const isolation = isCoordinatorThread(parent.thread) ? "worktree" : input.isolation;
       let workspaceStrategy: OrchestrationV2ThreadLaunchWorkspaceStrategy | undefined;
-      if (input.isolation === "worktree" && !isRetryOfAcceptedDelegation) {
+      if (isolation === "worktree" && !isRetryOfAcceptedDelegation) {
         const project = yield* requireProject(parent.thread.projectId);
         const base = yield* gitDriver
           .resolveCommit({
@@ -2713,6 +2719,10 @@ const make = Effect.gen(function* () {
         }
         workspaceStrategy = { type: "worktree", baseRef: base.commitSha, startFromOrigin: false };
       }
+      const task = taskPrompt(input);
+      const childTask = yield* projectContext
+        .taskWithContext(parent.thread.projectId, task)
+        .pipe(Effect.mapError((error) => failure("orchestration_error", error.message)));
       // ThreadManagementService.dispatch is the chokepoint for this command
       // type's own enablement check, using the same command id and its
       // receipt-replay exemption, so no separate assert runs here.
@@ -2725,8 +2735,19 @@ const make = Effect.gen(function* () {
           parentThreadId: scope.thread.threadId,
           parentRunId: parentRun.id,
           parentNodeId: parentRun.rootNodeId,
-          task: taskPrompt(input),
-          ...(input.title === undefined ? {} : { title: input.title }),
+          task: childTask,
+          // The context block comes first, so the title still names the task.
+          ...(input.title === undefined
+            ? childTask === task
+              ? {}
+              : {
+                  title: subagentThreadTitle({
+                    parentTitle: parent.thread.title,
+                    prompt: task,
+                    ordinal: 0,
+                  }),
+                }
+            : { title: input.title }),
           modelSelection: target.modelSelection,
           runtimeMode,
           interactionMode,
@@ -3000,6 +3021,12 @@ const make = Effect.gen(function* () {
     createThreads: Effect.fn("OrchestratorMcpService.createThreads")(
       function* (callerScope, input) {
         const { scope, parent } = yield* loadThreadCaller(callerScope, "create_threads");
+        if (isCoordinatorThread(parent.thread)) {
+          return yield* failure(
+            "invalid_request",
+            "A coordinator does not start threads in its own checkout. Use delegate_task, which gives each thread its own worktree.",
+          );
+        }
         const parentRun = ThreadManagementService.latestActiveRun(parent);
         if (
           parentRun === undefined ||
@@ -3593,4 +3620,5 @@ export const layer: Layer.Layer<
   | SecretRequests.SecretRequests
   | ServerSettings.ServerSettingsService
   | RemoteDelegation.RemoteDelegation
+  | ProjectContext.ProjectContext
 > = Layer.effect(OrchestratorMcpService, make);
