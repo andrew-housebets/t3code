@@ -6,7 +6,7 @@ import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
 import { ProjectFavicon } from "../ProjectFavicon";
 
 const ROW_CLASS_NAME =
-  "flex h-8 w-full cursor-pointer items-center gap-2 rounded-md px-2 text-left text-sm font-medium outline-none hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";
+  "flex h-8 w-full cursor-pointer items-center gap-2 rounded-md px-2 text-left text-sm font-medium outline-hidden hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";
 
 function NavRow(props: { row: string; label: string; Icon: LucideIcon; onClick: () => void }) {
   return (
