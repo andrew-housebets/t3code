@@ -286,7 +286,6 @@ export function HomeScreen(props: HomeScreenProps) {
     24,
     workspace?.bottomClearance ?? 0,
   );
-  const showsNewSessionPill = Platform.OS === "ios" && !sidebarSurface;
   const [newSessionPillHeight, setNewSessionPillHeight] = useState(48);
   const searchEnvironmentIds =
     props.selectedEnvironmentId === null
@@ -383,6 +382,12 @@ export function HomeScreen(props: HomeScreenProps) {
     [projects, selectedEnvironmentId, projectGroupingMode],
   );
   const hasSearchQuery = props.searchQuery.trim().length > 0;
+  // While searching, the keyboard lifts the bottom clearance and the pill would cover results.
+  const showsNewSessionPill =
+    Platform.OS === "ios" &&
+    !sidebarSurface &&
+    !hasSearchQuery &&
+    (searchMode === undefined || searchMode === "resting");
   const projectByKey = (() => {
     const map = new Map<string, EnvironmentProject>();
     for (const project of props.projects) {
