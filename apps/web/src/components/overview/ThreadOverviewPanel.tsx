@@ -1,42 +1,85 @@
 import { useAtomValue } from "@effect/atom-react";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
+import {
+  type AtomCommandResult,
+  isAtomCommandInterrupted,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
 import { threadFamilyRead } from "@t3tools/client-runtime/state/threads";
 import {
   groupThreadOverview,
+  threadOverviewStatusLine,
   type ThreadOverviewGroup,
 } from "@t3tools/client-runtime/state/thread-overview";
 import { resolveThreadPullRequestBadge } from "@t3tools/client-runtime/thread-pull-requests";
-import type { ScopedThreadRef, ServerProvider } from "@t3tools/contracts";
+import type { OrchestrationV2Subagent, ScopedThreadRef } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
-import { BotIcon } from "lucide-react";
+import {
+  ChevronDownIcon,
+  CircleAlertIcon,
+  CircleCheckIcon,
+  CircleDashedIcon,
+  CircleDotDashedIcon,
+  RotateCcwIcon,
+  SquareIcon,
+  type LucideIcon,
+} from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 
+import { useThreadActions } from "../../hooks/useThreadActions";
+import { useNowMinute } from "../../hooks/useNowMinute";
 import { resolveThreadOpenRoute } from "../../lib/sideChatPane";
+import { cn } from "../../lib/utils";
 import { appAtomRegistry } from "../../rpc/atomRegistry";
-import { useEnvironmentProviders } from "../../state/environments";
-import { threadFamilies } from "../../state/threads";
+import { environmentThreadDetails, threadEnvironment, threadFamilies } from "../../state/threads";
+import { useOrchestrationCommand } from "../../state/use-orchestration-command";
 import { buildThreadRouteParams } from "../../threadRoutes";
-import { ThreadDetailsControl } from "../chat/ThreadDetailsControl";
-import { ThreadDetailsSection } from "../chat/ThreadDetailsSection";
-import {
-  ThreadRelationshipIcon,
-  threadRelationshipStatusLabel,
-} from "../chat/ThreadRelationshipIcon";
-import { PULL_REQUEST_STATE_PRESENTATION } from "../pullRequest/pullRequestIcons";
+import { formatRelativeTime } from "../../timestampFormat";
+import { threadRelationshipStatusLabel } from "../chat/ThreadRelationshipIcon";
+import { PULL_REQUEST_STATE_PRESENTATION, PullRequestGlyph } from "../pullRequest/pullRequestIcons";
 import { resolveThreadStatusPill } from "../Sidebar.logic";
 import { Button } from "../ui/button";
 import { Spinner } from "../ui/spinner";
+import { stackedThreadToast, toastManager } from "../ui/toast";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { isGroupCollapsed, useCoordinatorStore } from "./coordinatorStore";
 import { useThreadOverviewChildren } from "./threadOverviewState";
 
-const GROUP_LABELS = {
-  waiting_on_you: "Waiting on you",
-  ready_for_review: "Ready for review",
-  working: "Working",
-  landing: "Landing",
-  idle: "Idle",
-  resolved: "Resolved",
-} satisfies Record<ThreadOverviewGroup, string>;
+const GROUPS = {
+  waiting_on_you: {
+    label: "Waiting on you",
+    Icon: CircleAlertIcon,
+    tone: "text-warning",
+  },
+  ready_for_review: {
+    label: "Ready for review",
+    Icon: PullRequestGlyph.pullRequest,
+    tone: "text-info",
+  },
+  working: { label: "Working", Icon: CircleDotDashedIcon, tone: "text-info" },
+  landing: { label: "Landing", Icon: PullRequestGlyph.pullRequest, tone: "text-success" },
+  idle: { label: "Idle", Icon: CircleDashedIcon, tone: "text-muted-foreground" },
+  resolved: { label: "Resolved", Icon: CircleCheckIcon, tone: "text-muted-foreground" },
+} satisfies Record<
+  ThreadOverviewGroup,
+  { readonly label: string; readonly Icon: LucideIcon; readonly tone: string }
+>;
+
+type RowAction = "resolve" | "reopen" | "stop";
+
+const ROW_ACTIONS = {
+  resolve: { label: "Mark resolved", Icon: CircleCheckIcon, failure: "Could not mark resolved" },
+  reopen: { label: "Reopen", Icon: RotateCcwIcon, failure: "Could not reopen" },
+  stop: { label: "Stop", Icon: SquareIcon, failure: "Could not stop the thread" },
+} satisfies Record<
+  RowAction,
+  { readonly label: string; readonly Icon: LucideIcon; readonly failure: string }
+>;
+
+/** Settling refuses an active run, so a working thread offers Stop instead. */
+const rowActionsOf = (group: ThreadOverviewGroup): ReadonlyArray<RowAction> =>
+  group === "resolved" ? ["reopen"] : group === "working" ? ["stop"] : ["resolve"];
 
 function PullRequestBadge({ thread }: { readonly thread: EnvironmentThreadShell }) {
   const badge = resolveThreadPullRequestBadge(thread.pullRequests);
@@ -56,31 +99,77 @@ function PullRequestBadge({ thread }: { readonly thread: EnvironmentThreadShell 
 
 function OverviewRow(props: {
   readonly thread: EnvironmentThreadShell;
-  readonly provider: ServerProvider | undefined;
+  readonly group: ThreadOverviewGroup;
+  readonly subagent: OrchestrationV2Subagent | undefined;
+  readonly nowMs: number;
   readonly onOpen: () => void;
+  readonly onAction: (action: RowAction) => void;
 }) {
-  const { thread } = props;
+  const { thread, group } = props;
+  const { Icon, tone } = GROUPS[group];
   const status = thread.source.activityRunStatus ?? thread.source.status;
-  const failed = status === "failed";
+  const line =
+    threadOverviewStatusLine(thread, props.subagent) ??
+    resolveThreadStatusPill({ thread })?.label ??
+    threadRelationshipStatusLabel(status);
+  const age = formatRelativeTime(thread.updatedAt, props.nowMs)?.value;
   return (
-    <li className="flex h-8 items-center">
-      <ThreadDetailsControl size="sm" variant="ghost" part="row" onClick={props.onOpen}>
-        <ThreadRelationshipIcon
-          driver={props.provider?.driver}
-          provider={props.provider}
-          fallbackIcon={BotIcon}
-          status={status}
-        />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium leading-4 text-foreground/85">
-          {thread.title}
+    <li
+      data-thread-overview-row
+      data-thread-overview-row-group={group}
+      className="group/row relative"
+    >
+      <button
+        type="button"
+        onClick={props.onOpen}
+        className="flex w-full min-w-0 items-start gap-2 rounded-md px-3 py-1.5 text-left hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
+      >
+        <Icon aria-label={GROUPS[group].label} className={cn("mt-0.5 size-3.5 shrink-0", tone)} />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+              {thread.title}
+            </span>
+            <PullRequestBadge thread={thread} />
+            {age ? (
+              <span className="shrink-0 text-2xs tabular-nums text-muted-foreground group-hover/row:invisible group-focus-within/row:invisible">
+                {age}
+              </span>
+            ) : null}
+          </span>
+          <span
+            data-thread-overview-row-status
+            className={cn(
+              "truncate text-xs",
+              thread.latestRun?.status === "failed" ? "text-destructive" : "text-muted-foreground",
+            )}
+          >
+            {line}
+          </span>
         </span>
-        <PullRequestBadge thread={thread} />
-        <span
-          className={`shrink-0 text-2xs ${failed ? "text-destructive" : "text-muted-foreground"}`}
-        >
-          {resolveThreadStatusPill({ thread })?.label ?? threadRelationshipStatusLabel(status)}
-        </span>
-      </ThreadDetailsControl>
+      </button>
+      <span className="invisible absolute top-1 right-2 flex items-center gap-0.5 group-hover/row:visible group-focus-within/row:visible">
+        {rowActionsOf(group).map((action) => {
+          const { label, Icon: ActionIcon } = ROW_ACTIONS[action];
+          return (
+            <Tooltip key={action}>
+              <TooltipTrigger
+                render={
+                  <Button
+                    size="icon-xs"
+                    variant="ghost-muted"
+                    aria-label={`${label}: ${thread.title}`}
+                    onClick={() => props.onAction(action)}
+                  />
+                }
+              >
+                <ActionIcon aria-hidden />
+              </TooltipTrigger>
+              <TooltipPopup side="top">{label}</TooltipPopup>
+            </Tooltip>
+          );
+        })}
+      </span>
     </li>
   );
 }
@@ -102,7 +191,16 @@ export function ThreadOverviewPanel({ threadRef }: { readonly threadRef: ScopedT
   );
   const read = threadFamilyRead(useAtomValue(threadFamilies.familyAtom(environmentId, threadId)));
   const children = useThreadOverviewChildren(threadRef);
-  const providers = useEnvironmentProviders().get(environmentId);
+  const subagents = useAtomValue(environmentThreadDetails.quietThreadAtom(threadRef))?.projection
+    .subagents;
+  const threadKey = scopedThreadKey(threadRef);
+  const collapsed = useCoordinatorStore((state) => state.collapsedGroups[threadKey]);
+  const toggleGroup = useCoordinatorStore((state) => state.toggleGroup);
+  const nowMs = Date.parse(`${useNowMinute()}Z`);
+  const { settleThread, unsettleThread } = useThreadActions();
+  const interruptTurn = useOrchestrationCommand(threadEnvironment.interruptTurn, {
+    reportFailure: false,
+  });
   const navigate = useNavigate();
   const groups = groupThreadOverview(children);
 
@@ -137,6 +235,14 @@ export function ThreadOverviewPanel({ threadRef }: { readonly threadRef: ScopedT
     );
   }
 
+  const subagentByChild = new Map(
+    (subagents ?? []).flatMap((agent) =>
+      agent.origin === "app_owned" && agent.childThreadId !== null
+        ? [[agent.childThreadId, agent] as const]
+        : [],
+    ),
+  );
+
   const openThread = (thread: EnvironmentThreadShell) => {
     const routeRef = resolveThreadOpenRoute(
       scopeThreadRef(environmentId, thread.id),
@@ -145,31 +251,67 @@ export function ThreadOverviewPanel({ threadRef }: { readonly threadRef: ScopedT
     void navigate({ to: "/$environmentId/$threadId", params: buildThreadRouteParams(routeRef) });
   };
 
+  const runAction = async (thread: EnvironmentThreadShell, action: RowAction) => {
+    const ref = scopeThreadRef(environmentId, thread.id);
+    const result: AtomCommandResult<unknown, unknown> =
+      action === "resolve"
+        ? await settleThread(ref)
+        : action === "reopen"
+          ? await unsettleThread(ref)
+          : await interruptTurn({ environmentId, input: { threadId: thread.id } });
+    if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+      const error = squashAtomCommandFailure(result);
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: ROW_ACTIONS[action].failure,
+          description: error instanceof Error ? error.message : undefined,
+        }),
+      );
+    }
+  };
+
   return (
-    <div className="h-full min-h-0 overflow-y-auto overscroll-contain">
-      {groups.map(({ group, threads }) => (
-        <ThreadDetailsSection
-          key={group}
-          headingId={`thread-overview-${group}`}
-          title={GROUP_LABELS[group]}
-          actions={
-            <span className="text-2xs tabular-nums text-muted-foreground">{threads.length}</span>
-          }
-        >
-          <ul className="m-0 list-none p-0">
-            {threads.map((thread) => (
-              <OverviewRow
-                key={thread.id}
-                thread={thread}
-                provider={providers?.find(
-                  (entry) => entry.instanceId === thread.providerInstanceId,
-                )}
-                onOpen={() => openThread(thread)}
-              />
-            ))}
-          </ul>
-        </ThreadDetailsSection>
-      ))}
+    <div data-thread-overview className="h-full min-h-0 overflow-y-auto overscroll-contain py-1">
+      {groups.map(({ group, threads }) => {
+        const folded = isGroupCollapsed(collapsed, group);
+        const headingId = `thread-overview-${threadKey}-${group}`;
+        return (
+          <section key={group} data-thread-overview-group={group} aria-labelledby={headingId}>
+            <h3 id={headingId} className="m-0">
+              <button
+                type="button"
+                aria-expanded={!folded}
+                onClick={() => toggleGroup(threadKey, group)}
+                className="flex w-full items-center gap-1 px-3 py-1.5 text-left text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+              >
+                <span>
+                  {GROUPS[group].label} · <span className="tabular-nums">{threads.length}</span>
+                </span>
+                <ChevronDownIcon
+                  aria-hidden
+                  className={cn("size-3.5 transition-transform", folded && "-rotate-90")}
+                />
+              </button>
+            </h3>
+            {folded ? null : (
+              <ul className="m-0 list-none p-0">
+                {threads.map((thread) => (
+                  <OverviewRow
+                    key={thread.id}
+                    thread={thread}
+                    group={group}
+                    subagent={subagentByChild.get(thread.id)}
+                    nowMs={nowMs}
+                    onOpen={() => openThread(thread)}
+                    onAction={(action) => void runAction(thread, action)}
+                  />
+                ))}
+              </ul>
+            )}
+          </section>
+        );
+      })}
     </div>
   );
 }

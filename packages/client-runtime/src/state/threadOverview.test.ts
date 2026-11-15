@@ -1,5 +1,6 @@
 import {
   EnvironmentId,
+  MessageId,
   RunId,
   RuntimeRequestId,
   ThreadId,
@@ -16,6 +17,7 @@ import {
   groupThreadOverview,
   isThreadOverviewChild,
   threadOverviewGroupOf,
+  threadOverviewStatusLine,
   type ThreadOverviewGroup,
 } from "./threadOverview.ts";
 
@@ -188,5 +190,77 @@ describe("isThreadOverviewChild", () => {
       ),
     ).toBe(false);
     expect(isThreadOverviewChild({ ...delegated, archivedAt: v2Now }, parentId)).toBe(false);
+  });
+});
+
+describe("threadOverviewStatusLine", () => {
+  const message = (role: "user" | "assistant", text: string) => ({
+    latestVisibleMessage: { id: MessageId.make("message-1"), role, text, updatedAt: v2Now },
+  });
+  const agent = { progress: "Running the tests", result: null };
+  const rows: ReadonlyArray<
+    [
+      string,
+      ReturnType<typeof child>,
+      Parameters<typeof threadOverviewStatusLine>[1],
+      string | null,
+    ]
+  > = [
+    [
+      "a pending request beats an error and a PR",
+      child({ ...approval, status: "failed", lastError: "Boom", ...pr({}) }),
+      agent,
+      "Waiting for you to approve a command",
+    ],
+    [
+      "its own subagent's question",
+      child({}, "user_input"),
+      agent,
+      "A subagent asked you a question",
+    ],
+    [
+      "the first line of the error of a failed run",
+      child({ status: "failed", lastError: "\nRate limited\nretry later", ...pr({}) }),
+      agent,
+      "Rate limited",
+    ],
+    [
+      "a stale error on a run that did not fail",
+      child({ lastError: "Old failure", ...message("assistant", "All done") }),
+      undefined,
+      "All done",
+    ],
+    [
+      "a PR with checks beats subagent progress",
+      child(pr({ checksState: "passing" })),
+      agent,
+      "PR #7 open, checks passing",
+    ],
+    ["an approved PR", child(pr({ reviewDecision: "approved" })), agent, "PR #7 open, approved"],
+    ["a merged PR", child(pr({ state: "merged" })), agent, "PR #7 merged"],
+    ["a PR not synced yet", child(pr(null)), agent, "Running the tests"],
+    [
+      "a subagent result beats its progress",
+      child(),
+      { progress: "Halfway", result: "Fixed the flaky test" },
+      "Fixed the flaky test",
+    ],
+    [
+      "the latest assistant message",
+      child(message("assistant", "Pushed a fix")),
+      undefined,
+      "Pushed a fix",
+    ],
+    [
+      "never the delegated task itself",
+      child(message("user", "<project_context>\nUse pnpm")),
+      undefined,
+      null,
+    ],
+    ["nothing to show", child(), { progress: "  ", result: null }, null],
+  ];
+
+  it.each(rows)("%s", (_label, thread, subagent, line) => {
+    expect(threadOverviewStatusLine(thread, subagent)).toBe(line);
   });
 });

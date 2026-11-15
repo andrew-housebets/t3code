@@ -30,7 +30,7 @@ export function threadOverviewPaletteItem(
     kind: "action",
     value: "action:open-thread-overview",
     searchTerms: ["overview", "threads", "delegated", "subagents", "coordinator"],
-    title: "Show thread overview",
+    title: "Show threads",
     icon: <BotIcon className={ITEM_ICON_CLASS} />,
     run: async () => openOverview(scopeThreadRef(thread.environmentId, thread.id)),
   };

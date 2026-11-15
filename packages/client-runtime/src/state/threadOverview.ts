@@ -1,7 +1,10 @@
 import {
   isProviderNativeSubagentThread,
+  type OrchestrationV2PendingRuntimeRequestSummary,
+  type OrchestrationV2Subagent,
   type OrchestrationV2ThreadShell,
   type ThreadId,
+  type ThreadPullRequestSnapshot,
 } from "@t3tools/contracts";
 import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
 import { groupBy } from "effect/Array";
@@ -83,4 +86,61 @@ export function groupThreadOverview(
     const threads = byGroup[group];
     return threads === undefined ? [] : [{ group, threads }];
   });
+}
+
+const REQUEST_LINES = {
+  command: "Waiting for you to approve a command",
+  "file-read": "Waiting for you to approve a file read",
+  "file-change": "Waiting for you to approve a file change",
+  permission: "Waiting for your permission",
+  "mcp-elicitation": "A tool is asking you for input",
+  dynamic_tool_call: "Waiting for you to approve a tool call",
+  user_input: "Asked you a question",
+  auth_refresh: "Needs you to sign in again",
+} satisfies Record<OrchestrationV2PendingRuntimeRequestSummary["kind"], string>;
+
+const firstLine = (text: string | null | undefined) =>
+  text
+    ?.split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line !== "") ?? null;
+
+function pullRequestLine(number: number, snapshot: ThreadPullRequestSnapshot): string {
+  if (snapshot.state !== "open") return `PR #${number} ${snapshot.state}`;
+  if (snapshot.isDraft) return `PR #${number} draft`;
+  const parts = [`PR #${number} open`];
+  if (snapshot.reviewDecision === "approved") parts.push("approved");
+  if (snapshot.checksState) parts.push(`checks ${snapshot.checksState}`);
+  return parts.join(", ");
+}
+
+/**
+ * One line of what a delegated thread last did, from data already on the client.
+ * Null when nothing has content; the row then shows its status label.
+ */
+export function threadOverviewStatusLine(
+  thread: EnvironmentThreadShell,
+  subagent?: Pick<OrchestrationV2Subagent, "progress" | "result"> | undefined,
+): string | null {
+  const request = thread.source.pendingRuntimeRequest;
+  if (request !== null) return REQUEST_LINES[request.kind];
+  if (thread.hasPendingUserInput) return REQUEST_LINES.user_input;
+  if (thread.hasPendingApprovals) return "Waiting for your approval";
+  if (thread.pendingSubagentRequest === "approval")
+    return "A subagent is waiting for your approval";
+  if (thread.pendingSubagentRequest === "user_input") return "A subagent asked you a question";
+  if (thread.latestRun?.status === "failed") {
+    const error = firstLine(thread.source.lastError);
+    if (error !== null) return error;
+  }
+  const link = visibleThreadPullRequests(thread.pullRequests).find(
+    (candidate) => candidate.snapshot !== null,
+  );
+  if (link?.snapshot) return pullRequestLine(link.number, link.snapshot);
+  const latest = thread.source.latestVisibleMessage;
+  return (
+    firstLine(subagent?.result) ??
+    firstLine(subagent?.progress) ??
+    (latest?.role === "assistant" ? firstLine(latest.text) : null)
+  );
 }

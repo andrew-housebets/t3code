@@ -1,3 +1,4 @@
+import type { ThreadOverviewGroup } from "@t3tools/client-runtime/state/thread-overview";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
@@ -12,14 +13,22 @@ const withKey = (set: KeySet, key: string, present: boolean): KeySet => {
   return rest;
 };
 
-const keySetOf = (value: unknown): KeySet =>
-  typeof value === "object" && value !== null && !Array.isArray(value) ? (value as KeySet) : {};
+const objectOf = <T = KeySet>(value: unknown): T =>
+  (typeof value === "object" && value !== null && !Array.isArray(value) ? value : {}) as T;
+
+type GroupCollapse = Readonly<Partial<Record<ThreadOverviewGroup, boolean>>>;
+
+/** Resolved threads start folded away; every other group starts open. */
+export const isGroupCollapsed = (stored: GroupCollapse | undefined, group: ThreadOverviewGroup) =>
+  stored?.[group] ?? group === "resolved";
 
 interface CoordinatorStoreState {
   /** Drafts started as coordinators; the tag goes on at launch. */
   readonly draftIds: KeySet;
   /** Coordinator threads whose Overview this browser already opened once. */
   readonly overviewShownThreadKeys: KeySet;
+  readonly collapsedGroups: Readonly<Record<string, GroupCollapse>>;
+  readonly toggleGroup: (threadKey: string, group: ThreadOverviewGroup) => void;
   readonly markDraft: (draftId: string, coordinator: boolean) => void;
   /** True the first time it is asked for a thread, false after. */
   readonly claimFirstOverview: (threadKey: string) => boolean;
@@ -31,6 +40,17 @@ export const useCoordinatorStore = create<CoordinatorStoreState>()(
     (set, get) => ({
       draftIds: {},
       overviewShownThreadKeys: {},
+      collapsedGroups: {},
+      toggleGroup: (threadKey, group) =>
+        set((state) => {
+          const stored = state.collapsedGroups[threadKey];
+          return {
+            collapsedGroups: {
+              ...state.collapsedGroups,
+              [threadKey]: { ...stored, [group]: !isGroupCollapsed(stored, group) },
+            },
+          };
+        }),
       markDraft: (draftId, coordinator) =>
         set((state) => ({ draftIds: withKey(state.draftIds, draftId, coordinator) })),
       claimFirstOverview: (threadKey) => {
@@ -46,16 +66,20 @@ export const useCoordinatorStore = create<CoordinatorStoreState>()(
       storage: createJSONStorage(() =>
         resolveStorage(typeof window !== "undefined" ? window.localStorage : undefined),
       ),
-      partialize: ({ draftIds, overviewShownThreadKeys }) => ({
+      partialize: ({ draftIds, overviewShownThreadKeys, collapsedGroups }) => ({
         draftIds,
         overviewShownThreadKeys,
+        collapsedGroups,
       }),
       merge: (persisted, current) => {
-        const stored = keySetOf(persisted) as Partial<Record<string, unknown>>;
+        const stored = objectOf<Partial<Record<string, unknown>>>(persisted);
         return {
           ...current,
-          draftIds: keySetOf(stored.draftIds),
-          overviewShownThreadKeys: keySetOf(stored.overviewShownThreadKeys),
+          draftIds: objectOf(stored.draftIds),
+          overviewShownThreadKeys: objectOf(stored.overviewShownThreadKeys),
+          collapsedGroups: objectOf<CoordinatorStoreState["collapsedGroups"]>(
+            stored.collapsedGroups,
+          ),
         };
       },
     },
