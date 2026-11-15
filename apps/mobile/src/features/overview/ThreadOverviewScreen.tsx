@@ -90,7 +90,7 @@ type RowAction = "resolve" | "reopen" | "stop";
 const ROW_ACTIONS = {
   resolve: { label: "Mark resolved", failure: "Could not mark resolved" },
   reopen: { label: "Reopen", failure: "Could not reopen" },
-  stop: { label: "Stop", failure: "Could not stop the thread" },
+  stop: { label: "Stop thread", failure: "Could not stop the thread" },
 } satisfies Record<RowAction, { readonly label: string; readonly failure: string }>;
 
 /** Settling refuses an active or blocked run, so a thread with a live run offers Stop instead. */

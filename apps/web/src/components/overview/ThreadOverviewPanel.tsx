@@ -84,7 +84,7 @@ const SETTLED_TASK: ReadonlySet<OrchestrationV2Subagent["status"]> = new Set([
 const ROW_ACTIONS = {
   resolve: { label: "Mark resolved", Icon: CircleCheckIcon, failure: "Could not mark resolved" },
   reopen: { label: "Reopen", Icon: RotateCcwIcon, failure: "Could not reopen" },
-  stop: { label: "Stop", Icon: SquareIcon, failure: "Could not stop the thread" },
+  stop: { label: "Stop thread", Icon: SquareIcon, failure: "Could not stop the thread" },
 } satisfies Record<
   RowAction,
   { readonly label: string; readonly Icon: LucideIcon; readonly failure: string }
