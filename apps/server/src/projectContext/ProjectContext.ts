@@ -94,6 +94,10 @@ export class ProjectContext extends Context.Service<
       projectId: string,
       task: string,
     ) => Effect.Effect<string, ProjectContextPathError | ProjectContextLibraryError>;
+    /** What a coordinator reads beside its brief: the same instructions and memory, and the Library. */
+    readonly coordinatorContext: (
+      projectId: string,
+    ) => Effect.Effect<string, ProjectContextPathError | ProjectContextLibraryError>;
   }
 >()("t3/projectContext/ProjectContext") {}
 
@@ -105,21 +109,36 @@ const capped = (text: string) => {
   return `${text.slice(0, end)}\n[Cut at ${PROJECT_CONTEXT_MAX_CHARS} characters.]`;
 };
 
+const fileSections = (files: ProjectContextFiles) =>
+  [
+    files.instructions.trim() === ""
+      ? undefined
+      : `## Standing instructions\n\n${files.instructions.trimEnd()}`,
+    files.memory.trim() === "" ? undefined : `## Memory index\n\n${files.memory.trimEnd()}`,
+  ].filter((section) => section !== undefined);
+
 function formatTaskWithContext(
   task: string,
   context: ProjectContextFiles & { readonly libraryDir: string },
 ): string {
   const sections = [
-    context.instructions.trim() === ""
-      ? undefined
-      : `## Standing instructions\n\n${context.instructions.trimEnd()}`,
-    context.memory.trim() === "" ? undefined : `## Memory index\n\n${context.memory.trimEnd()}`,
+    ...fileSections(context),
     `Library: put non-code deliverables (reports, notes, docs) in ${context.libraryDir}, not in your worktree, which is private to this thread.`,
-  ].filter((section) => section !== undefined);
+  ];
   return formatProjectContextBlock(
     `This project's standing context. Follow it while you do the task below.\n\n${sections.join("\n\n")}`,
     task,
   );
+}
+
+function formatCoordinatorContext(
+  context: ProjectContextFiles & { readonly libraryDir: string },
+): string {
+  return [
+    "## Project standing context\n\nEvery thread you delegate starts with these instructions and this memory. Hold delegated work to them, and answer questions about them from this text.",
+    ...fileSections(context),
+    `Library: the project's non-code deliverables are in ${context.libraryDir}.`,
+  ].join("\n\n");
 }
 
 const make = Effect.gen(function* () {
@@ -274,6 +293,13 @@ const make = Effect.gen(function* () {
     });
   });
 
+  const coordinatorContext = Effect.fn("ProjectContext.coordinatorContext")(function* (
+    projectId: string,
+  ) {
+    const files = yield* read(projectId);
+    return formatCoordinatorContext({ ...files, libraryDir: yield* ensureLibrary(projectId) });
+  });
+
   return ProjectContext.of({
     directory,
     read,
@@ -282,6 +308,7 @@ const make = Effect.gen(function* () {
     ensureLibrary,
     listLibrary,
     taskWithContext,
+    coordinatorContext,
   });
 });
 

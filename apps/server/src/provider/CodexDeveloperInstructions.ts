@@ -32,6 +32,36 @@ const toolInstructions = (availability: boolean | T3CodeToolAvailability): strin
     .join("\n\n");
 };
 
+/** Line-aligned pieces within Codex's per-entry cap; a longer line splits between code points. */
+function splitCodexContextValue(text: string): ReadonlyArray<string> {
+  const max = CODEX_ADDITIONAL_CONTEXT_VALUE_MAX_BYTES;
+  const pieces: Array<string> = [];
+  let current = "";
+  let currentBytes = 0;
+  const flush = () => {
+    if (current !== "") pieces.push(current);
+    current = "";
+    currentBytes = 0;
+  };
+  for (const line of text.split(/(?<=\n)/)) {
+    const lineBytes = Buffer.byteLength(line, "utf8");
+    if (currentBytes + lineBytes > max) flush();
+    if (lineBytes <= max) {
+      current += line;
+      currentBytes += lineBytes;
+      continue;
+    }
+    for (const char of line) {
+      const charBytes = Buffer.byteLength(char, "utf8");
+      if (currentBytes + charBytes > max) flush();
+      current += char;
+      currentBytes += charBytes;
+    }
+  }
+  flush();
+  return pieces;
+}
+
 export interface CodexRuntimeInfo {
   readonly model: string;
   readonly modelName?: string | undefined;
@@ -43,6 +73,7 @@ export function buildCodexAdditionalContext(
   runtime: CodexRuntimeInfo,
   toolsAvailable: boolean | T3CodeToolAvailability = true,
   coordinator = false,
+  projectContext?: string,
 ): Record<string, V2TurnStartParams__AdditionalContextEntry> {
   const tools = toolInstructions(toolsAvailable);
   // Split values to fit per-entry caps; number keys because Codex emits them in key order.
@@ -65,6 +96,15 @@ export function buildCodexAdditionalContext(
             value: T3_CODE_COORDINATOR_INSTRUCTIONS,
           },
         }
+      : {}),
+    // User- and agent-written text, so it carries a user's authority, not the application's.
+    ...(coordinator && projectContext !== undefined
+      ? Object.fromEntries(
+          splitCodexContextValue(projectContext).map((value, index) => [
+            `t3_code_project_context_${String(index + 1).padStart(2, "0")}`,
+            { kind: "untrusted" as const, value },
+          ]),
+        )
       : {}),
   };
 }

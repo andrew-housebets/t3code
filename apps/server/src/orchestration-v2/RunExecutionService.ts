@@ -41,6 +41,7 @@ import * as Stream from "effect/Stream";
 import * as McpSessionRegistry from "../mcp/McpSessionRegistry.ts";
 import * as McpAppModelContext from "../mcpApps/McpAppModelContext.ts";
 import * as PreviewAgentActivity from "../preview/PreviewAgentActivity.ts";
+import * as ProjectContext from "../projectContext/ProjectContext.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as CheckpointService from "./CheckpointService.ts";
 import * as EventSink from "./EventSink.ts";
@@ -58,6 +59,7 @@ import * as RunFinalizationService from "./RunFinalizationService.ts";
 import * as ThreadCommandExecutor from "./ThreadCommandExecutor.ts";
 import * as TurnItemPositionStore from "./TurnItemPositionStore.ts";
 import { userFacingDatabaseErrorMessage } from "./UserFacingErrors.ts";
+import { isCoordinatorThread } from "@t3tools/shared/coordinatorThread";
 
 export interface ProviderEventRoutingState {
   readonly ownedThreadIds: ReadonlySet<ThreadId>;
@@ -647,6 +649,7 @@ export const layer: Layer.Layer<
   | ProviderEventIngestor.ProviderEventIngestorV2
   | ServerSettings.ServerSettingsService
   | McpAppModelContext.McpAppModelContext
+  | ProjectContext.ProjectContext
   | PreviewAgentActivity.PreviewAgentActivity
   | TurnItemPositionStore.TurnItemPositionStoreV2
   | ThreadCommandExecutor.ThreadCommandExecutor
@@ -660,6 +663,7 @@ export const layer: Layer.Layer<
     const providerEventIngestor = yield* ProviderEventIngestor.ProviderEventIngestorV2;
     const serverSettings = yield* ServerSettings.ServerSettingsService;
     const mcpAppModelContext = yield* McpAppModelContext.McpAppModelContext;
+    const projectContext = yield* ProjectContext.ProjectContext;
     const previewAgentActivity = yield* PreviewAgentActivity.PreviewAgentActivity;
     const turnItemPositions = yield* TurnItemPositionStore.TurnItemPositionStoreV2;
     const finalizationObserver = yield* RunFinalizationService.RunFinalizationObserver;
@@ -1958,6 +1962,15 @@ export const layer: Layer.Layer<
           key: `mcp_app_${entry.itemId.replace(/[^\w.-]/g, "_")}`,
           text: entry.text,
         }));
+        const coordinatorProjectContext = isCoordinatorThread(input.appThread)
+          ? yield* projectContext.coordinatorContext(input.appThread.projectId).pipe(
+              Effect.catch((cause) =>
+                Effect.logWarning("Failed to read the coordinator's project context.", {
+                  cause,
+                }).pipe(Effect.as(undefined)),
+              ),
+            )
+          : undefined;
         const turnInput = {
           appThread: input.appThread,
           threadId: input.run.threadId,
@@ -1979,6 +1992,9 @@ export const layer: Layer.Layer<
           modelSelection: input.modelSelection,
           runtimePolicy: input.runtimePolicy,
           ...(appContext.length === 0 ? {} : { appContext }),
+          ...(coordinatorProjectContext === undefined
+            ? {}
+            : { projectContext: coordinatorProjectContext }),
         };
         // Check after the context read: ingestion can settle the run while
         // it awaits. A failed ownership read fails the start below.

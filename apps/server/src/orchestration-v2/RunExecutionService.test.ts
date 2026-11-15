@@ -17,6 +17,7 @@ import {
   type OrchestrationV2StoredEvent,
   type OrchestrationV2Subagent,
   type OrchestrationV2TurnItem,
+  ProjectId,
   ProviderDriverKind,
   ProviderInstanceId,
   ProviderSessionId,
@@ -57,6 +58,7 @@ import * as ProviderCommitBatch from "./ProviderCommitBatch.ts";
 import * as ProviderEventIngestor from "./ProviderEventIngestor.ts";
 import * as ProviderUsageAnalytics from "../telemetry/ProviderUsageAnalytics.ts";
 import * as McpAppModelContext from "../mcpApps/McpAppModelContext.ts";
+import * as ProjectContext from "../projectContext/ProjectContext.ts";
 import * as PreviewAgentActivity from "../preview/PreviewAgentActivity.ts";
 import * as RunExecutionService from "./RunExecutionService.ts";
 import * as RunFinalizationService from "./RunFinalizationService.ts";
@@ -89,6 +91,7 @@ const layerRunExecutionTest = RunExecutionService.layer.pipe(
   Layer.provide(
     Layer.mergeAll(
       McpAppModelContext.layerEmpty,
+      Layer.mock(ProjectContext.ProjectContext)({}),
       PreviewAgentActivity.layer,
       Layer.mock(CheckpointService.CheckpointServiceV2)({ captureBaseline: () => Effect.void }),
       layerTurnItemPositionsTest,
@@ -914,7 +917,7 @@ it.effect("rechecks run ownership immediately before calling the provider", () =
   }).pipe(Effect.provide(layerRunExecutionTest)),
 );
 
-it.effect("passes the thread's MCP app context to the provider under a safe key", () =>
+it.effect("passes the MCP app context, and a coordinator's project context, to the provider", () =>
   Effect.gen(function* () {
     const runExecution = yield* RunExecutionService.RunExecutionServiceV2;
     const started = yield* Deferred.make<ProviderAdapter.ProviderAdapterV2TurnInput>();
@@ -929,7 +932,11 @@ it.effect("passes the thread's MCP app context to the provider under a safe key"
 
     yield* runExecution.startRootRun({
       commandId: CommandId.make("command:run-execution-app-context"),
-      appThread: rootAppThread(threadId),
+      appThread: {
+        ...rootAppThread(threadId),
+        projectId: ProjectId.make("project:run-execution-app-context"),
+        tags: ["coordinator"],
+      },
       providerSessionId: ProviderSessionId.make("session:run-execution-app-context"),
       session,
       run: {
@@ -966,12 +973,16 @@ it.effect("passes the thread's MCP app context to the provider under a safe key"
     assert.deepEqual(input.appContext, [
       { key: "mcp_app_turn-item_provider_codex_native-item_call-1", text: "2 overdue" },
     ]);
+    assert.equal(input.projectContext, "context of project:run-execution-app-context");
   }).pipe(
     Effect.provide(
       RunExecutionService.layer.pipe(
         Layer.provide(
           Layer.mergeAll(
             PreviewAgentActivity.layer,
+            Layer.mock(ProjectContext.ProjectContext)({
+              coordinatorContext: (projectId) => Effect.succeed(`context of ${projectId}`),
+            }),
             Layer.mock(McpAppModelContext.McpAppModelContext)({
               forThread: () =>
                 Effect.succeed([
@@ -1014,6 +1025,7 @@ it.effect("fails the run when its ownership check cannot be read before calling 
       Layer.provide(
         Layer.mergeAll(
           McpAppModelContext.layerEmpty,
+          Layer.mock(ProjectContext.ProjectContext)({}),
           PreviewAgentActivity.layer,
           Layer.mock(CheckpointService.CheckpointServiceV2)({ captureBaseline: () => Effect.void }),
           layerTurnItemPositionsTest,
@@ -1217,6 +1229,7 @@ it.effect("starts the provider when checkpoint baseline capture fails", () =>
       Layer.provide(
         Layer.mergeAll(
           McpAppModelContext.layerEmpty,
+          Layer.mock(ProjectContext.ProjectContext)({}),
           PreviewAgentActivity.layer,
           Layer.mock(CheckpointService.CheckpointServiceV2)({
             captureBaseline: () =>
@@ -1329,6 +1342,7 @@ it.effect("prompts the provider only after a forked baseline capture finishes", 
       Layer.provide(
         Layer.mergeAll(
           McpAppModelContext.layerEmpty,
+          Layer.mock(ProjectContext.ProjectContext)({}),
           PreviewAgentActivity.layer,
           Layer.mock(CheckpointService.CheckpointServiceV2)({
             captureBaseline: () =>
@@ -1430,6 +1444,7 @@ it.effect.each(["failure", "interruption", "stale-attempt", "start-guard"] as co
         Layer.provide(
           Layer.mergeAll(
             McpAppModelContext.layerEmpty,
+            Layer.mock(ProjectContext.ProjectContext)({}),
             PreviewAgentActivity.layer,
             Layer.mock(CheckpointService.CheckpointServiceV2)({
               captureBaseline: () =>
@@ -1614,6 +1629,7 @@ it.effect("ingests new member threads of an owned child after the root turn term
               ]),
           }),
           McpAppModelContext.layerEmpty,
+          Layer.mock(ProjectContext.ProjectContext)({}),
           PreviewAgentActivity.layer,
           Layer.mock(CheckpointService.CheckpointServiceV2)({ captureBaseline: () => Effect.void }),
           layerTurnItemPositionsTest,
@@ -1875,6 +1891,7 @@ it.effect("ends a nested native subagent and its thread when the root run is int
       Layer.provide(
         Layer.mergeAll(
           McpAppModelContext.layerEmpty,
+          Layer.mock(ProjectContext.ProjectContext)({}),
           PreviewAgentActivity.layer,
           Layer.mock(CheckpointService.CheckpointServiceV2)({ captureBaseline: () => Effect.void }),
           layerTurnItemPositionsTest,
@@ -2491,6 +2508,7 @@ it.effect(
         Layer.provide(
           Layer.mergeAll(
             McpAppModelContext.layerEmpty,
+            Layer.mock(ProjectContext.ProjectContext)({}),
             PreviewAgentActivity.layer,
             Layer.mock(CheckpointService.CheckpointServiceV2)({
               captureBaseline: () => Effect.void,
@@ -2928,6 +2946,7 @@ it.effect("settles native subagents when a workspace handoff completes the root 
       Layer.provide(
         Layer.mergeAll(
           McpAppModelContext.layerEmpty,
+          Layer.mock(ProjectContext.ProjectContext)({}),
           PreviewAgentActivity.layer,
           Layer.mock(CheckpointService.CheckpointServiceV2)({
             captureBaseline: () => Effect.void,
@@ -3820,6 +3839,7 @@ function captureRootRunTermination(input: {
           Layer.mock(McpAppModelContext.McpAppModelContext)({
             forThread: () => input.appContext ?? Effect.succeed([]),
           }),
+          Layer.mock(ProjectContext.ProjectContext)({}),
           Layer.mock(CheckpointService.CheckpointServiceV2)({ captureBaseline: () => Effect.void }),
           layerTurnItemPositionsTest,
           mockEventSink({
@@ -4376,6 +4396,7 @@ function runBackgroundItemScenario(
       Layer.provide(
         Layer.mergeAll(
           McpAppModelContext.layerEmpty,
+          Layer.mock(ProjectContext.ProjectContext)({}),
           Layer.succeed(PreviewAgentActivity.PreviewAgentActivity, previewActivity),
           Layer.mock(CheckpointService.CheckpointServiceV2)({ captureBaseline: () => Effect.void }),
           layerTurnItemPositionsTest,

@@ -553,6 +553,8 @@ export interface ProviderAdapterV2TurnInput {
   readonly modelSelection: ModelSelection;
   readonly runtimePolicy: ProviderAdapterV2RuntimePolicy;
   readonly appContext?: ReadonlyArray<{ readonly key: string; readonly text: string }>;
+  /** Coordinator threads only: the project's standing context, read at this turn's start. */
+  readonly projectContext?: string;
 }
 
 export type ProviderAdapterV2ResumeTurnInput = Omit<

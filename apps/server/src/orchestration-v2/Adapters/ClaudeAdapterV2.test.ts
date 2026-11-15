@@ -740,7 +740,11 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
     });
 
     assert.strictEqual(withClaudeCoordinatorOptions({ tags: ["private"] }, options), options);
-    const coordinator = withClaudeCoordinatorOptions({ tags: ["coordinator"] }, options);
+    const coordinator = withClaudeCoordinatorOptions(
+      { tags: ["coordinator"] },
+      options,
+      "## Project standing context\n\nEnd every file with ZEBRA-7.",
+    );
     assert.equal(coordinator.permissionMode, "bypassPermissions");
     assert.deepEqual(coordinator.tools, [...ClaudeAdapterV2.CLAUDE_READ_ONLY_ALLOWED_TOOLS]);
     assert.includeMembers(coordinator.disallowedTools ?? [], [
@@ -771,6 +775,10 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
     assert.include(
       typeof systemPrompt === "object" && "append" in systemPrompt ? systemPrompt.append : "",
       T3_CODE_COORDINATOR_INSTRUCTIONS,
+    );
+    assert.include(
+      typeof systemPrompt === "object" && "append" in systemPrompt ? systemPrompt.append : "",
+      "End every file with ZEBRA-7.",
     );
   });
 

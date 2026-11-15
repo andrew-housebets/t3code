@@ -39,6 +39,7 @@ import * as TestClock from "effect/testing/TestClock";
 
 import * as ServerConfig from "../config.ts";
 import * as McpAppModelContext from "../mcpApps/McpAppModelContext.ts";
+import * as ProjectContext from "../projectContext/ProjectContext.ts";
 import * as PreviewAgentActivity from "../preview/PreviewAgentActivity.ts";
 import * as CheckpointService from "./CheckpointService.ts";
 import * as ProviderEventIngestor from "./ProviderEventIngestor.ts";
@@ -1675,6 +1676,7 @@ effectIt.effect("preserves a replacement committed before exhausted start settle
       Layer.provide(
         Layer.mergeAll(
           McpAppModelContext.layerEmpty,
+          Layer.mock(ProjectContext.ProjectContext)({}),
           PreviewAgentActivity.layer,
           Layer.mock(CheckpointService.CheckpointServiceV2)({ captureBaseline: () => Effect.void }),
           Layer.mock(TurnItemPositionStore.TurnItemPositionStoreV2)({}),

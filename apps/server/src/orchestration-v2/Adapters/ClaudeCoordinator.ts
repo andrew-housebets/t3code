@@ -24,6 +24,7 @@ const union = (left: ReadonlyArray<string> | undefined, right: ReadonlyArray<str
 export function withClaudeCoordinatorOptions(
   appThread: Pick<OrchestrationV2AppThread, "tags">,
   options: ClaudeAgentSdkQueryOptions,
+  projectContext?: string,
 ): ClaudeAgentSdkQueryOptions {
   if (!isCoordinatorThread(appThread)) return options;
   const locked = {
@@ -44,7 +45,7 @@ export function withClaudeCoordinatorOptions(
     allowedTools: union(options.allowedTools, CLAUDE_COORDINATOR_T3_MCP_ALLOWED_TOOLS),
     systemPrompt: {
       ...systemPrompt,
-      append: `${systemPrompt.append ?? ""}\n\n${T3_CODE_COORDINATOR_INSTRUCTIONS}\n`,
+      append: `${systemPrompt.append ?? ""}\n\n${T3_CODE_COORDINATOR_INSTRUCTIONS}\n${projectContext === undefined ? "" : `\n${projectContext}\n`}`,
     },
   };
 }

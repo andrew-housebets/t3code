@@ -12551,7 +12551,8 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               ? {}
               : { allowedTools: queryPolicy.allowedTools }),
           });
-          const queryPolicyKey = claudeEffectiveQueryPolicyKey(queryPolicy, mcpOverrides);
+          // A changed project context reopens a coordinator's query, as a policy change does.
+          const queryPolicyKey = `${claudeEffectiveQueryPolicyKey(queryPolicy, mcpOverrides)}${turnInput.projectContext ?? ""}`;
           const resumeSessionAt = yield* getNativeConversationHeadId(turnInput.providerThread);
           const existing = yield* Ref.get(queryContext);
           // Continuations drain existing output without prompting; retain the live process regardless of selection.
@@ -12728,7 +12729,11 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
           const openQueryRuntime = queryRunner.open({
             threadId: turnInput.threadId,
             providerSessionId: input.providerSessionId,
-            options: withClaudeCoordinatorOptions(turnInput.appThread, queryOptions),
+            options: withClaudeCoordinatorOptions(
+              turnInput.appThread,
+              queryOptions,
+              turnInput.projectContext,
+            ),
             ...(turnInput.resume ? { resume: true } : {}),
           });
           // The SDK spawns the CLI per turn, so only the open waits for a provider update.

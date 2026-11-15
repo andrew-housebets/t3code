@@ -65,6 +65,21 @@ it.layer(layerTest, { excludeTestServices: true })("ProjectContext", (it) => {
     }),
   );
 
+  it.effect("gives a coordinator the same instructions, memory and Library its children get", () =>
+    Effect.gen(function* () {
+      const { libraryDir } = yield* withContext({
+        instructions: "End every file with ZEBRA-7.",
+        memory: "- [auth](auth.md)",
+      });
+      const context = yield* (yield* ProjectContext.ProjectContext).coordinatorContext(
+        "project:mcp-1",
+      );
+      for (const text of ["End every file with ZEBRA-7.", "- [auth](auth.md)", libraryDir]) {
+        assert.include(context, text);
+      }
+    }),
+  );
+
   it.effect("passes a task through byte-identical when the project has no context", () =>
     Effect.gen(function* () {
       const context = yield* ProjectContext.ProjectContext;
