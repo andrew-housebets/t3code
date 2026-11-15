@@ -26,6 +26,7 @@ import * as McpInvocationContext from "./McpInvocationContext.ts";
 import { resolveInteractionMode, resolveRuntimeMode } from "./delegatedTaskModes.ts";
 import {
   assertCoordinatorDelegated,
+  assertCoordinatorDelegatedThere,
   assertFullAccess,
   assertLiveCaller,
   assertTargetWithinLimits,
@@ -53,10 +54,12 @@ let declare: <P, A, E, R>(
 /**
  * What a call bound for a linked environment checks here before it goes: the
  * caller, not the thread or project it names, which live there and are
- * checked there. `undefined` for tools that act as the calling thread itself.
+ * checked there, except that a coordinator may only name a task's thread it
+ * delegated there. `undefined` for tools that act as the calling thread itself.
  */
 type RemoteCheck<P> = (
   params: P,
+  environmentId: EnvironmentId,
 ) => Effect.Effect<unknown, OrchestratorMcpFailure, Effect.Services<typeof writingCaller>>;
 let remoteCheckOf: <Handler>(declaration: Declaration<Handler>) => RemoteCheck<never> | undefined;
 
@@ -227,7 +230,12 @@ export const writesThreads = <P, A, E, R>(
           ),
         );
       }),
-    () => writingCaller,
+    (params: P, environmentId) =>
+      writingCaller.pipe(
+        Effect.tap((caller) =>
+          assertCoordinatorDelegatedThere(caller, environmentId, threads(params)),
+        ),
+      ),
   );
 
 const escalationDenied = (refusal: DispatchModeRefusal) =>
@@ -293,8 +301,8 @@ export const either = <P, A, E, R, A2, E2, R2>(
   return declare(
     (params: P): Effect.Effect<A | A2, E | E2, R | R2> =>
       useFirst(params) ? checkedHandler(first)(params) : checkedHandler(second)(params),
-    (params) =>
-      remotes[useFirst(params) ? 0 : 1]?.(params) ??
+    (params, environmentId) =>
+      remotes[useFirst(params) ? 0 : 1]?.(params, environmentId) ??
       Effect.fail(
         new OrchestratorMcpFailure({
           code: "invalid_request",
@@ -440,7 +448,7 @@ const routed = Effect.fn("McpToolAccess.routed")(function* <Tools extends Record
         const target = PeerForwarding.remoteTarget(scope, environmentId);
         if (target === undefined) return yield* here(params);
         if (scope.linkedEnvironments === false) return yield* PeerForwarding.linkedEnvironmentsOff;
-        yield* (remote as RemoteCheck<typeof params>)(params);
+        yield* (remote as RemoteCheck<typeof params>)(params, target);
         if (Option.isNone(forwarding)) return yield* linksUnavailable;
         const result = yield* forwarding.value.call(scope, tool, target, {
           ...params,

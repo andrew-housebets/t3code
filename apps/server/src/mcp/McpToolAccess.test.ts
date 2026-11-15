@@ -383,6 +383,7 @@ it.effect("refuses a change when the calling thread cannot be read", () =>
 );
 
 const box = EnvironmentId.make("environment-box");
+const remoteChildThreadId = ThreadId.make("thread:delegated-on-box");
 const here = EnvironmentId.make("environment");
 const linkedProbe = {
   ...probe,
@@ -420,6 +421,13 @@ const linkedProbeServer = McpHttpServer.toolkitRegistration(
   Layer.provideMerge(
     Layer.mock(ThreadManagement.ThreadManagementService)({
       getThreadShell: (threadId) => Effect.succeed(shells.get(threadId) ?? null),
+      getThreadRecords: (threadId) =>
+        Effect.succeed({
+          subagents:
+            threadId === coordinatorThreadId
+              ? [{ remoteChild: { environmentId: box, threadId: remoteChildThreadId } }]
+              : [],
+        } as never),
     }),
   ),
   // Stands in for the linked environment, answering with where the call went.
@@ -469,6 +477,19 @@ it.effect.each([
     supervised,
     { environmentId: here, threadId: fullAccessThreadId },
     "runtime_mode_escalation_denied",
+  ],
+  // A coordinator there may only name a thread it delegated there.
+  [
+    "writes_threads",
+    coordinator,
+    { environmentId: box, threadId: remoteChildThreadId },
+    "writes_threads in environment-box",
+  ],
+  [
+    "writes_threads",
+    coordinator,
+    { environmentId: box, threadId: fullAccessThreadId },
+    "capability_denied",
   ],
 ] as const)("a linked %s from %o with %o: %s", ([tool, scope, args, expected]) =>
   call(tool, scope, args).pipe(

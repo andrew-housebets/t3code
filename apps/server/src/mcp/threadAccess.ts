@@ -4,6 +4,7 @@ import type {
 } from "../orchestration-v2/ProjectionStore.ts";
 import {
   CommandId,
+  type EnvironmentId,
   OrchestratorMcpFailure,
   type ProjectId,
   type ProviderInstanceId,
@@ -179,11 +180,36 @@ export const assertCoordinatorDelegated = Effect.fn("mcp.assertCoordinatorDelega
       .getThreadShell(thread.lineage.parentThreadId)
       .pipe(Effect.mapError(unavailable));
   }
-  return yield* new OrchestratorMcpFailure({
-    code: "capability_denied",
-    message: `A coordinator changes only threads it delegated, and "${target.id}" is not one. Start the work with delegate_task, or tell the user to act in that thread.`,
-  });
+  return yield* notDelegated(target.id);
 });
+
+/** In a linked environment only the threads it delegated there directly can be recognised. */
+export const assertCoordinatorDelegatedThere = Effect.fn("mcp.assertCoordinatorDelegatedThere")(
+  function* (
+    { caller, threads }: Caller,
+    environmentId: EnvironmentId,
+    threadIds: ReadonlyArray<ThreadId | undefined>,
+  ) {
+    if (caller === undefined || !isCoordinatorThread(caller)) return;
+    const { subagents } = yield* threads
+      .getThreadRecords(caller.id, ["subagents"])
+      .pipe(Effect.mapError(unavailable));
+    for (const threadId of threadIds) {
+      const delegated = subagents.some(
+        (task) =>
+          task.remoteChild?.environmentId === environmentId &&
+          task.remoteChild.threadId === threadId,
+      );
+      if (!delegated) return yield* notDelegated(threadId ?? "its own thread there");
+    }
+  },
+);
+
+const notDelegated = (threadId: string) =>
+  new OrchestratorMcpFailure({
+    code: "capability_denied",
+    message: `A coordinator changes only threads it delegated, and "${threadId}" is not one. Start the work with delegate_task, or tell the user to act in that thread.`,
+  });
 
 /** Background subagents retain credentials until provider exit; archived threads and other instances cannot act. */
 export const isLiveCallerShell = (
