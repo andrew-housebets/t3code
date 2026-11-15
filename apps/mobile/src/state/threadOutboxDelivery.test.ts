@@ -64,6 +64,7 @@ const harness = vi.hoisted(() => ({
   })(),
 }));
 
+vi.mock("./coordinator-drafts", () => ({ setCoordinatorDraft: vi.fn() }));
 vi.mock("react-native", () => ({ Alert: { alert: vi.fn() } }));
 
 vi.mock("expo-file-system", () => ({

@@ -1,3 +1,5 @@
+import { COORDINATOR_THREAD_TAG } from "@t3tools/shared/coordinatorThread";
+import { setCoordinatorDraft } from "./coordinator-drafts";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import * as Dialog from "../components/ui/Dialog";
 import {
@@ -444,6 +446,9 @@ export async function restoreRejectedQueuedMessage(
     let mergedDraft: ComposerDraft;
     try {
       stampRecoveryDraftProject(queuedMessage, draftKey);
+      if (queuedMessage.creation?.tags?.includes(COORDINATOR_THREAD_TAG)) {
+        setCoordinatorDraft(draftKey, true);
+      }
       await mergeComposerDraftContent(draftKey, {
         text: queuedMessage.text,
         context: queuedMessage.context,
@@ -1131,6 +1136,7 @@ export function createThreadOutboxDelivery(): {
         worktreePath: workspace.worktreePath,
         startFromOrigin: workspace.startFromOrigin ?? false,
         worktreeBranchName: buildTemporaryWorktreeBranchName(randomHex),
+        tags: creation.tags,
       }),
     });
     if (AsyncResult.isFailure(deliveryResult) && !hasAccess()) return true;

@@ -1,3 +1,8 @@
+import {
+  COORDINATOR_DRAFT_PLACEHOLDER,
+  setCoordinatorDraft,
+  useIsCoordinatorDraft,
+} from "../../state/coordinator-drafts";
 import { DraftEnvironmentControl } from "./DraftEnvironmentControl";
 import { NativeScrollEdgeEffectsContext } from "../../native/NativeScrollViewMarker";
 import { DraftThreadHeader } from "./DraftThreadHeader";
@@ -161,6 +166,7 @@ export function NewTaskDraftScreen(props: {
   const [creationMetadata] = useState(makeTurnCommandMetadata);
   const projects = useProjects();
   const flow = useNewTaskFlow();
+  const coordinatorDraft = useIsCoordinatorDraft(flow.draftKey);
   const navigation = useNavigation();
   const isFocused = useIsFocused();
   const goBack = useWorkspaceBackNavigation();
@@ -967,7 +973,17 @@ export function NewTaskDraftScreen(props: {
       <ThreadScreenBinding
         environmentId={selectedProject.environmentId}
         header={
-          <DraftThreadHeader thread={thread} project={selectedProject} cwd={flow.workspaceCwd} />
+          <DraftThreadHeader
+            thread={thread}
+            project={selectedProject}
+            cwd={flow.workspaceCwd}
+            coordinator={coordinatorDraft}
+            onToggleCoordinator={
+              flow.draftKey === null
+                ? undefined
+                : () => setCoordinatorDraft(flow.draftKey!, !coordinatorDraft)
+            }
+          />
         }
         draftMode={{
           content: heroViewport,
@@ -975,6 +991,7 @@ export function NewTaskDraftScreen(props: {
           editorRef: promptInputRef,
           sendBlockedReason: setupBlockReason,
           interactionLocked: isComposerInteractionLocked,
+          placeholder: coordinatorDraft ? COORDINATOR_DRAFT_PLACEHOLDER : undefined,
         }}
         canOperateThread={canOperate}
         selectedThread={thread}

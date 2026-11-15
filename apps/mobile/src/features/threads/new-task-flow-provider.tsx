@@ -1,3 +1,5 @@
+import { COORDINATOR_THREAD_TAG } from "@t3tools/shared/coordinatorThread";
+import { isCoordinatorDraft } from "../../state/coordinator-drafts";
 import { ActiveNewTaskContext } from "../../state/active-new-task";
 import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
 import { useNowMinuteMs } from "../../lib/clock";
@@ -793,6 +795,7 @@ export function NewTaskFlowProvider(
         ...((workspaceSelection?.startFromOrigin ?? startFromOrigin)
           ? { startFromOrigin: true }
           : {}),
+        ...(isCoordinatorDraft(selectedProjectDraftKey) ? { tags: [COORDINATOR_THREAD_TAG] } : {}),
       },
       createdAt: metadata.createdAt,
     };

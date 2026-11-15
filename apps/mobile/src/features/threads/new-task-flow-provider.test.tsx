@@ -37,6 +37,7 @@ const mocks = vi.hoisted(() => ({
   openScratch: vi.fn(),
   prepareTriage: vi.fn(),
 }));
+vi.mock("../../state/coordinator-drafts", () => ({ isCoordinatorDraft: () => false }));
 vi.mock("../../state/atom-registry", () => ({
   appAtomRegistry: {
     get: (atom: Atom.Atom<unknown>) => mocks.registry().get(atom),

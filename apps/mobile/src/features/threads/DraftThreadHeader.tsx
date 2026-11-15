@@ -19,6 +19,8 @@ export function DraftThreadHeader(props: {
   readonly thread: EnvironmentThreadShell;
   readonly project: EnvironmentProject;
   readonly cwd: string | null;
+  readonly coordinator: boolean;
+  readonly onToggleCoordinator: (() => void) | undefined;
 }) {
   const navigation = useNavigation();
   const environmentId = props.thread.environmentId;
@@ -46,11 +48,25 @@ export function DraftThreadHeader(props: {
   return (
     <ThreadHeader
       draft
-      title="New thread"
+      title={props.coordinator ? "New coordinator" : "New thread"}
       subtitle=""
       hasThreadCwd={props.cwd !== null}
       inspectorMode={null}
       onOpenFilesInspector={openFiles}
+      draftActions={
+        props.onToggleCoordinator === undefined
+          ? []
+          : [
+              {
+                accessibilityLabel: props.coordinator
+                  ? "Start as a plain thread"
+                  : "Start as a coordinator",
+                icon: "checklist",
+                selected: props.coordinator,
+                onPress: props.onToggleCoordinator,
+              },
+            ]
+      }
       gitControls={{
         environmentId,
         threadId: props.thread.id,

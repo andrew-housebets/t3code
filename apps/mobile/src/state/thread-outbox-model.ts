@@ -45,6 +45,7 @@ const QueuedThreadCreationSchema = Schema.Struct({
   worktreePath: Schema.NullOr(Schema.String),
   startFromOrigin: Schema.optional(Schema.Boolean),
   pullRequestReference: Schema.optional(Schema.String),
+  tags: Schema.optional(Schema.Array(Schema.String)),
 });
 
 export const QueuedThreadMessageSchema = Schema.Struct({
@@ -78,6 +79,8 @@ export interface QueuedThreadCreation {
   readonly worktreePath: string | null;
   readonly startFromOrigin?: boolean;
   readonly pullRequestReference?: string;
+  /** Committed with the thread, before its first run: a coordinator's first turn is already locked. */
+  readonly tags?: ReadonlyArray<string>;
 }
 
 export interface QueuedThreadMessage {

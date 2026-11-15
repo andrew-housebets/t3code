@@ -1,3 +1,4 @@
+import { persistedObjectOf, type KeySet } from "@t3tools/client-runtime/state/coordinator-ui";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -141,6 +142,8 @@ export interface Preferences {
   readonly threadListFilters?: ThreadListFilters;
   readonly pullRequestListFilters?: PullRequestListPreferences;
   readonly workspaceSelections?: WorkspaceSelections;
+  /** New-task drafts started as coordinators; the tag goes on at launch. */
+  readonly coordinatorDraftKeys?: KeySet;
 }
 
 export class MobilePreferencesLoadError extends Schema.TaggedError<MobilePreferencesLoadError>()(
@@ -225,6 +228,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     threadListFilters?: ThreadListFilters;
     pullRequestListFilters?: PullRequestListPreferences;
     workspaceSelections?: WorkspaceSelections;
+    coordinatorDraftKeys?: KeySet;
   } = {};
 
   if (Array.isArray(parsed.hiddenNavigationTabs)) {
@@ -364,6 +368,9 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   }
   if (typeof parsed.threadListSettledShelfExpanded === "boolean") {
     preferences.threadListSettledShelfExpanded = parsed.threadListSettledShelfExpanded;
+  }
+  if (parsed.coordinatorDraftKeys !== undefined) {
+    preferences.coordinatorDraftKeys = persistedObjectOf(parsed.coordinatorDraftKeys);
   }
   if (typeof parsed.threadListSnoozedShelfExpanded === "boolean") {
     preferences.threadListSnoozedShelfExpanded = parsed.threadListSnoozedShelfExpanded;

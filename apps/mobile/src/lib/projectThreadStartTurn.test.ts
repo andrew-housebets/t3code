@@ -69,4 +69,32 @@ describe("project thread title", () => {
     expect(relaunched.message.text).toBe(wire.text);
     expect(relaunched.message.attachments).toEqual(uploadedAttachments);
   });
+
+  it("commits a coordinator's tag with the thread it creates", () => {
+    const spec = {
+      projectId: ProjectId.make("project"),
+      projectCwd: "/workspace",
+      threadId: "coordinator-thread",
+      commandId: "coordinator-command",
+      messageId: "coordinator-message",
+      createdAt: "2026-09-04T00:00:00Z",
+      text: "Plan the release",
+      uploadedAttachments: [],
+      modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.6-sol" },
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      workspaceMode: "local",
+      branch: null,
+      worktreePath: null,
+      startFromOrigin: false,
+      worktreeBranchName: "unused",
+    } satisfies ProjectThreadStartTurnSpec;
+
+    expect(
+      buildProjectThreadStartTurnInput({ ...spec, tags: ["coordinator"] }).bootstrap,
+    ).toMatchObject({
+      tags: ["coordinator"],
+    });
+    expect(buildProjectThreadStartTurnInput(spec).bootstrap).not.toHaveProperty("tags");
+  });
 });

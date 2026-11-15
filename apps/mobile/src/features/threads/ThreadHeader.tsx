@@ -30,6 +30,7 @@ export function ThreadHeader(props: {
   readonly inspectorMode: ThreadInspectorMode | null;
   readonly onOpenFilesInspector: () => void;
   readonly onOpenOverviewInspector?: () => void;
+  readonly draftActions?: ReadonlyArray<AppBarAction>;
 }) {
   const goBack = useWorkspaceBackNavigation();
   const { toggleAuxiliaryPane, startNewTask } = useAdaptiveWorkspaceLayout();
@@ -81,7 +82,11 @@ export function ThreadHeader(props: {
         },
       ]
     : [];
-  const actions = overviewAction === null ? fileActions : [overviewAction, ...fileActions];
+  const actions = [
+    ...(props.draftActions ?? []),
+    ...(overviewAction === null ? [] : [overviewAction]),
+    ...fileActions,
+  ];
   const menus = [gitMenu, terminalMenu].filter((menu): menu is AppBarMenu => menu !== null);
 
   return (

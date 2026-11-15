@@ -35,6 +35,7 @@ export interface ProjectThreadStartTurnSpec {
   readonly worktreePath: string | null;
   readonly startFromOrigin: boolean;
   readonly worktreeBranchName: string;
+  readonly tags?: ReadonlyArray<string> | undefined;
 }
 
 export function buildProjectThreadStartTurnInput(spec: ProjectThreadStartTurnSpec) {
@@ -59,6 +60,7 @@ export function buildProjectThreadStartTurnInput(spec: ProjectThreadStartTurnSpe
     runtimeMode: spec.runtimeMode,
     interactionMode: spec.interactionMode,
     bootstrap: {
+      ...(spec.tags !== undefined && spec.tags.length > 0 ? { tags: [...spec.tags] } : {}),
       createThread: {
         projectId: spec.projectId,
         title,
