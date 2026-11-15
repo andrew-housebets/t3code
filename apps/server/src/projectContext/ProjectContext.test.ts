@@ -89,10 +89,58 @@ it.layer(layerTest, { excludeTestServices: true })("ProjectContext", (it) => {
         for (const error of [
           yield* context.taskWithContext(projectId, TASK).pipe(Effect.flip),
           yield* context.listLibrary(projectId).pipe(Effect.flip),
+          yield* context.readFiles(projectId).pipe(Effect.flip),
+          yield* context.writeFiles(projectId, { instructions: "", memory: "" }).pipe(Effect.flip),
         ]) {
           assert.equal(error._tag, "ProjectContextPathError");
         }
       }),
+  );
+
+  it.effect("saves instructions and memory that the next delegated task starts with", () =>
+    Effect.gen(function* () {
+      const context = yield* ProjectContext.ProjectContext;
+      assert.deepEqual(yield* context.readFiles("project:edit"), { instructions: "", memory: "" });
+      const files = { instructions: "Use pnpm.", memory: "- [auth](auth.md)" };
+      assert.deepEqual(yield* context.writeFiles("project:edit", files), files);
+      assert.deepEqual(yield* context.readFiles("project:edit"), files);
+      const split = splitProjectContextBlock(yield* context.taskWithContext("project:edit", TASK));
+      assert.include(split.context, "Use pnpm.");
+      assert.strictEqual(split.task, TASK);
+    }),
+  );
+
+  it.effect("refuses a save over the cap and keeps what was stored", () =>
+    Effect.gen(function* () {
+      const context = yield* ProjectContext.ProjectContext;
+      yield* context.writeFiles("project:cap", { instructions: "Keep me.", memory: "" });
+      const error = yield* context
+        .writeFiles("project:cap", {
+          instructions: "a".repeat(PROJECT_CONTEXT_MAX_CHARS + 1),
+          memory: "",
+        })
+        .pipe(Effect.flip);
+      assert.equal(error._tag, "ProjectContextTooLongError");
+      assert.deepEqual(yield* context.readFiles("project:cap"), {
+        instructions: "Keep me.",
+        memory: "",
+      });
+    }),
+  );
+
+  it.effect("fails a read for editing that the child brief would treat as empty", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const context = yield* ProjectContext.ProjectContext;
+      const directory = yield* context.directory("project:unreadable");
+      yield* fileSystem.makeDirectory(path.join(directory, "instructions.md"), {
+        recursive: true,
+      });
+      assert.deepEqual(yield* context.read("project:unreadable"), { instructions: "", memory: "" });
+      const error = yield* context.readFiles("project:unreadable").pipe(Effect.flip);
+      assert.equal(error._tag, "ProjectContextFileError");
+    }),
   );
 
   it.effect("creates the Library on first listing and lists nested files without links", () =>

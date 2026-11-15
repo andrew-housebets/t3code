@@ -415,7 +415,9 @@ import { VcsError } from "./vcs.ts";
 import { Project, ProjectMutation, ProjectMutationError } from "./project.ts";
 import {
   ProjectContextError,
+  ProjectContextFiles,
   ProjectContextInput,
+  ProjectContextWriteInput,
   ProjectLibraryListing,
 } from "./projectContext.ts";
 
@@ -427,6 +429,8 @@ export const WS_METHODS = {
   projectsSearchEntries: "projects.searchEntries",
   projectsWriteFile: "projects.writeFile",
   projectContextListLibrary: "projectContext.listLibrary",
+  projectContextRead: "projectContext.read",
+  projectContextWrite: "projectContext.write",
   projectsMutate: "projects.mutate",
   projectsEnsureScratch: "projects.ensureScratch",
   projectsCreateNew: "projects.createNew",
@@ -1414,6 +1418,18 @@ const WsProjectContextListLibraryRpc = Rpc.make(WS_METHODS.projectContextListLib
   error: Schema.Union([ProjectContextError, EnvironmentAuthorizationError]),
 });
 
+const WsProjectContextReadRpc = Rpc.make(WS_METHODS.projectContextRead, {
+  payload: ProjectContextInput,
+  success: ProjectContextFiles,
+  error: Schema.Union([ProjectContextError, EnvironmentAuthorizationError]),
+});
+
+const WsProjectContextWriteRpc = Rpc.make(WS_METHODS.projectContextWrite, {
+  payload: ProjectContextWriteInput,
+  success: ProjectContextFiles,
+  error: Schema.Union([ProjectContextError, EnvironmentAuthorizationError]),
+});
+
 const WsProjectsWriteFileRpc = Rpc.make(WS_METHODS.projectsWriteFile, {
   payload: ProjectWriteFileInput,
   success: ProjectWriteFileResult,
@@ -2254,6 +2270,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsCreateFromThreadRpc,
   WsProjectsWriteFileRpc,
   WsProjectContextListLibraryRpc,
+  WsProjectContextReadRpc,
+  WsProjectContextWriteRpc,
   WsProjectsMutateRpc,
   WsShellOpenInEditorRpc,
   WsFilesystemBrowseRpc,

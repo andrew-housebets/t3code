@@ -46,6 +46,18 @@ describe("RPC authorization scopes", () => {
     }
   });
 
+  it("lets readers see a project's standing context but only operators change it", () => {
+    expect(requiredScopeForRpcMethod(WS_METHODS.projectContextRead)).toBe(
+      AuthOrchestrationReadScope,
+    );
+    expect(requiredScopeForRpcMethod(WS_METHODS.projectContextWrite)).toBe(
+      AuthOrchestrationOperateScope,
+    );
+    expect(requiredScopeForRpcMethod(WS_METHODS.projectContextListLibrary)).toBe(
+      AuthFilesystemReadScope,
+    );
+  });
+
   it("keeps triage, which seeds an agent that reads logs and the database, behind operate scope", () => {
     expect(requiredScopeForRpcMethod(WS_METHODS.serverPrepareTriage)).toBe(
       AuthOrchestrationOperateScope,

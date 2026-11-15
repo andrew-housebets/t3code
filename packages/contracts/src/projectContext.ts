@@ -10,15 +10,17 @@ const ProjectContextText = Schema.String.check(Schema.isMaxLength(PROJECT_CONTEX
 export const ProjectContextInput = Schema.Struct({ projectId: ProjectId });
 export type ProjectContextInput = typeof ProjectContextInput.Type;
 
+/** Read back in full, so a hand-edited file over the cap shows as over it. */
 export const ProjectContextFiles = Schema.Struct({
-  instructions: ProjectContextText,
-  memory: ProjectContextText,
+  instructions: Schema.String,
+  memory: Schema.String,
 });
 export type ProjectContextFiles = typeof ProjectContextFiles.Type;
 
 export const ProjectContextWriteInput = Schema.Struct({
   projectId: ProjectId,
-  ...ProjectContextFiles.fields,
+  instructions: ProjectContextText,
+  memory: ProjectContextText,
 });
 export type ProjectContextWriteInput = typeof ProjectContextWriteInput.Type;
 

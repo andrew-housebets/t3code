@@ -38,6 +38,24 @@ export class ProjectContextLibraryError extends Schema.TaggedError<ProjectContex
   }
 }
 
+export class ProjectContextFileError extends Schema.TaggedError<ProjectContextFileError>()(
+  "ProjectContextFileError",
+  { path: Schema.String, cause: Schema.Defect() },
+) {
+  override get message(): string {
+    return `The project context file ${this.path} could not be read or written.`;
+  }
+}
+
+export class ProjectContextTooLongError extends Schema.TaggedError<ProjectContextTooLongError>()(
+  "ProjectContextTooLongError",
+  { file: Schema.String, length: Schema.Number },
+) {
+  override get message(): string {
+    return `${this.file} is ${this.length} characters; the limit is ${PROJECT_CONTEXT_MAX_CHARS}.`;
+  }
+}
+
 export interface ProjectContextFiles {
   readonly instructions: string;
   readonly memory: string;
@@ -52,6 +70,18 @@ export class ProjectContext extends Context.Service<
     readonly read: (
       projectId: string,
     ) => Effect.Effect<ProjectContextFiles, ProjectContextPathError>;
+    /** The files as stored, for editing: uncapped, and a read failure fails rather than reading as empty. */
+    readonly readFiles: (
+      projectId: string,
+    ) => Effect.Effect<ProjectContextFiles, ProjectContextPathError | ProjectContextFileError>;
+    /** Replaces both files, each through a rename; refuses text over `PROJECT_CONTEXT_MAX_CHARS`. */
+    readonly writeFiles: (
+      projectId: string,
+      files: ProjectContextFiles,
+    ) => Effect.Effect<
+      ProjectContextFiles,
+      ProjectContextPathError | ProjectContextFileError | ProjectContextTooLongError
+    >;
     readonly ensureLibrary: (
       projectId: string,
     ) => Effect.Effect<string, ProjectContextPathError | ProjectContextLibraryError>;
@@ -133,6 +163,56 @@ const make = Effect.gen(function* () {
     return { instructions, memory };
   });
 
+  const FILE_NAMES = { instructions: "instructions.md", memory: "MEMORY.md" } as const;
+
+  const readStored = (filePath: string) =>
+    fileSystem.readFileString(filePath).pipe(
+      Effect.catchTags({
+        PlatformError: (cause) =>
+          cause.reason._tag === "NotFound"
+            ? Effect.succeed("")
+            : Effect.fail(new ProjectContextFileError({ path: filePath, cause })),
+      }),
+    );
+
+  const readFiles = Effect.fn("ProjectContext.readFiles")(function* (projectId: string) {
+    const root = yield* directory(projectId);
+    const [instructions, memory] = yield* Effect.all(
+      [
+        readStored(path.join(root, FILE_NAMES.instructions)),
+        readStored(path.join(root, FILE_NAMES.memory)),
+      ],
+      { concurrency: "unbounded" },
+    );
+    return { instructions, memory };
+  });
+
+  const writeFiles = Effect.fn("ProjectContext.writeFiles")(function* (
+    projectId: string,
+    files: ProjectContextFiles,
+  ) {
+    const root = yield* directory(projectId);
+    for (const key of ["instructions", "memory"] as const) {
+      if (files[key].length > PROJECT_CONTEXT_MAX_CHARS) {
+        return yield* new ProjectContextTooLongError({
+          file: FILE_NAMES[key],
+          length: files[key].length,
+        });
+      }
+    }
+    for (const key of ["instructions", "memory"] as const) {
+      const target = path.join(root, FILE_NAMES[key]);
+      // ponytail: one staging name per file; two saves racing on one project can interleave.
+      const staged = `${target}.saving`;
+      yield* fileSystem.makeDirectory(root, { recursive: true }).pipe(
+        Effect.andThen(fileSystem.writeFileString(staged, files[key])),
+        Effect.andThen(fileSystem.rename(staged, target)),
+        Effect.mapError((cause) => new ProjectContextFileError({ path: target, cause })),
+      );
+    }
+    return files;
+  });
+
   const ensureLibrary = Effect.fn("ProjectContext.ensureLibrary")(function* (projectId: string) {
     const libraryDir = path.join(yield* directory(projectId), "library");
     yield* fileSystem
@@ -194,7 +274,15 @@ const make = Effect.gen(function* () {
     });
   });
 
-  return ProjectContext.of({ directory, read, ensureLibrary, listLibrary, taskWithContext });
+  return ProjectContext.of({
+    directory,
+    read,
+    readFiles,
+    writeFiles,
+    ensureLibrary,
+    listLibrary,
+    taskWithContext,
+  });
 });
 
 export const layer = Layer.effect(ProjectContext, make);
