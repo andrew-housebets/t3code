@@ -161,6 +161,10 @@ function ProjectOverviewContent(props: {
     reportFailure: true,
   });
   const [isOrganizing, setIsOrganizing] = useState(false);
+  const navigation = useNavigation();
+  const contextMember = props.members.find((member) =>
+    props.connectedTargets.some((entry) => entry.environmentId === member.environmentId),
+  );
   const memberTargets = allMembers.map((member) =>
     props.connectedTargets.find((entry) => entry.environmentId === member.environmentId),
   );
@@ -347,6 +351,22 @@ function ProjectOverviewContent(props: {
           </View>
         </View>
       </SettingsSection>
+
+      {contextMember === undefined ? null : (
+        <SettingsSection title="Coordinators">
+          <SettingsActionRow
+            icon="doc.text"
+            label="Instructions and memory"
+            description="What every coordinator and its threads in this project start with, and their models."
+            onPress={() =>
+              navigation.navigate("ProjectInstructions", {
+                environmentId: String(contextMember.environmentId),
+                projectId: String(contextMember.id),
+              })
+            }
+          />
+        </SettingsSection>
+      )}
 
       {canOrganize ? (
         <SettingsSection title="Organize">

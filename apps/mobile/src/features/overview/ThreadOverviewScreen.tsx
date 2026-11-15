@@ -161,6 +161,7 @@ export function ThreadOverview(props: {
           },
         ]
       : [];
+  const navigation = useNavigation();
   const openLibraryFor = (ownerThreadId: ThreadId | null) => {
     setLibraryOwner(ownerThreadId);
     setTab("library");
@@ -173,6 +174,24 @@ export function ThreadOverview(props: {
         onBack={props.onBack}
         onBackToList={props.onBack}
         actions={actions}
+        menus={[
+          {
+            title: "Project",
+            icon: "ellipsis",
+            items: [
+              {
+                id: "project-instructions",
+                title: "Project instructions",
+                icon: "doc.text",
+                onPress: () =>
+                  navigation.navigate("ProjectInstructions", {
+                    environmentId: String(target.environmentId),
+                    projectId: String(target.projectId),
+                  }),
+              },
+            ],
+          },
+        ]}
         hideBottomBorder
       />
       <ScreenContent>

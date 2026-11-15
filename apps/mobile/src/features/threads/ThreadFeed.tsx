@@ -1998,6 +1998,8 @@ function renderFeedEntry(
           ? scopeThreadRef(props.environmentId, message.senderThreadId)
           : null);
       const foldExpanded = foldRowId !== null && (props.expandedWorkRows[foldRowId] ?? false);
+      const projectContextRowId = `project-context:${message.id}`;
+      const projectContextExpanded = props.expandedWorkRows[projectContextRowId] ?? false;
       const bubbleBodyVisible = foldRowId === null || foldExpanded;
       const intentBadge = props.userMessageGrouping.continuesSteer
         ? null
@@ -2204,6 +2206,38 @@ function renderFeedEntry(
                       })}
                     </View>
                   ) : null}
+                  {presentation.projectContext === undefined ? null : (
+                    <View className="gap-2">
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityState={{ expanded: projectContextExpanded }}
+                        onPress={() => props.onToggleWorkRow(projectContextRowId, entry.id)}
+                        className="flex-row items-center gap-1.5 active:opacity-70"
+                      >
+                        <ThreadDisclosureChevron
+                          expanded={projectContextExpanded}
+                          collapsedDirection="right"
+                          size={12}
+                          tintColor={iconSubtleColor}
+                        />
+                        <Text className="font-t3-medium text-sm text-foreground-secondary">
+                          Project context
+                        </Text>
+                      </Pressable>
+                      {projectContextExpanded ? (
+                        <UserMessageContent
+                          text={presentation.projectContext}
+                          environmentId={props.environmentId}
+                          context={message.context}
+                          markdownStyles={styles}
+                          reviewCommentColors={props.reviewCommentColors}
+                          skills={props.skills}
+                          linkHandlers={props.markdownLinkHandlers}
+                          renderImage={props.renderMarkdownImage}
+                        />
+                      ) : null}
+                    </View>
+                  )}
                   {presentation.text.trim().length > 0 ? (
                     <MarkdownImageAvailableWidthContext
                       value={props.userBubbleMaxWidth - USER_BUBBLE_HORIZONTAL_PADDING * 2}

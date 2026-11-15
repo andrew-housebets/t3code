@@ -16,7 +16,13 @@ A coordinator's header has three panels:
 
 ## On your phone
 
-In the mobile app, tap the checklist button on a new thread to start it as a coordinator, or choose **Make coordinator** from a thread's long-press menu. A coordinator's header has a checklist button that opens its **Overview**, with the same Threads, Library, and Scheduled tabs; it turns amber when a thread is waiting on you. Long-press a delegated thread to mark it resolved, reopen it, or stop it. The drawer's **Artifacts** row opens the Library of the project you are in. Project instructions and memory are edited on the web or desktop app.
+In the mobile app, tap the checklist button on a new thread to start it as a coordinator, or choose **Make coordinator** from a thread's long-press menu. A coordinator's header has a checklist button that opens its **Overview**, with the same Threads, Library, and Scheduled tabs; it turns amber when a thread is waiting on you. Long-press a delegated thread to mark it resolved, reopen it, or stop it. The drawer's **Artifacts** row opens the Library of the project you are in. Edit project instructions and memory from the Overview's **⋯** menu or **Settings → Projects → Instructions and memory**.
+
+## Pinned projects
+
+Pin a project from its right-click menu, the command palette, or its settings. Pinned projects are listed under **Pinned** at the top of the sidebar and the mobile drawer. Selecting one opens its most recent coordinator. When it has none, the sidebar starts a new coordinator and the drawer shows the project's threads. A dot means a thread one of its coordinators delegated is waiting on you. Right-click a pinned project, or long-press it on your phone, to unpin it.
+
+The sidebar's **Artifacts** row opens the Library of the thread you have open, and **Scheduled** opens your scheduled tasks.
 
 ## Project instructions and memory
 
