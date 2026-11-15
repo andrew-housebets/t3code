@@ -6,6 +6,7 @@ import {
 } from "@t3tools/shared/toolOutput";
 import { makeProviderTextDeltaCoalescer } from "./ProviderTextDeltaCoalescer.ts";
 import { claudeTaskOutputRoot, tailClaudeTaskOutput } from "./ClaudeTaskOutputTail.ts";
+import { withClaudeCoordinatorOptions } from "./ClaudeCoordinator.ts";
 import {
   dynamicToolTitle,
   formatReadToolLabel,
@@ -12727,7 +12728,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
           const openQueryRuntime = queryRunner.open({
             threadId: turnInput.threadId,
             providerSessionId: input.providerSessionId,
-            options: queryOptions,
+            options: withClaudeCoordinatorOptions(turnInput.appThread, queryOptions),
             ...(turnInput.resume ? { resume: true } : {}),
           });
           // The SDK spawns the CLI per turn, so only the open waits for a provider update.

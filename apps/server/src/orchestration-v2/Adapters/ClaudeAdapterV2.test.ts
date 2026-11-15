@@ -77,6 +77,7 @@ import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import { Tool } from "effect/ai";
 import { formatClaudeResumeCompactionQuestion } from "@t3tools/shared/claudeCompaction";
+import { T3_CODE_COORDINATOR_INSTRUCTIONS } from "@t3tools/provider-core/server/coordinatorInstructions";
 import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
@@ -116,6 +117,7 @@ import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter"
 import type * as ProviderContinuationRequests from "@t3tools/provider-core/server/ProviderContinuationRequests";
 import { makeProviderFailure } from "@t3tools/provider-core/server/failure";
 import * as ClaudeAdapterV2 from "./ClaudeAdapterV2.ts";
+import { withClaudeCoordinatorOptions } from "./ClaudeCoordinator.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProviderInstallationGate from "../../provider/ProviderInstallationGate.ts";
 import { ClaudeOrchestratorReplayHarness } from "./ClaudeAdapterV2.testkit.ts";
@@ -705,6 +707,71 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
       mcpServers: T3_MCP_SERVERS,
     });
     assert.isFalse(overrides.allowedTools?.includes(ClaudeAdapterV2.CLAUDE_T3_MCP_TOOL_WILDCARD));
+  });
+
+  it("lets a read-only coordinator delegate but never write, even when a launch argument reopens its mode", () => {
+    const threadId = ThreadId.make("thread-claude-mcp-coordinator");
+    const queryPolicy = ClaudeAdapterV2.claudeRuntimeQueryPolicyForRuntimePolicy(
+      ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        cwd: "/workspace",
+        approvalPolicy: "never",
+        sandboxPolicy: { type: "readOnly", access: { type: "fullAccess" }, networkAccess: false },
+      }),
+    );
+    const overrides = ClaudeAdapterV2.claudeMcpQueryOverrides({
+      mcpSession: mcpSessionFor(threadId),
+      readOnlySandbox: true,
+      ...(queryPolicy.allowedTools === undefined ? {} : { allowedTools: queryPolicy.allowedTools }),
+    });
+    const options = ClaudeAdapterV2.makeClaudeQueryOptions({
+      modelSelection: {
+        instanceId: ProviderInstanceId.make("claudeAgent"),
+        model: "claude-haiku-5-5",
+      },
+      nativeThreadId: "native-coordinator",
+      resume: false,
+      cwd: "/workspace",
+      settings: { ...DEFAULT_CLAUDE_SETTINGS, launchArgs: "--permission-mode bypassPermissions" },
+      tools: queryPolicy.tools ?? [],
+      permissionMode: queryPolicy.permissionMode,
+      ...overrides,
+    });
+
+    assert.strictEqual(withClaudeCoordinatorOptions({ tags: ["private"] }, options), options);
+    const coordinator = withClaudeCoordinatorOptions({ tags: ["coordinator"] }, options);
+    assert.equal(coordinator.permissionMode, "bypassPermissions");
+    assert.deepEqual(coordinator.tools, [...ClaudeAdapterV2.CLAUDE_READ_ONLY_ALLOWED_TOOLS]);
+    assert.includeMembers(coordinator.disallowedTools ?? [], [
+      "Edit",
+      "Write",
+      "NotebookEdit",
+      "Bash",
+    ]);
+    assert.includeMembers(coordinator.allowedTools ?? [], [
+      "mcp__t3-code__delegate_task",
+      "mcp__t3-code__task_status",
+      "mcp__t3-code__task_cancel",
+      "mcp__t3-code__t3_thread_read",
+      "mcp__t3-code__t3_thread_send",
+      "mcp__t3-code__t3_pending_request",
+    ]);
+    for (const writer of [
+      ClaudeAdapterV2.CLAUDE_T3_MCP_TOOL_WILDCARD,
+      "mcp__t3-code__t3_thread_launch",
+      "mcp__t3-code__create_threads",
+      "Edit",
+      "Write",
+      "Bash",
+    ]) {
+      assert.notInclude(coordinator.allowedTools ?? [], writer);
+    }
+    const systemPrompt = coordinator.systemPrompt;
+    assert.include(
+      typeof systemPrompt === "object" && "append" in systemPrompt ? systemPrompt.append : "",
+      T3_CODE_COORDINATOR_INSTRUCTIONS,
+    );
   });
 
   it("invalidates live-query reuse when MCP credentials rotate", () => {
