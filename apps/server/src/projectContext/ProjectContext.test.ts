@@ -5,8 +5,9 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 
-import { PROJECT_CONTEXT_MAX_CHARS } from "@t3tools/contracts";
+import { PROJECT_CONTEXT_MAX_CHARS, PROJECT_LIBRARY_UPLOAD_MAX_BYTES } from "@t3tools/contracts";
 import { splitProjectContextBlock } from "@t3tools/shared/projectContextBlock";
+import { createPendingAttachmentId, resolveAttachmentPathById } from "../attachmentStore.ts";
 import * as ServerConfig from "../config.ts";
 import * as ProjectSidecar from "../projectSidecar/ProjectSidecar.ts";
 import * as ProjectContext from "./ProjectContext.ts";
@@ -222,6 +223,77 @@ it.layer(layerTest, { excludeTestServices: true })("ProjectContext", (it) => {
         (yield* sidecar.listArtifacts("project:artifacts")).map((row) => row.id).toSorted(),
         ["file:by-shell.md", "file:by-thread.md"],
       );
+    }),
+  );
+
+  const pendingUpload = (contents: string, sizeBytes?: number) =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const { attachmentsDir } = yield* ServerConfig.ServerConfig;
+      const attachmentId = createPendingAttachmentId("md");
+      yield* fileSystem.makeDirectory(attachmentsDir, { recursive: true });
+      const file = path.join(attachmentsDir, `${attachmentId}.md`);
+      yield* fileSystem.writeFileString(file, contents);
+      if (sizeBytes !== undefined) yield* fileSystem.truncate(file, sizeBytes);
+      assert.strictEqual(resolveAttachmentPathById({ attachmentsDir, attachmentId }), file);
+      return attachmentId;
+    });
+
+  it.effect("adds an upload under a safe name, owned by the user, and refuses to overwrite", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const context = yield* ProjectContext.ProjectContext;
+      const projectId = "project:upload";
+      const add = (attachmentId: string, replace: boolean) =>
+        context.addLibraryFile({ projectId, attachmentId, name: "../brief.md", replace });
+
+      const first = yield* pendingUpload("first");
+      assert.deepEqual(yield* add(first, false), { path: "brief.md" });
+      const library = yield* context.ensureLibrary(projectId);
+      assert.strictEqual(yield* fileSystem.readFileString(path.join(library, "brief.md")), "first");
+      const { artifacts } = yield* context.listArtifacts(projectId);
+      assert.deepEqual(
+        artifacts.map(({ id, source, threadId }) => ({ id, source, threadId })),
+        [{ id: "file:brief.md", source: "upload", threadId: null }],
+      );
+
+      const second = yield* pendingUpload("second");
+      const refused = yield* add(second, false).pipe(Effect.flip);
+      assert.strictEqual(refused._tag, "ProjectLibraryFileExistsError");
+      assert.strictEqual(yield* fileSystem.readFileString(path.join(library, "brief.md")), "first");
+      yield* add(second, true);
+      assert.strictEqual(
+        yield* fileSystem.readFileString(path.join(library, "brief.md")),
+        "second",
+      );
+
+      yield* context.removeLibraryFile({ projectId, path: "brief.md" });
+      assert.isFalse(yield* fileSystem.exists(path.join(library, "brief.md")));
+      assert.deepEqual((yield* context.listArtifacts(projectId)).artifacts, []);
+    }),
+  );
+
+  it.effect("refuses an upload over the size cap and a path outside the Library", () =>
+    Effect.gen(function* () {
+      const context = yield* ProjectContext.ProjectContext;
+      const projectId = "project:upload-refusals";
+      const large = yield* pendingUpload("", PROJECT_LIBRARY_UPLOAD_MAX_BYTES + 1);
+      const tooLarge = yield* context
+        .addLibraryFile({ projectId, attachmentId: large, name: "big.md", replace: false })
+        .pipe(Effect.flip);
+      assert.deepInclude(tooLarge, { _tag: "ProjectLibraryRequestError", reason: "too_large" });
+
+      const notPending = yield* context
+        .addLibraryFile({ projectId, attachmentId: "thread-1-abc", name: "x.md", replace: false })
+        .pipe(Effect.flip);
+      assert.deepInclude(notPending, { reason: "missing_upload" });
+
+      const escape = yield* context
+        .removeLibraryFile({ projectId, path: "../MEMORY.md" })
+        .pipe(Effect.flip);
+      assert.deepInclude(escape, { _tag: "ProjectLibraryRequestError", reason: "path" });
     }),
   );
 });

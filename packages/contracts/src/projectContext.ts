@@ -68,6 +68,41 @@ export const ProjectArtifactListing = Schema.Struct({
 });
 export type ProjectArtifactListing = typeof ProjectArtifactListing.Type;
 
+/** A file a user adds to the Library is refused above this size. */
+export const PROJECT_LIBRARY_UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
+
+export const ProjectLibraryAddInput = Schema.Struct({
+  projectId: ProjectId,
+  /** A pending upload minted by `attachments.createUploadUrl`; it is moved, not copied. */
+  attachmentId: TrimmedNonEmptyString,
+  name: TrimmedNonEmptyString,
+  /** Without it, an existing file of the same name refuses the add. */
+  replace: Schema.Boolean,
+});
+export type ProjectLibraryAddInput = typeof ProjectLibraryAddInput.Type;
+
+export const ProjectLibraryAddResult = Schema.Struct({
+  /** The name the file was stored under, after reducing it to one safe segment. */
+  path: TrimmedNonEmptyString,
+});
+export type ProjectLibraryAddResult = typeof ProjectLibraryAddResult.Type;
+
+export const ProjectLibraryRemoveInput = Schema.Struct({
+  projectId: ProjectId,
+  /** Library-relative, `/`-separated. */
+  path: TrimmedNonEmptyString,
+});
+export type ProjectLibraryRemoveInput = typeof ProjectLibraryRemoveInput.Type;
+
+export class ProjectLibraryFileExistsError extends Schema.TaggedError<ProjectLibraryFileExistsError>()(
+  "ProjectLibraryFileExistsError",
+  { projectId: Schema.String, fileName: Schema.String },
+) {
+  override get message(): string {
+    return `The Library already has a file named ${this.fileName}.`;
+  }
+}
+
 export class ProjectContextError extends Schema.TaggedError<ProjectContextError>()(
   "ProjectContextError",
   {

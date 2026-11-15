@@ -2,6 +2,7 @@ import {
   AuthEnvironmentMaintainScope,
   AuthDiagnosticsReadScope,
   AuthFilesystemReadScope,
+  AuthFilesystemWriteScope,
   AuthProvidersManageScope,
   AuthSettingsWriteScope,
   AuthAccessWriteScope,
@@ -56,6 +57,12 @@ describe("RPC authorization scopes", () => {
     expect(requiredScopeForRpcMethod(WS_METHODS.projectContextListArtifacts)).toBe(
       AuthFilesystemReadScope,
     );
+    for (const method of [
+      WS_METHODS.projectContextAddLibraryFile,
+      WS_METHODS.projectContextRemoveLibraryFile,
+    ]) {
+      expect(requiredScopeForRpcMethod(method)).toBe(AuthFilesystemWriteScope);
+    }
   });
 
   it("keeps triage, which seeds an agent that reads logs and the database, behind operate scope", () => {

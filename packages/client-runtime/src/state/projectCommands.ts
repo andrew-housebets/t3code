@@ -162,6 +162,24 @@ export function createProjectEnvironmentAtoms<R, E>(
       tag: WS_METHODS.projectContextListArtifacts,
       staleTimeMs: 0,
     }),
+    addLibraryFile: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:projects:add-library-file",
+      tag: WS_METHODS.projectContextAddLibraryFile,
+      scheduler: projectScheduler,
+      concurrency: {
+        mode: "serial",
+        key: ({ environmentId, input }) => JSON.stringify([environmentId, input.projectId]),
+      },
+    }),
+    removeLibraryFile: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:projects:remove-library-file",
+      tag: WS_METHODS.projectContextRemoveLibraryFile,
+      scheduler: projectScheduler,
+      concurrency: {
+        mode: "serial",
+        key: ({ environmentId, input }) => JSON.stringify([environmentId, input.projectId]),
+      },
+    }),
     readContext: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:projects:read-context",
       tag: WS_METHODS.projectContextRead,

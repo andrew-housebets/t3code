@@ -3,6 +3,7 @@ import { GitPreparePullRequestThreadInput, GitRunStackedActionInput } from "./gi
 import {
   AuthAccessWriteScope,
   AuthEnvironmentMaintainScope,
+  AuthFilesystemWriteScope,
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   AuthPreviewOperateScope,
@@ -45,6 +46,9 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.projectsCreateFromThread]: AuthOrchestrationOperateScope,
   // Every thread the project delegates afterwards starts with what this writes.
   [WS_METHODS.projectContextWrite]: AuthOrchestrationOperateScope,
+  // Both write files on the host, into the project's Library.
+  [WS_METHODS.projectContextAddLibraryFile]: AuthFilesystemWriteScope,
+  [WS_METHODS.projectContextRemoveLibraryFile]: AuthFilesystemWriteScope,
   [WS_METHODS.sourceControlCloneRepository]: AuthSourceControlWriteScope,
   [WS_METHODS.sourceControlPublishRepository]: AuthSourceControlWriteScope,
   [WS_METHODS.sourceControlStar]: AuthSourceControlWriteScope,

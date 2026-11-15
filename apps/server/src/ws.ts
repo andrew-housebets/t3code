@@ -2959,6 +2959,21 @@ export const layerWsRpc = (
           projectContext
             .listArtifacts(input.projectId)
             .pipe(Effect.mapError(projectContextError(input.projectId))),
+        [WS_METHODS.projectContextAddLibraryFile]: (input) =>
+          projectContext.addLibraryFile(input).pipe(
+            Effect.catchTags({
+              ProjectContextPathError: (cause) =>
+                Effect.fail(projectContextError(input.projectId)(cause)),
+              ProjectContextLibraryError: (cause) =>
+                Effect.fail(projectContextError(input.projectId)(cause)),
+              ProjectLibraryRequestError: (cause) =>
+                Effect.fail(projectContextError(input.projectId)(cause)),
+            }),
+          ),
+        [WS_METHODS.projectContextRemoveLibraryFile]: (input) =>
+          projectContext
+            .removeLibraryFile(input)
+            .pipe(Effect.mapError(projectContextError(input.projectId))),
         [WS_METHODS.projectContextRead]: (input) =>
           projectContext
             .readFiles(input.projectId)

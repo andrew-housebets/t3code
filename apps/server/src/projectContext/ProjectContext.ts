@@ -8,6 +8,8 @@ import type * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
 import {
   PROJECT_CONTEXT_MAX_CHARS,
+  PROJECT_LIBRARY_UPLOAD_MAX_BYTES,
+  ProjectLibraryFileExistsError,
   type ProjectArtifact,
   type ProjectArtifactListing,
   type ProjectLibraryEntry,
@@ -16,9 +18,15 @@ import {
 } from "@t3tools/contracts";
 import { formatProjectContextBlock } from "@t3tools/shared/projectContextBlock";
 
-import { resolveAttachmentPathById } from "../attachmentStore.ts";
+import {
+  parseThreadSegmentFromAttachmentId,
+  PENDING_ATTACHMENT_THREAD_SEGMENT,
+  resolveAttachmentPathById,
+} from "../attachmentStore.ts";
 import * as ServerConfig from "../config.ts";
 import * as ProjectSidecar from "../projectSidecar/ProjectSidecar.ts";
+import { isWithinRoot } from "../workspace/KnownWorkspaces.ts";
+import { copyIntoLibrary, libraryRelativePath, safeLibraryFileName } from "./libraryFiles.ts";
 
 // ponytail: a flat listing capped here; page it if Libraries grow past a few thousand files.
 const LIBRARY_LISTING_LIMIT = 2_000;
@@ -58,6 +66,22 @@ export class ProjectContextTooLongError extends Schema.TaggedError<ProjectContex
 ) {
   override get message(): string {
     return `${this.file} is ${this.length} characters; the limit is ${PROJECT_CONTEXT_MAX_CHARS}.`;
+  }
+}
+
+const LIBRARY_REQUEST_REFUSALS = {
+  name: "That file name has nothing usable left once made safe.",
+  path: "That is not a file in the Library.",
+  missing_upload: "The upload is gone; add the file again.",
+  too_large: `Files added to the Library can be at most ${PROJECT_LIBRARY_UPLOAD_MAX_BYTES / 1024 / 1024} MB.`,
+} as const;
+
+export class ProjectLibraryRequestError extends Schema.TaggedError<ProjectLibraryRequestError>()(
+  "ProjectLibraryRequestError",
+  { reason: Schema.Literals(["name", "path", "missing_upload", "too_large"]) },
+) {
+  override get message(): string {
+    return LIBRARY_REQUEST_REFUSALS[this.reason];
   }
 }
 
@@ -103,6 +127,30 @@ export class ProjectContext extends Context.Service<
     ) => Effect.Effect<
       ProjectArtifactListing,
       ProjectContextPathError | ProjectContextLibraryError
+    >;
+    /**
+     * Moves a pending upload into the Library under a safe name, owned by the user. Refuses an
+     * existing name unless `replace`, and a file over `PROJECT_LIBRARY_UPLOAD_MAX_BYTES`.
+     */
+    readonly addLibraryFile: (input: {
+      readonly projectId: string;
+      readonly attachmentId: string;
+      readonly name: string;
+      readonly replace: boolean;
+    }) => Effect.Effect<
+      { readonly path: string },
+      | ProjectContextPathError
+      | ProjectContextLibraryError
+      | ProjectLibraryRequestError
+      | ProjectLibraryFileExistsError
+    >;
+    /** Deletes one Library file, never a folder or a link, and forgets its owner. */
+    readonly removeLibraryFile: (input: {
+      readonly projectId: string;
+      readonly path: string;
+    }) => Effect.Effect<
+      void,
+      ProjectContextPathError | ProjectContextLibraryError | ProjectLibraryRequestError
     >;
     /** The task unchanged when the project has no instructions or memory. */
     readonly taskWithContext: (
@@ -360,6 +408,84 @@ const make = Effect.gen(function* () {
     return { library, artifacts };
   });
 
+  const addLibraryFile = Effect.fn("ProjectContext.addLibraryFile")(function* (input: {
+    readonly projectId: string;
+    readonly attachmentId: string;
+    readonly name: string;
+    readonly replace: boolean;
+  }) {
+    const name = safeLibraryFileName(input.name);
+    if (name === null) return yield* new ProjectLibraryRequestError({ reason: "name" });
+    const upload =
+      parseThreadSegmentFromAttachmentId(input.attachmentId) === PENDING_ATTACHMENT_THREAD_SEGMENT
+        ? resolveAttachmentPathById({
+            attachmentsDir: config.attachmentsDir,
+            attachmentId: input.attachmentId,
+          })
+        : null;
+    if (upload === null) return yield* new ProjectLibraryRequestError({ reason: "missing_upload" });
+    const info = yield* fileSystem.stat(upload).pipe(
+      Effect.catchTags({
+        PlatformError: () => new ProjectLibraryRequestError({ reason: "missing_upload" }),
+      }),
+    );
+    const sizeBytes = Number(info.size);
+    if (sizeBytes > PROJECT_LIBRARY_UPLOAD_MAX_BYTES) {
+      return yield* new ProjectLibraryRequestError({ reason: "too_large" });
+    }
+    const libraryDir = yield* ensureLibrary(input.projectId);
+    const outcome = yield* copyIntoLibrary(upload, path.join(libraryDir, name), input.replace).pipe(
+      Effect.mapError((cause) => new ProjectContextLibraryError({ path: libraryDir, cause })),
+    );
+    if (outcome === "exists") {
+      return yield* new ProjectLibraryFileExistsError({
+        projectId: input.projectId,
+        fileName: name,
+      });
+    }
+    yield* fileSystem.remove(upload, { force: true }).pipe(Effect.ignore);
+    yield* sidecar
+      .recordArtifacts([
+        {
+          projectId: input.projectId,
+          threadId: null,
+          source: "upload",
+          path: name,
+          title: name,
+          sizeBytes,
+        },
+      ])
+      .pipe(
+        Effect.catchTags({
+          ProjectSidecarError: (cause) =>
+            Effect.logWarning("A Library upload was stored without its owner.", { cause }),
+        }),
+      );
+    return { path: name };
+  });
+
+  const removeLibraryFile = Effect.fn("ProjectContext.removeLibraryFile")(function* (input: {
+    readonly projectId: string;
+    readonly path: string;
+  }) {
+    const relative = libraryRelativePath(input.path);
+    const libraryDir = path.join(yield* directory(input.projectId), "library");
+    const target = relative === null ? null : path.join(libraryDir, relative);
+    const info =
+      target === null || !isWithinRoot(path, target, libraryDir) || target === libraryDir
+        ? null
+        : yield* fileSystem.lstat(target).pipe(Effect.orElseSucceed(() => null));
+    if (target === null || info?.type !== "File") {
+      return yield* new ProjectLibraryRequestError({ reason: "path" });
+    }
+    yield* fileSystem
+      .remove(target)
+      .pipe(
+        Effect.mapError((cause) => new ProjectContextLibraryError({ path: libraryDir, cause })),
+      );
+    yield* sidecar.removeArtifacts(input.projectId, [`file:${relative}`]).pipe(Effect.ignore);
+  });
+
   const taskWithContext = Effect.fn("ProjectContext.taskWithContext")(function* (
     projectId: string,
     task: string,
@@ -387,6 +513,8 @@ const make = Effect.gen(function* () {
     ensureLibrary,
     listLibrary,
     listArtifacts,
+    addLibraryFile,
+    removeLibraryFile,
     taskWithContext,
     coordinatorContext,
   });

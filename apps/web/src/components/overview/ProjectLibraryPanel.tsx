@@ -1,13 +1,15 @@
+import { useAtomValue } from "@effect/atom-react";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { ProjectArtifact, ScopedThreadRef } from "@t3tools/contracts";
-import { ChevronRightIcon, GlobeIcon } from "lucide-react";
-import { useState } from "react";
+import { ChevronRightIcon, GlobeIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { useRef, useState } from "react";
 
 import { useClientSettings } from "../../hooks/useSettings";
 import { formatBytes } from "../../lib/formatBytes";
 import { cn } from "../../lib/utils";
 import { useRightPanelStore } from "../../rightPanelStore";
 import { useQuietThreadShell } from "../../state/entities";
+import { projectEnvironment } from "../../state/projects";
 import { formatDayAwareTimestamp } from "../../timestampFormat";
 import { joinHostPath } from "../files/filePath";
 import { PierreEntryIcon } from "../chat/PierreEntryIcon";
@@ -16,7 +18,12 @@ import { Spinner } from "../ui/spinner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 import { useTheme } from "../../hooks/useTheme";
 import { useCoordinatorStore } from "./coordinatorStore";
-import { openProjectArtifact, useProjectArtifacts } from "./projectArtifacts";
+import {
+  addFilesToLibrary,
+  openProjectArtifact,
+  removeFromLibrary,
+  useProjectArtifacts,
+} from "./projectArtifacts";
 import { visibleLibraryRows } from "./projectLibrary.logic";
 
 function ArtifactOwner(props: {
@@ -43,6 +50,51 @@ function PanelMessage(props: { readonly children: React.ReactNode }) {
 
 export function ProjectLibraryPanel({ threadRef }: { readonly threadRef: ScopedThreadRef }) {
   const library = useProjectArtifacts(threadRef);
+  const projectId = useQuietThreadShell(threadRef)?.projectId ?? null;
+  const { environmentId } = threadRef;
+  const canAdd = useAtomValue(projectEnvironment.addLibraryFile.permissionAtom(environmentId));
+  const canRemove = useAtomValue(
+    projectEnvironment.removeLibraryFile.permissionAtom(environmentId),
+  );
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [adding, setAdding] = useState(false);
+  const addFiles = async (files: ReadonlyArray<File>) => {
+    if (projectId === null || files.length === 0) return;
+    setAdding(true);
+    await addFilesToLibrary(environmentId, projectId, files);
+    setAdding(false);
+    library.refresh();
+  };
+  const removeFile = async (path: string) => {
+    if (projectId !== null && (await removeFromLibrary(environmentId, projectId, path))) {
+      library.refresh();
+    }
+  };
+  const header = (
+    <div className="flex items-center gap-2 border-b px-3 py-1.5">
+      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">Library</span>
+      <input
+        ref={fileInput}
+        type="file"
+        multiple
+        hidden
+        onChange={(event) => {
+          const files = Array.from(event.currentTarget.files ?? []);
+          event.currentTarget.value = "";
+          void addFiles(files);
+        }}
+      />
+      <Button
+        size="xs"
+        variant="outline"
+        disabled={!canAdd || adding || projectId === null}
+        onClick={() => fileInput.current?.click()}
+      >
+        {adding ? <Spinner size="sm" /> : <PlusIcon aria-hidden />}
+        Add
+      </Button>
+    </div>
+  );
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   const timestampFormat = useClientSettings((settings) => settings.timestampFormat);
   const { resolvedTheme } = useTheme();
@@ -108,16 +160,31 @@ export function ProjectLibraryPanel({ threadRef }: { readonly threadRef: ScopedT
           {artifact.sizeBytes === null ? "" : formatBytes(artifact.sizeBytes)}
         </span>
       </TableCell>
+      <TableCell>
+        {artifact.source === "html_render" || !canRemove ? null : (
+          <Button
+            size="icon-xs"
+            variant="ghost-muted"
+            aria-label={`Remove ${artifact.path} from Library`}
+            onClick={() => void removeFile(artifact.path)}
+          >
+            <Trash2Icon aria-hidden />
+          </Button>
+        )}
+      </TableCell>
     </TableRow>
   );
 
   if (shown === null && listing.entries.length === 0 && renders.length === 0) {
     return (
-      <PanelMessage>
-        <p className="max-w-60 text-xs text-muted-foreground">
-          Files and docs this project's threads produce appear here.
-        </p>
-      </PanelMessage>
+      <div className="flex h-full min-h-0 flex-col">
+        {header}
+        <PanelMessage>
+          <p className="max-w-60 text-xs text-muted-foreground">
+            Files and docs this project's threads produce appear here. Add your own with Add.
+          </p>
+        </PanelMessage>
+      </div>
     );
   }
 
@@ -131,6 +198,7 @@ export function ProjectLibraryPanel({ threadRef }: { readonly threadRef: ScopedT
 
   return (
     <div data-project-library className="flex h-full min-h-0 flex-col">
+      {header}
       {shown === null ? null : (
         <div className="flex items-center gap-2 border-b px-3 py-1.5 text-xs text-muted-foreground">
           <span className="min-w-0 flex-1 truncate">
@@ -150,6 +218,9 @@ export function ProjectLibraryPanel({ threadRef }: { readonly threadRef: ScopedT
               <TableHead>Owner</TableHead>
               <TableHead>Date modified</TableHead>
               <TableHead>Size</TableHead>
+              <TableHead>
+                <span className="sr-only">Actions</span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -208,6 +279,18 @@ export function ProjectLibraryPanel({ threadRef }: { readonly threadRef: ScopedT
                         <span className="tabular-nums text-muted-foreground">
                           {entry.sizeBytes === null ? "" : formatBytes(entry.sizeBytes)}
                         </span>
+                      </TableCell>
+                      <TableCell>
+                        {folder || !canRemove ? null : (
+                          <Button
+                            size="icon-xs"
+                            variant="ghost-muted"
+                            aria-label={`Remove ${entry.path} from Library`}
+                            onClick={() => void removeFile(entry.path)}
+                          >
+                            <Trash2Icon aria-hidden />
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
