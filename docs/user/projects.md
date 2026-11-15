@@ -14,6 +14,10 @@ A coordinator's header has three panels:
 - **Library** holds the project's non-code deliverables, such as reports, notes, and docs, with the thread that wrote each. Add or remove files there yourself.
 - **Scheduled**, in the **⋯** menu, lists the project's scheduled tasks.
 
+## On your phone
+
+In the mobile app, tap the checklist button on a new thread to start it as a coordinator, or choose **Make coordinator** from a thread's long-press menu. A coordinator's header has a checklist button that opens its **Overview**, with the same Threads, Library, and Scheduled tabs; it turns amber when a thread is waiting on you. Long-press a delegated thread to mark it resolved, reopen it, or stop it. The drawer's **Artifacts** row opens the Library of the project you are in. Project instructions and memory are edited on the web or desktop app.
+
 ## Project instructions and memory
 
 Each project has standing instructions and a memory file. Every coordinator and every thread it delegates starts with both, along with the Library's location. Edit them from **⋯ → Project instructions** in a coordinator, the command palette, or **Settings → Projects → Instructions and memory**. Changes reach threads started afterwards, and a running coordinator on its next turn. The same editor sets the model new coordinators start on and the model their delegated threads use.
