@@ -8,6 +8,7 @@ import * as SqlClient from "effect/sql/SqlClient";
 import { runMigrations } from "../src/persistence/Migrations.ts";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import { runMigrateDevDb } from "./migrate-dev-db.ts";
+import { PROJECT_SIDECAR_FILE_NAME } from "../src/projectSidecar/ProjectSidecar.ts";
 
 const withDatabase = <A, E, R>(
   databasePath: string,
@@ -156,6 +157,10 @@ it.layer(NodeServices.layer)("migrate-dev-db", (it) => {
       const sourceDir = yield* fs.makeTempDirectoryScoped({ prefix: "migrate-dev-db-src-" });
       const destDir = yield* fs.makeTempDirectoryScoped({ prefix: "migrate-dev-db-dest-" });
       const source = yield* createFixtureSource(sourceDir);
+      const sidecar = path.join(destDir, "userdata", PROJECT_SIDECAR_FILE_NAME);
+      yield* fs.makeDirectory(path.dirname(sidecar), { recursive: true });
+      yield* fs.writeFileString(sidecar, "this worktree's own index");
+      yield* fs.writeFileString(path.join(sourceDir, PROJECT_SIDECAR_FILE_NAME), "live index");
 
       const result = yield* runMigrateDevDb(
         { baseDir: destDir, source, projects: 5, threadsPerProject: 2 },
@@ -163,6 +168,11 @@ it.layer(NodeServices.layer)("migrate-dev-db", (it) => {
       );
 
       assert.equal(result.databasePath, path.join(destDir, "userdata", "statev2.sqlite"));
+      assert.equal(
+        yield* fs.readFileString(sidecar),
+        "this worktree's own index",
+        "the projects sidecar indexes this home's own Library and attachments, so it is never replaced",
+      );
       const kept = yield* withDatabase(
         result.databasePath,
         Effect.gen(function* () {
