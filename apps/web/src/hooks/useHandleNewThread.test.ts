@@ -235,7 +235,7 @@ vi.mock("../state/entities", () => {
 });
 vi.mock("../state/projects", () => ({ defaultProjectFallbackReadyAtom: () => true }));
 vi.mock("../components/overview/projectModelDefaults", () => ({
-  readCoordinatorModelDefault: async () => null,
+  readCoordinatorModelDefault: async () => ({ instanceId: "claudeAgent", model: "opus" }),
 }));
 vi.mock("../state/olderSettledShelf", () => ({ readUnloadedThreadCount: () => 0 }));
 vi.mock("../state/presentation", () => ({
@@ -283,6 +283,24 @@ describe.each([
     expect(testState.router.state.location.href).toBe("/usage");
     expect(testState.router.navigate).not.toHaveBeenCalled();
     expect(testState.draftStore.setLogicalProjectDraftThreadId).not.toHaveBeenCalled();
+  });
+
+  it("starts a coordinator draft on the project's coordinator model, and no other draft", async () => {
+    for (const coordinator of [true, false]) {
+      testState.reset(draft);
+      testState.draftStore.setModelSelection.mockClear();
+      const pendingOpen = useNewThreadHandler()(
+        { environmentId: "environment-ssh", projectId: "project-remote" } as never,
+        { coordinator },
+      );
+      testState.completeProjectFileRead(null);
+      const opened = await pendingOpen;
+      const coordinatorPicks = testState.draftStore.setModelSelection.mock.calls.filter(
+        ([draftId, selection]) =>
+          draftId === opened?.draftId && (selection as { model?: string } | null)?.model === "opus",
+      );
+      expect(coordinatorPicks.length > 0).toBe(coordinator);
+    }
   });
 
   it("sets the prompt before the draft shows", async () => {
