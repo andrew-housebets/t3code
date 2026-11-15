@@ -394,6 +394,7 @@ const make = Effect.gen(function* () {
       }),
       ...rows
         .filter((row) => row.source === "html_render" && !goneRenders.includes(row))
+        .slice(0, LIBRARY_LISTING_LIMIT)
         .map((row) => ({
           id: row.id,
           source: row.source,
@@ -434,6 +435,12 @@ const make = Effect.gen(function* () {
       return yield* new ProjectLibraryRequestError({ reason: "too_large" });
     }
     const libraryDir = yield* ensureLibrary(input.projectId);
+    const existing = yield* fileSystem
+      .lstat(path.join(libraryDir, name))
+      .pipe(Effect.orElseSucceed(() => null));
+    if (existing !== null && existing.type !== "File") {
+      return yield* new ProjectLibraryRequestError({ reason: "path" });
+    }
     const outcome = yield* copyIntoLibrary(upload, path.join(libraryDir, name), input.replace).pipe(
       Effect.mapError((cause) => new ProjectContextLibraryError({ path: libraryDir, cause })),
     );

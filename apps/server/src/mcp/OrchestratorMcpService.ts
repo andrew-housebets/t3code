@@ -1504,21 +1504,23 @@ const make = Effect.gen(function* () {
       })
       .pipe(Effect.mapError(threadManagementFailure));
 
-  // A coordinator's children start on the project's thread model unless the task names one.
-  const withProjectThreadModel = (parent: Parameters<typeof resolveTarget>[0]["parent"]) =>
-    isCoordinatorThread(parent.thread)
-      ? projectSidecar.getModelDefaults(parent.thread.projectId).pipe(
-          Effect.map(({ threadModelSelection }) =>
-            threadModelSelection === null
-              ? parent
-              : { ...parent, thread: { ...parent.thread, modelSelection: threadModelSelection } },
+  // A coordinator's children start on the project's thread model unless the task names one;
+  // a default whose provider is gone falls back to the coordinator's own model.
+  const withProjectThreadModel = (input: Parameters<typeof resolveTarget>[0]) =>
+    isCoordinatorThread(input.parent.thread)
+      ? projectSidecar.getModelDefaults(input.parent.thread.projectId).pipe(
+          Effect.map(({ threadModelSelection: selection }) =>
+            selection === null ||
+            !input.providers.some((provider) => provider.instanceId === selection.instanceId)
+              ? input.parent
+              : { ...input.parent, thread: { ...input.parent.thread, modelSelection: selection } },
           ),
-          Effect.orElseSucceed(() => parent),
+          Effect.orElseSucceed(() => input.parent),
         )
-      : Effect.succeed(parent);
+      : Effect.succeed(input.parent);
 
   const resolveTargetRechecking = (input: Parameters<typeof resolveTarget>[0]) =>
-    withProjectThreadModel(input.parent).pipe(
+    withProjectThreadModel(input).pipe(
       Effect.flatMap((parent) => resolveTargetRecheckingFrom({ ...input, parent })),
     );
 

@@ -93,6 +93,10 @@ export async function addFilesToLibrary(
       toastManager.add(
         stackedThreadToast({ type: "error", title: `Could not add ${file.name}`, description }),
       );
+    if (file.size === 0) {
+      fail("The file is empty.");
+      continue;
+    }
     if (file.size > PROJECT_LIBRARY_UPLOAD_MAX_BYTES) {
       fail(
         `Files added to the Library can be at most ${PROJECT_LIBRARY_UPLOAD_MAX_BYTES / 1024 / 1024} MB.`,
@@ -105,7 +109,7 @@ export async function addFilesToLibrary(
       createUploadUrl: attachmentEnvironment.createUploadUrl,
       remove: attachmentEnvironment.remove,
       environmentId,
-      upload: { type: "file", name: file.name, mimeType, sizeBytes: Math.max(1, file.size) },
+      upload: { type: "file", name: file.name, mimeType, sizeBytes: file.size },
       resolveUploadUrl: (relativeUrl) => {
         const connection = readPreparedConnection(environmentId);
         return connection ? resolveAssetUrl(connection.httpBaseUrl, relativeUrl) : null;
