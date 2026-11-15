@@ -99,10 +99,34 @@ const REQUEST_LINES = {
   auth_refresh: "Needs you to sign in again",
 } satisfies Record<OrchestrationV2PendingRuntimeRequestSummary["kind"], string>;
 
+const LEADING_MARKER = /^(?:#{1,6}\s+|>\s?|[-*+]\s+|\d+[.)]\s+|\[[ xX]\]\s+|(?:->|=>|[→•▸►⇒➜])\s*)/;
+const UNIX_ABSOLUTE_PATH = /(?<![\w:/.~])~?\/(?:[^\s/]+\/)+([^\s/]+)/g;
+const WINDOWS_ABSOLUTE_PATH = /\b[A-Za-z]:\\(?:[^\s\\]+\\)+([^\s\\]+)/g;
+
+/** Markdown and long paths read as noise in a one-line status; URLs and identifiers stay intact. */
+function plainLine(line: string): string {
+  if (line.trimStart().startsWith("```")) return "";
+  let text = line
+    .replace(/\[([^\]\n]+)\]\([^)\s]+\)/g, "$1")
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/(?<![\w*])\*(?=\S)([^*\n]*[^\s*])\*(?![\w*])/g, "$1")
+    .replace(/(?<!\w)_(?=\S)([^_\n]*[^\s_])_(?!\w)/g, "$1")
+    .replace(/`([^`\n]+)`/g, "$1")
+    .replace(UNIX_ABSOLUTE_PATH, "$1")
+    .replace(WINDOWS_ABSOLUTE_PATH, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+  for (let stripped = text.replace(LEADING_MARKER, ""); stripped !== text;) {
+    text = stripped;
+    stripped = text.replace(LEADING_MARKER, "");
+  }
+  return text.replace(/^[*_`~|=-]+$/, "");
+}
+
 const firstLine = (text: string | null | undefined) =>
   text
     ?.split(/\r?\n/)
-    .map((line) => line.trim())
+    .map(plainLine)
     .find((line) => line !== "") ?? null;
 
 function pullRequestLine(number: number, snapshot: ThreadPullRequestSnapshot): string {

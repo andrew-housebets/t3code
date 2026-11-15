@@ -257,6 +257,60 @@ describe("threadOverviewStatusLine", () => {
       undefined,
       null,
     ],
+    [
+      "bold, an arrow bullet and code",
+      child(),
+      { progress: "", result: "**→ Not done: the sandbox blocked `sleep 120`…**" },
+      "Not done: the sandbox blocked sleep 120…",
+    ],
+    [
+      "an absolute path cut to its file name",
+      child(),
+      {
+        progress: "",
+        result: "Saved to `/home/andrew/.t3/userdata/projects/p/library/binary-search.md`.",
+      },
+      "Saved to binary-search.md.",
+    ],
+    [
+      "a heading and a rule before the text",
+      child(),
+      { progress: "", result: "---\n## Summary\nDone" },
+      "Summary",
+    ],
+    [
+      "a list marker and italics",
+      child(),
+      { progress: "", result: "- *Fixed* the `parse_args` helper in src/cli/*.ts" },
+      "Fixed the parse_args helper in src/cli/*.ts",
+    ],
+    [
+      "URLs, relative paths and identifiers as they are",
+      child(),
+      {
+        progress: "",
+        result: "Opened https://github.com/acme/app/pull/7 for apps/web/src/a.ts and __init__",
+      },
+      "Opened https://github.com/acme/app/pull/7 for apps/web/src/a.ts and __init__",
+    ],
+    [
+      "a markdown link as its text",
+      child(),
+      { progress: "", result: "1. See [PR #7](https://github.com/acme/app/pull/7)  now" },
+      "See PR #7 now",
+    ],
+    [
+      "a Windows path",
+      child(),
+      { progress: "", result: "Wrote C:\\Users\\me\\notes\\report.md" },
+      "Wrote report.md",
+    ],
+    [
+      "a code fence skipped",
+      child(),
+      { progress: "", result: "```ts\nconst x = 1;" },
+      "const x = 1;",
+    ],
     ["nothing to show", child(), { progress: "  ", result: null }, null],
   ];
 
