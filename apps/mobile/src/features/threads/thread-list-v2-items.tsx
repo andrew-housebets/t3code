@@ -80,7 +80,6 @@ import {
   resolveThreadListV2SnoozeGateExpiryMs,
   resolveThreadListV2SnoozeMenuSelection,
   resolveThreadListV2SnoozePresets,
-  threadHasUnseenCompletion,
   resolveThreadListV2RowStatus,
   resolveThreadListV2Status,
   resolveThreadListV2ProviderDrivers,
@@ -89,6 +88,7 @@ import {
   threadListV2RowAccessibilityLabel,
   type ThreadListV2Status,
 } from "./threadListV2";
+import { threadHasUnseenCompletion } from "@t3tools/client-runtime/state/thread-inbox";
 import { QueuedMessageIcon } from "./queued-message-icon";
 import { shouldRecedeThreadRow } from "./thread-row-emphasis";
 import { ThreadSearchMatchExcerpt } from "./thread-search-match";

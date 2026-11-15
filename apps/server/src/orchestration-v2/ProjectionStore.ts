@@ -9001,6 +9001,10 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             OR EXISTS (
               SELECT 1 FROM json_each(t.payload_json, '$.pullRequests') link
               WHERE json_type(link.value, '$.watch') IS NOT NULL
+                OR (
+                  json_extract(t.payload_json, '$.lineage.relationshipToParent') = 'subagent'
+                  AND json_extract(link.value, '$.snapshot.state') = 'open'
+                )
             )
           ) AS may_be_live,
           -- One list for the whole read, found through the child_thread_id index. A lookup per

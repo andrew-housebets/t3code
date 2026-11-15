@@ -2286,19 +2286,31 @@ const LIVE_SHELL_STATUSES: ReadonlySet<OrchestrationV2ShellThreadStatus> = new S
 /**
  * A subagent child that can still need the user or hold its parent. Shells that omit idle children
  * keep these, so every reader of live child rows (pending requests, working parents, background
- * work) still finds them.
+ * work, a pull request waiting for review) still finds them.
  */
 export function isLiveSubagentShell(
   thread: Pick<
     OrchestrationV2ThreadShell,
-    "activityRunStatus" | "status" | "pendingRuntimeRequest" | "pendingBackgroundTasks"
+    | "activityRunStatus"
+    | "status"
+    | "pendingRuntimeRequest"
+    | "pendingBackgroundTasks"
+    | "lineage"
+    | "pullRequests"
   >,
 ): boolean {
   return (
     (thread.activityRunStatus ?? null) !== null ||
     LIVE_SHELL_STATUSES.has(thread.status) ||
     thread.pendingRuntimeRequest !== null ||
-    (thread.pendingBackgroundTasks?.length ?? 0) > 0
+    (thread.pendingBackgroundTasks?.length ?? 0) > 0 ||
+    (thread.lineage.relationshipToParent === "subagent" &&
+      (thread.pullRequests ?? []).some(
+        (link) =>
+          link.source !== "stack-dismissed" &&
+          link.snapshot?.state === "open" &&
+          !link.snapshot.isDraft,
+      ))
   );
 }
 

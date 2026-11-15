@@ -45,9 +45,9 @@ import {
   resolveThreadListV2WokeAt,
   threadListV2ListItemsAreEqual,
   threadListV2RowAccessibilityLabel,
-  threadHasUnseenCompletion,
   type ThreadListV2ListItem,
 } from "./threadListV2";
+import { threadHasUnseenCompletion } from "@t3tools/client-runtime/state/thread-inbox";
 
 const environmentId = EnvironmentId.make("environment-1");
 const decodeThreadShell = Schema.decodeUnknownSync(OrchestrationV2ThreadShell);

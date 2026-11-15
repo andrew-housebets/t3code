@@ -2,7 +2,7 @@ import type { ScopedThreadRef } from "@t3tools/contracts";
 import { isCoordinatorThread } from "@t3tools/shared/coordinatorThread";
 
 import type { EnvironmentProject, EnvironmentThreadShell } from "./models.ts";
-import { isThreadOverviewChild, threadOverviewGroupOf } from "./threadOverview.ts";
+import { isThreadOverviewChild, threadNeedsYou } from "./threadOverview.ts";
 import { toSortableTimestamp } from "./threadSort.ts";
 
 type PinnableProject = Pick<EnvironmentProject, "environmentId" | "id" | "pinnedAt" | "archivedAt">;
@@ -11,15 +11,15 @@ export interface PinnedProject<TGroup> {
   readonly group: TGroup;
   /** The project's most recently updated coordinator, which opening the project goes to. */
   readonly coordinator: ScopedThreadRef | null;
-  /** A thread one of the project's coordinators delegated is waiting on you. */
-  readonly waitingOnYou: boolean;
+  /** One of the project's coordinators needs you, by `threadNeedsYou`. */
+  readonly needsYou: boolean;
 }
 
 const refKey = (environmentId: string, id: string) => `${environmentId}\0${id}`;
 
 /**
  * Pinned, unarchived project groups, newest pin first. Children absent from `threads`
- * still count through their coordinator's rolled-up approval request.
+ * still count through their coordinator's rolled-up request.
  */
 export function pinnedProjects<TGroup>(
   groups: ReadonlyArray<TGroup>,
@@ -45,23 +45,20 @@ export function pinnedProjects<TGroup>(
     }
   });
   const latest: Array<EnvironmentThreadShell | undefined> = [];
-  const coordinatorEntry = new Map<string, number>();
-  const waitingParents = new Set<string>();
-  const waiting = new Set<number>();
+  const coordinators: Array<readonly [index: number, coordinator: EnvironmentThreadShell]> = [];
+  const childrenByParent = new Map<string, EnvironmentThreadShell[]>();
   for (const thread of threads) {
     const parentId = thread.source.lineage.parentThreadId;
-    if (
-      parentId !== null &&
-      isThreadOverviewChild(thread.source, parentId) &&
-      threadOverviewGroupOf(thread) === "waiting_on_you"
-    ) {
-      waitingParents.add(refKey(thread.environmentId, parentId));
+    if (parentId !== null && isThreadOverviewChild(thread.source, parentId)) {
+      const key = refKey(thread.environmentId, parentId);
+      const siblings = childrenByParent.get(key);
+      if (siblings === undefined) childrenByParent.set(key, [thread]);
+      else siblings.push(thread);
     }
     if (thread.archivedAt !== null || !isCoordinatorThread(thread.source)) continue;
     const index = entryByProject.get(refKey(thread.environmentId, thread.projectId));
     if (index === undefined) continue;
-    coordinatorEntry.set(refKey(thread.environmentId, thread.id), index);
-    if (thread.pendingSubagentRequest != null) waiting.add(index);
+    coordinators.push([index, thread]);
     const current = latest[index];
     if (
       current === undefined ||
@@ -70,10 +67,16 @@ export function pinnedProjects<TGroup>(
       latest[index] = thread;
     }
   }
-  for (const parent of waitingParents) {
-    const index = coordinatorEntry.get(parent);
-    if (index !== undefined) waiting.add(index);
-  }
+  const needsYou = new Set(
+    coordinators.flatMap(([index, coordinator]) =>
+      threadNeedsYou(
+        coordinator,
+        childrenByParent.get(refKey(coordinator.environmentId, coordinator.id)) ?? [],
+      )
+        ? [index]
+        : [],
+    ),
+  );
 
   return pinned
     .map((entry, index) => ({ entry, index }))
@@ -86,7 +89,7 @@ export function pinnedProjects<TGroup>(
           coordinator === undefined
             ? null
             : { environmentId: coordinator.environmentId, threadId: coordinator.id },
-        waitingOnYou: waiting.has(index),
+        needsYou: needsYou.has(index),
       };
     });
 }

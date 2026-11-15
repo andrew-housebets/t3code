@@ -10,17 +10,17 @@ Right-click a project in the sidebar, or the project name in the chat header, an
 
 A coordinator's header has three panels:
 
-- **Threads** lists the threads it delegated, grouped by what each needs from you, with what each last did. A dot on the button means one is waiting on you.
+- **Threads** lists the threads it delegated, grouped by what each needs from you, with what each last did. A dot on the button means something needs you: a delegated thread is waiting on you or has a pull request ready for your review, or the thread itself is asking, failed, or finished since you last looked.
 - **Library** holds the project's non-code deliverables, such as reports, notes, and docs, with the thread that wrote each. Add or remove files there yourself.
 - **Scheduled**, in the **⋯** menu, lists the project's scheduled tasks.
 
 ## On your phone
 
-In the mobile app, tap the checklist button on a new thread to start it as a coordinator, or choose **Make coordinator** from a thread's long-press menu. A coordinator's header has a checklist button that opens its **Overview**, with the same Threads, Library, and Scheduled tabs; it turns amber when a thread is waiting on you. Long-press a delegated thread to mark it resolved, reopen it, or stop it. The drawer's **Artifacts** row opens the Library of the project you are in. Edit project instructions and memory from the Overview's **⋯** menu or **Settings → Projects → Instructions and memory**.
+In the mobile app, tap the checklist button on a new thread to start it as a coordinator, or choose **Make coordinator** from a thread's long-press menu. A coordinator's header has a checklist button that opens its **Overview**, with the same Threads, Library, and Scheduled tabs; it turns amber when something needs you. Long-press a delegated thread to mark it resolved, reopen it, or stop it. The drawer's **Artifacts** row opens the Library of the project you are in. Edit project instructions and memory from the Overview's **⋯** menu or **Settings → Projects → Instructions and memory**.
 
 ## Pinned projects
 
-Pin a project from its right-click menu, the command palette, or its settings. Pinned projects are listed under **Pinned** at the top of the sidebar and the mobile drawer. Selecting one opens its most recent coordinator. When it has none, the sidebar starts a new coordinator and the drawer shows the project's threads. A dot means a thread one of its coordinators delegated is waiting on you. Right-click a pinned project, or long-press it on your phone, to unpin it.
+Pin a project from its right-click menu, the command palette, or its settings. Pinned projects are listed under **Pinned** at the top of the sidebar and the mobile drawer. Selecting one opens its most recent coordinator. When it has none, the sidebar starts a new coordinator and the drawer shows the project's threads. A dot means one of its coordinators needs you, by the same rule as the Threads button. Right-click a pinned project, or long-press it on your phone, to unpin it.
 
 The sidebar's **Artifacts** row opens the Library of the thread you have open, and **Scheduled** opens your scheduled tasks.
 

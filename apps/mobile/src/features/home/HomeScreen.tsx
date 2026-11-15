@@ -679,6 +679,7 @@ export function HomeScreen(props: HomeScreenProps) {
         <View className={sidebarSurface ? "px-2" : "px-3"}>
           <DrawerNavigationHeader
             threads={props.threads}
+            visible={props.visible}
             projectScopes={projectScopes}
             selectedProjectScope={v2ScopedProjectGroup}
             selectedThreadKey={selectedThreadKey}

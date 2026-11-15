@@ -68,7 +68,7 @@ export function SidebarPinnedProjects(props: {
         Pinned
       </h2>
       {props.entries.map((entry) => {
-        const { group, coordinator, waitingOnYou } = entry;
+        const { group, coordinator, needsYou } = entry;
         const active =
           coordinator !== null && props.activeThreadKey === scopedThreadKey(coordinator);
         return (
@@ -76,7 +76,7 @@ export function SidebarPinnedProjects(props: {
             key={group.projectKey}
             type="button"
             data-sidebar-pinned-project={group.projectKey}
-            data-waiting-on-you={waitingOnYou || undefined}
+            data-needs-you={needsYou || undefined}
             aria-current={active ? "page" : undefined}
             onClick={() => props.onOpen(entry)}
             onContextMenu={(event) => {
@@ -87,9 +87,9 @@ export function SidebarPinnedProjects(props: {
           >
             <ProjectFavicon project={group} className="size-4 shrink-0" />
             <span className="min-w-0 flex-1 truncate">{group.displayName}</span>
-            {waitingOnYou ? (
+            {needsYou ? (
               <span className="size-1.5 shrink-0 rounded-full bg-warning">
-                <span className="sr-only">, a thread is waiting on you</span>
+                <span className="sr-only">, needs you</span>
               </span>
             ) : null}
           </button>

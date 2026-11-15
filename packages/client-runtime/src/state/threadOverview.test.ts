@@ -22,6 +22,7 @@ import {
   threadOverviewArtifactsChanged,
   threadOverviewGroupOf,
   threadOverviewArtifacts,
+  threadNeedsYou,
   threadOverviewStatusLine,
   type ThreadOverviewGroup,
 } from "./threadOverview.ts";
@@ -151,6 +152,58 @@ describe("threadOverviewGroupOf", () => {
 
   it.each(rows)("%s", (_label, thread, group) => {
     expect(threadOverviewGroupOf(thread)).toBe(group);
+  });
+});
+
+describe("threadNeedsYou", () => {
+  const coordinator = (
+    overrides: Partial<OrchestrationV2ThreadShell> = {},
+    rollup: PendingSubagentRequest | null = null,
+  ) =>
+    presentThreadShell(
+      environmentId,
+      { ...v2ThreadShell, ...completed, id: parentId, ...overrides },
+      rollup,
+    );
+  const visited = (iso: string) => ({ lastVisitedAt: DateTime.makeUnsafe(iso) });
+  const rows: ReadonlyArray<
+    [
+      string,
+      ReturnType<typeof coordinator> | null,
+      ReadonlyArray<ReturnType<typeof child>>,
+      boolean,
+    ]
+  > = [
+    ["nothing to do", coordinator(visited("2026-06-21T00:00:00.000Z")), [child()], false],
+    ["a child waits on you", coordinator(), [child(), child(approval)], true],
+    ["a child's PR awaits review", null, [child(pr({}))], true],
+    ["a child's PR is landing", null, [child(pr({ reviewDecision: "approved" }))], false],
+    ["a child is working", null, [child(running)], false],
+    ["the coordinator awaits approval", coordinator(approval), [], true],
+    [
+      "the coordinator carries a child's rolled-up question",
+      coordinator({}, "user_input"),
+      [],
+      true,
+    ],
+    ["the coordinator's run failed", coordinator({ status: "failed" }), [], true],
+    [
+      "the coordinator finished after you looked",
+      coordinator(visited("2026-06-19T00:00:00.000Z")),
+      [],
+      true,
+    ],
+    ["the coordinator was never opened", coordinator(), [], false],
+    [
+      "a resolved child's old question",
+      null,
+      [child({ ...approval, settledOverride: "settled" })],
+      false,
+    ],
+  ];
+
+  it.each(rows)("%s", (_label, thread, children, needsYou) => {
+    expect(threadNeedsYou(thread, children)).toBe(needsYou);
   });
 });
 

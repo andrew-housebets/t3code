@@ -11420,6 +11420,92 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
     }),
   );
 
+  it.effect("an idle delegated child stays live while its pull request awaits review", () =>
+    Effect.gen(function* () {
+      const store = yield* ProjectionStore.ProjectionStoreV2;
+      const parentId = ThreadId.make("thread:review-parent");
+      const threadId = ThreadId.make("thread:review-child");
+      const at = DateTime.makeUnsafe("2026-10-05T12:00:00.000Z");
+      const thread = {
+        createdBy: "user" as const,
+        creationSource: "mcp" as const,
+        id: threadId,
+        projectId: ProjectId.make("project:review-child"),
+        title: "Fix the bug",
+        providerInstanceId,
+        modelSelection,
+        runtimeMode: "full-access" as const,
+        interactionMode: "default" as const,
+        branch: null,
+        worktreePath: null,
+        activeProviderThreadId: null,
+        lineage: {
+          parentThreadId: parentId,
+          relationshipToParent: "subagent" as const,
+          rootThreadId: parentId,
+        },
+        forkedFrom: null,
+        createdAt: at,
+        updatedAt: at,
+        archivedAt: null,
+        settledOverride: null,
+        settledAt: null,
+        lastVisitedAt: null,
+        deletedAt: null,
+      };
+      yield* store.apply({
+        id: EventId.make("event:review-child:thread"),
+        type: "thread.created",
+        threadId,
+        occurredAt: at,
+        payload: thread,
+      });
+      const syncPullRequest = (id: string, isDraft: boolean) =>
+        store.apply({
+          id: EventId.make(`event:review-child:${id}`),
+          type: "thread.pull-request-synced",
+          threadId,
+          occurredAt: at,
+          payload: {
+            ...thread,
+            pullRequests: [
+              {
+                host: "github.com",
+                repository: "pingdotgg/t3code",
+                number: 8,
+                url: "https://github.com/pingdotgg/t3code/pull/8",
+                source: "agent" as const,
+                linkedAt: DateTime.formatIso(at),
+                snapshot: {
+                  state: "open" as const,
+                  title: "Fix the bug",
+                  headBranch: "fix",
+                  baseBranch: "main",
+                  isDraft,
+                  updatedAt: DateTime.formatIso(at),
+                  syncedAt: DateTime.formatIso(at),
+                  closedAt: null,
+                  mergedAt: null,
+                },
+                stack: null,
+              },
+            ],
+          },
+        });
+      const live = Effect.gen(function* () {
+        yield* assertShellIndexCoversShells();
+        const shell = yield* store.getThreadShell(threadId);
+        return shell !== null && isLiveSubagentShell(shell);
+      });
+
+      assert.isFalse(yield* live);
+      yield* syncPullRequest("draft", true);
+      assert.isFalse(yield* live);
+      yield* syncPullRequest("ready", false);
+      assert.isTrue(yield* live);
+    }),
+  );
+
   it.effect("dates a completion released by held background work at the release", () =>
     Effect.gen(function* () {
       const store = yield* ProjectionStore.ProjectionStoreV2;

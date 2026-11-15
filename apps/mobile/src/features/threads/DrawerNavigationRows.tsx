@@ -17,7 +17,9 @@ import { Menu } from "../../components/ui/Menu";
 import { scopedThreadKey } from "../../lib/scopedEntities";
 import { projectEnvironment } from "../../state/projects";
 import { readEnvironmentScope } from "../../state/session";
+import { environmentThreadShells } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { useAtomValueWhileVisible } from "../home/home-route-visibility";
 import type { HomeProjectScope } from "../home/homeThreadList";
 import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
 import { openSettings } from "../settings/settings-navigation";
@@ -34,9 +36,7 @@ function DrawerRow(props: {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={
-        props.attention ? `${props.label}, a thread is waiting on you` : props.label
-      }
+      accessibilityLabel={props.attention ? `${props.label}, needs you` : props.label}
       accessibilityHint={props.accessibilityHint}
       onPress={props.onPress}
       className="min-h-12 flex-row items-center gap-3.5 rounded-xl px-3 active:bg-thread-hover"
@@ -98,9 +98,13 @@ export function DrawerSectionLabel({ label }: { readonly label: string }) {
   );
 }
 
-/** The thread list's top rows and pinned projects; hidden while searching. */
+/**
+ * The thread list's top rows and pinned projects; hidden while searching. The pinned dot reads
+ * every live shell, delegated children included, which the list's own rows leave out.
+ */
 export function DrawerNavigationHeader(props: {
   readonly threads: ReadonlyArray<EnvironmentThreadShell>;
+  readonly visible: boolean;
   readonly projectScopes: ReadonlyArray<HomeProjectScope>;
   readonly selectedProjectScope: HomeProjectScope | null;
   readonly selectedThreadKey: string | null;
@@ -111,9 +115,13 @@ export function DrawerNavigationHeader(props: {
   const navigation = useNavigation();
   const selectDetail = useSelectWorkspaceDetail();
   const { projectScopes, threads } = props;
+  const liveShells = useAtomValueWhileVisible(
+    environmentThreadShells.quietThreadShellsAtom,
+    props.visible,
+  );
   const pinned = useMemo(
-    () => pinnedProjects(projectScopes, (scope) => scope.projects, threads),
-    [projectScopes, threads],
+    () => pinnedProjects(projectScopes, (scope) => scope.projects, liveShells),
+    [projectScopes, liveShells],
   );
   const unpinProject = useUnpinProject();
   if (props.searching) return null;
@@ -201,7 +209,7 @@ function DrawerNavigationRows(props: {
               >
                 <DrawerRow
                   label={entry.group.title}
-                  attention={entry.waitingOnYou}
+                  attention={entry.needsYou}
                   accessibilityHint="Long press to unpin."
                   icon={
                     <ProjectFavicon

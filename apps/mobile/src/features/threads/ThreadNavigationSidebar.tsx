@@ -325,6 +325,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
   const drawerHeader = (
     <DrawerNavigationHeader
       threads={threads}
+      visible={props.visible}
       projectScopes={projectScopes}
       selectedProjectScope={selectedProjectScope}
       selectedThreadKey={props.selectedThreadKey}

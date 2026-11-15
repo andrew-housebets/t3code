@@ -30,6 +30,22 @@ export function isThreadWorking(thread: WorkingThreadInput): boolean {
   return !(thread.interactionMode === "plan" && thread.hasActionableProposedPlan && runSettled);
 }
 
+/** The latest run finished after the user last looked; a thread never visited is not unread. */
+export function threadHasUnseenCompletion(
+  thread: Pick<EnvironmentThreadShell, "latestRun"> & {
+    readonly lastVisitedAt?: string | null | undefined;
+  },
+): boolean {
+  const completedAt = thread.latestRun?.completedAt;
+  if (!completedAt) return false;
+  const completedAtMs = Date.parse(completedAt);
+  if (Number.isNaN(completedAtMs)) return false;
+  if (!thread.lastVisitedAt) return false;
+  const lastVisitedAtMs = Date.parse(thread.lastVisitedAt);
+  if (Number.isNaN(lastVisitedAtMs)) return true;
+  return completedAtMs > lastVisitedAtMs;
+}
+
 /**
  * A thread its own client is launching reads as preparing until its first run lands.
  * The server commits the thread before its run, so the list would otherwise place it twice.

@@ -12,7 +12,7 @@ import { groupBy } from "effect/Array";
 import * as DateTime from "effect/DateTime";
 
 import { threadRuntimeIsActive, type EnvironmentThreadShell } from "./models.ts";
-import { isThreadWorking } from "./threadInbox.ts";
+import { isThreadWorking, threadHasUnseenCompletion } from "./threadInbox.ts";
 import { toSortableTimestamp } from "./threadSort.ts";
 
 const THREAD_OVERVIEW_GROUPS = [
@@ -62,18 +62,17 @@ const openReadyPullRequests = (thread: EnvironmentThreadShell) =>
     snapshot?.state === "open" && !snapshot.isDraft ? [snapshot] : [],
   );
 
+const isAskingOrFailed = (thread: EnvironmentThreadShell) =>
+  thread.hasPendingApprovals ||
+  thread.hasPendingUserInput ||
+  thread.pendingSubagentRequest != null ||
+  thread.latestRun?.status === "failed";
+
 const RULES: ReadonlyArray<
   readonly [ThreadOverviewGroup, (thread: EnvironmentThreadShell) => boolean]
 > = [
   ["resolved", (thread) => thread.settledOverride === "settled"],
-  [
-    "waiting_on_you",
-    (thread) =>
-      thread.hasPendingApprovals ||
-      thread.hasPendingUserInput ||
-      thread.pendingSubagentRequest !== null ||
-      thread.latestRun?.status === "failed",
-  ],
+  ["waiting_on_you", isAskingOrFailed],
   ["working", isThreadWorking],
   [
     "landing",
@@ -87,6 +86,25 @@ const RULES: ReadonlyArray<
 
 export function threadOverviewGroupOf(thread: EnvironmentThreadShell): ThreadOverviewGroup {
   return RULES.find(([, matches]) => matches(thread))?.[0] ?? "idle";
+}
+
+const CHILD_GROUPS_THAT_NEED_YOU: ReadonlySet<ThreadOverviewGroup> = new Set([
+  "waiting_on_you",
+  "ready_for_review",
+]);
+
+/**
+ * The rule behind every "needs you" dot for a thread with delegated children: the thread asks,
+ * failed, or finished since you looked, or a child waits on you or has a pull request to review.
+ */
+export function threadNeedsYou(
+  thread: EnvironmentThreadShell | null,
+  children: ReadonlyArray<EnvironmentThreadShell>,
+): boolean {
+  return (
+    (thread !== null && (isAskingOrFailed(thread) || threadHasUnseenCompletion(thread))) ||
+    children.some((child) => CHILD_GROUPS_THAT_NEED_YOU.has(threadOverviewGroupOf(child)))
+  );
 }
 
 export function groupThreadOverview(
