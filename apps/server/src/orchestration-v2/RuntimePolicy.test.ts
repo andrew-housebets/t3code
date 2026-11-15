@@ -1,5 +1,10 @@
 import { assert, it } from "@effect/vitest";
 import {
+  COORDINATOR_LOCK_BY_DRIVER,
+  COORDINATOR_UNLOCKED_WARNING,
+  coordinatorProviderWarning,
+} from "@t3tools/shared/coordinatorThread";
+import {
   type ManagedPolicySummary,
   type ModelSelection,
   type OrchestrationV2AppThread,
@@ -17,6 +22,7 @@ import * as Stream from "effect/Stream";
 import type { ProviderInstance } from "@t3tools/provider-core/server/driver";
 import { acpPermissionDisposition } from "@t3tools/provider-acp/server/clientPolicy";
 import * as ServerSettings from "../serverSettings.ts";
+import { BUILT_IN_DRIVERS } from "../provider/builtInDrivers.ts";
 import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.ts";
 import * as ProjectStore from "./ProjectStore.ts";
 import * as RuntimePolicy from "./RuntimePolicy.ts";
@@ -179,8 +185,27 @@ it.layer(layerTest)("RuntimePolicyV2", (it) => {
           networkAccess: false,
         });
         assert.equal(coordinator.runtimeMode, "full-access");
+        const write = {
+          sessionId: "session-1",
+          toolCall: { toolCallId: "edit-1", title: "Edit", kind: "edit" as const },
+          options: [{ optionId: "allow", name: "Allow", kind: "allow_once" as const }],
+        };
+        assert.equal(acpPermissionDisposition(locked, write), "deny");
       }),
   );
+});
+
+it("decides the coordinator lock for every built-in provider, and warns unless it is enforced", () => {
+  assert.sameMembers(
+    Object.keys(COORDINATOR_LOCK_BY_DRIVER),
+    BUILT_IN_DRIVERS.map((driver) => driver.driverKind),
+  );
+  assert.isNull(coordinatorProviderWarning("claudeAgent"));
+  assert.isNull(coordinatorProviderWarning("codex"));
+  assert.equal(coordinatorProviderWarning("grok"), COORDINATOR_UNLOCKED_WARNING);
+  assert.equal(coordinatorProviderWarning("pi"), COORDINATOR_UNLOCKED_WARNING);
+  assert.equal(coordinatorProviderWarning("someNewDriver"), COORDINATOR_UNLOCKED_WARNING);
+  assert.isNull(coordinatorProviderWarning(undefined));
 });
 
 it.layer(

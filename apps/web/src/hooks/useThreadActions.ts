@@ -1,4 +1,7 @@
-import { COORDINATOR_THREAD_TAG } from "@t3tools/shared/coordinatorThread";
+import {
+  COORDINATOR_THREAD_TAG,
+  coordinatorProviderWarning,
+} from "@t3tools/shared/coordinatorThread";
 import {
   parseScopedThreadKey,
   scopeProjectRef,
@@ -750,11 +753,30 @@ export function useThreadActions() {
     });
   };
 
-  const setThreadCoordinator = (target: ScopedThreadRef, coordinator: boolean) =>
-    setThreadTagMutation({
+  const setThreadCoordinator = async (target: ScopedThreadRef, coordinator: boolean) => {
+    const localApi = readLocalApi();
+    const thread = readThreadShell(target);
+    const warning = coordinatorProviderWarning(
+      appAtomRegistry
+        .get(environmentServerConfigsAtom)
+        .get(target.environmentId)
+        ?.providers?.find((provider) => provider.instanceId === thread?.modelSelection.instanceId)
+        ?.driver,
+    );
+    if (coordinator && warning !== null && localApi) {
+      const confirmation = await settlePromise(() =>
+        localApi.dialogs.confirm(
+          `Make "${thread?.title ?? "this thread"}" a coordinator?\n${warning}`,
+        ),
+      );
+      if (confirmation._tag === "Failure") return confirmation;
+      if (!confirmation.value) return AsyncResult.success(undefined);
+    }
+    return setThreadTagMutation({
       environmentId: target.environmentId,
       input: { threadId: target.threadId, tag: COORDINATOR_THREAD_TAG, tagged: coordinator },
     });
+  };
 
   const sendPin = async (target: ScopedThreadRef, opts: { orderKey?: string } = {}) => {
     if (!readEnvironmentServerConfigLoaded(target.environmentId)) {

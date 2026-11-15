@@ -1,4 +1,4 @@
-import { isCoordinatorThread } from "@t3tools/shared/coordinatorThread";
+import { coordinatorProviderWarning, isCoordinatorThread } from "@t3tools/shared/coordinatorThread";
 import { useIsCoordinatorDraft } from "./overview/coordinatorStore";
 import { ChildThreadApprovals } from "./chat/ChildThreadApprovals";
 import { workspaceAreaProps } from "../lib/workspaceFocus";
@@ -3393,6 +3393,7 @@ export default function ChatView(props: ChatViewProps) {
                   ? activeThreadShell != null && isCoordinatorThread(activeThreadShell.source)
                   : coordinatorDraft
               }
+              coordinatorWarning={coordinatorProviderWarning(selectedProvider)}
               {...(activeDraftLogicalProjectKey
                 ? { onOpenProjectSettings: handleOpenDraftProjectSettingsStable }
                 : {})}

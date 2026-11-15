@@ -10,7 +10,7 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { ChevronDownIcon, NetworkIcon } from "lucide-react";
+import { ChevronDownIcon, NetworkIcon, TriangleAlertIcon } from "lucide-react";
 import {
   memo,
   useEffect,
@@ -58,6 +58,7 @@ interface ChatHeaderProps {
   onNewThreadInProject: () => void;
   onNewCoordinatorInProject: () => void;
   coordinator: boolean;
+  coordinatorWarning?: string | null | undefined;
   onOpenProjectSettings?: (() => void) | undefined;
   onFindInThread?: ((threadRef: ScopedThreadRef) => void) | undefined;
 }
@@ -85,6 +86,7 @@ export const ChatHeader = memo(function ChatHeader({
   onNewThreadInProject,
   onNewCoordinatorInProject,
   coordinator,
+  coordinatorWarning,
   onOpenProjectSettings,
   onFindInThread,
 }: ChatHeaderProps) {
@@ -424,6 +426,15 @@ export const ChatHeader = memo(function ChatHeader({
               <TooltipPopup side="top">
                 Plans and delegates. Each task runs in a thread of its own.
               </TooltipPopup>
+            </Tooltip>
+          ) : null}
+          {renamingTitle === null && coordinator && coordinatorWarning ? (
+            <Tooltip>
+              <TooltipTrigger render={<Badge variant="warning" size="sm" />}>
+                <TriangleAlertIcon aria-hidden />
+                <span className="@max-[40rem]/chat-header:sr-only">Not read-only</span>
+              </TooltipTrigger>
+              <TooltipPopup side="top">{coordinatorWarning}</TooltipPopup>
             </Tooltip>
           ) : null}
           {renamingTitle === null && activeThreadLinkOrigin ? (
