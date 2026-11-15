@@ -230,6 +230,7 @@ import {
   reduceCommandPaletteSearchState,
   type SearchOverlayMode,
 } from "./CommandPalette.logic";
+import { threadOverviewPaletteItem } from "./overview/ThreadOverviewEntryPoints";
 import { resolveEnvironmentOptionLabel } from "./BranchToolbar.logic";
 import { CommandPaletteContent, type PendingInputSelection } from "./CommandPaletteContent";
 import {
@@ -1489,6 +1490,7 @@ function OpenCommandPaletteDialog(props: {
     });
   }
 
+  if (activeThread !== null) actionItems.push(threadOverviewPaletteItem(activeThread));
   if (activeThread !== null && canShareActiveThreadWithGuest) {
     const threadRef = scopeThreadRef(activeThread.environmentId, activeThread.id);
     actionItems.push({
