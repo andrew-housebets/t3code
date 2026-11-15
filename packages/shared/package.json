@@ -275,6 +275,10 @@
       "types": "./src/coordinatorThread.ts",
       "import": "./src/coordinatorThread.ts"
     },
+    "./projectContextBlock": {
+      "types": "./src/projectContextBlock.ts",
+      "import": "./src/projectContextBlock.ts"
+    },
     "./threadPullRequests": {
       "types": "./src/threadPullRequests.ts",
       "import": "./src/threadPullRequests.ts"

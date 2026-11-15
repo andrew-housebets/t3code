@@ -4,10 +4,10 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+import { PROJECT_CONTEXT_MAX_CHARS } from "@t3tools/contracts";
+import { formatProjectContextBlock } from "@t3tools/shared/projectContextBlock";
 
 import * as ServerConfig from "../config.ts";
-
-export const PROJECT_CONTEXT_MAX_CHARS = 16_000;
 
 const PATH_SEPARATOR_OR_NUL = /[/\\\0]/;
 
@@ -73,7 +73,10 @@ function formatTaskWithContext(
     context.memory.trim() === "" ? undefined : `## Memory index\n\n${context.memory.trimEnd()}`,
     `Library: put non-code deliverables (reports, notes, docs) in ${context.libraryDir}, not in your worktree, which is private to this thread.`,
   ].filter((section) => section !== undefined);
-  return `<project_context>\nThis project's standing context. Follow it while you do the task below.\n\n${sections.join("\n\n")}\n</project_context>\n\n---\n\n${task}`;
+  return formatProjectContextBlock(
+    `This project's standing context. Follow it while you do the task below.\n\n${sections.join("\n\n")}`,
+    task,
+  );
 }
 
 const make = Effect.gen(function* () {

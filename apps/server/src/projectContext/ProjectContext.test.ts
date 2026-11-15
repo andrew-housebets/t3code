@@ -5,6 +5,8 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 
+import { PROJECT_CONTEXT_MAX_CHARS } from "@t3tools/contracts";
+import { splitProjectContextBlock } from "@t3tools/shared/projectContextBlock";
 import * as ServerConfig from "../config.ts";
 import * as ProjectContext from "./ProjectContext.ts";
 
@@ -57,7 +59,9 @@ it.layer(layerTest, { excludeTestServices: true })("ProjectContext", (it) => {
       for (const text of excludes) assert.notInclude(task, text);
       assert.include(task, libraryDir);
       assert.isTrue(libraryExists);
-      assert.isTrue(task.endsWith(`\n</project_context>\n\n---\n\n${TASK}`));
+      const split = splitProjectContextBlock(task);
+      assert.strictEqual(split.task, TASK);
+      for (const text of includes) assert.include(split.context, text);
     }),
   );
 
@@ -70,9 +74,9 @@ it.layer(layerTest, { excludeTestServices: true })("ProjectContext", (it) => {
 
   it.effect("caps oversize instructions", () =>
     Effect.gen(function* () {
-      const instructions = `${"a".repeat(ProjectContext.PROJECT_CONTEXT_MAX_CHARS)}OVERFLOW`;
+      const instructions = `${"a".repeat(PROJECT_CONTEXT_MAX_CHARS)}OVERFLOW`;
       const { task } = yield* withContext({ instructions });
-      assert.include(task, "a".repeat(ProjectContext.PROJECT_CONTEXT_MAX_CHARS));
+      assert.include(task, "a".repeat(PROJECT_CONTEXT_MAX_CHARS));
       assert.notInclude(task, "OVERFLOW");
     }),
   );

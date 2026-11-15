@@ -1027,6 +1027,24 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
                 ))}
               </div>
             ) : null}
+            {userMessage.projectContext === undefined ? null : (
+              <details data-project-context className="group/project-context mb-2 text-sm">
+                <summary className="flex cursor-pointer list-none items-center gap-1.5 text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+                  <ChevronDownIcon
+                    aria-hidden
+                    className="size-3.5 -rotate-90 transition-transform group-open/project-context:rotate-0"
+                  />
+                  Project context
+                </summary>
+                <div className="mt-2 border-s-2 border-border ps-3 text-muted-foreground">
+                  <UserMessageBody
+                    text={userMessage.projectContext}
+                    skills={ctx.skills}
+                    markdownCwd={ctx.markdownCwd}
+                  />
+                </div>
+              </details>
+            )}
             {fileCardsOnly || audioOnly ? null : (
               <div onCopyCapture={onBodyCopyCapture}>
                 <CollapsibleUserMessageBody

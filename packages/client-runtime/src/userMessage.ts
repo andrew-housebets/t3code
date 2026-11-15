@@ -14,6 +14,7 @@ import {
   replaceComposerContextReferences,
 } from "@t3tools/shared/composerContextReferences";
 import { filePreviewKind } from "@t3tools/shared/filePreview";
+import { splitProjectContextBlock } from "@t3tools/shared/projectContextBlock";
 import { imageMimeType } from "@t3tools/shared/image";
 import { videoMimeType } from "@t3tools/shared/video";
 
@@ -72,6 +73,8 @@ export function resolveUserMessagePresentation(message: {
   readonly scheduledTaskId: ScheduledTaskId | undefined;
   /** Set when `attribution` is "guest". */
   readonly guestName?: string;
+  /** The project's standing context an agent prepended to a delegated task. */
+  readonly projectContext?: string;
 } {
   if (message.role !== "user") {
     return { text: message.text, attribution: null, scheduledTaskId: undefined };
@@ -102,6 +105,15 @@ export function resolveUserMessagePresentation(message: {
       text: message.text.slice(legacyPrefix[0].length),
       attribution: "automation",
       scheduledTaskId: legacyTaskId === undefined ? undefined : ScheduledTaskId.make(legacyTaskId),
+    };
+  }
+  const delegated = message.createdBy === "agent" ? splitProjectContextBlock(message.text) : null;
+  if (delegated?.context != null) {
+    return {
+      text: delegated.task,
+      attribution: message.creationSource === "server" ? "t3code" : "agent",
+      scheduledTaskId: undefined,
+      projectContext: delegated.context,
     };
   }
   return {
