@@ -678,7 +678,6 @@ export function HomeScreen(props: HomeScreenProps) {
       {workspace ? (
         <View className={sidebarSurface ? "px-2" : "px-3"}>
           <DrawerNavigationHeader
-            projects={props.projects}
             threads={props.threads}
             projectScopes={projectScopes}
             selectedProjectScope={v2ScopedProjectGroup}
