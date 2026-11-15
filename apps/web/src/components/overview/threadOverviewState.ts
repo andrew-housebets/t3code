@@ -13,6 +13,7 @@ import {
   threadOverviewGroupOf,
 } from "@t3tools/client-runtime/state/thread-overview";
 import type { OrchestrationV2ThreadShell, ScopedThreadRef } from "@t3tools/contracts";
+import { isCoordinatorThread } from "@t3tools/shared/coordinatorThread";
 import { Atom } from "effect/reactivity";
 
 import { environmentThreadDetails, environmentThreadShells } from "../../state/threads";
@@ -48,7 +49,21 @@ export function useThreadOverviewChildren(
   return useAtomValue(childrenAtomFamily(threadKey(ref)));
 }
 
-export type ThreadOverviewHeaderState = "hidden" | "children" | "waiting";
+const coordinatorAtomFamily = Atom.family((key: string) => {
+  const ref = parseThreadKey(key);
+  return Atom.make((get) => {
+    const thread = get(environmentThreadShells.environmentThreadIndexAtom(ref.environmentId)).get(
+      ref.threadId,
+    );
+    return thread !== undefined && isCoordinatorThread(thread);
+  }).pipe(Atom.withLabel(`web-thread-coordinator:${key}`));
+});
+
+export function useIsCoordinatorThread(ref: ScopedThreadRef): boolean {
+  return useAtomValue(coordinatorAtomFamily(threadKey(ref)));
+}
+
+export type ThreadOverviewHeaderState = "hidden" | "shown" | "waiting";
 
 const headerStateAtomFamily = Atom.family((key: string) =>
   Atom.make((get): ThreadOverviewHeaderState => {
@@ -56,12 +71,12 @@ const headerStateAtomFamily = Atom.family((key: string) =>
     if (children.some((thread) => threadOverviewGroupOf(thread) === "waiting_on_you")) {
       return "waiting";
     }
-    if (children.length > 0) return "children";
+    if (children.length > 0 || get(coordinatorAtomFamily(key))) return "shown";
     const subagents =
       get(environmentThreadDetails.quietThreadAtom(parseThreadKey(key)))?.projection.subagents ??
       [];
     return subagents.some((agent) => agent.origin === "app_owned" && agent.childThreadId !== null)
-      ? "children"
+      ? "shown"
       : "hidden";
   }).pipe(Atom.withLabel(`web-thread-overview-header:${key}`)),
 );

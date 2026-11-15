@@ -62,6 +62,8 @@ import { stackedThreadToast, toastManager } from "../ui/toast";
 import { writeTextToClipboard } from "~/hooks/useCopyToClipboard";
 import { newMessageId, newThreadId } from "~/lib/utils";
 import { useNewThreadHandler } from "../../hooks/useHandleNewThread";
+import { isCoordinatorDraft, useCoordinatorStore } from "../overview/coordinatorStore";
+import { COORDINATOR_THREAD_TAG, isCoordinatorThread } from "@t3tools/shared/coordinatorThread";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import {
   beginBackgroundDraftSubmissionByRef,
@@ -345,6 +347,7 @@ export function useComposerSend(input: ComposerSendInput) {
   const startThreadTurn = useOrchestrationCommand(threadEnvironment.startTurn, {
     reportFailure: false,
   });
+  const setThreadTag = useOrchestrationCommand(threadEnvironment.setTag, { reportFailure: false });
   const uploadThreadFeedback = useOrchestrationCommand(threadEnvironment.uploadFeedback, {
     reportFailure: false,
   });
@@ -374,6 +377,30 @@ export function useComposerSend(input: ComposerSendInput) {
     pendingApprovalsRef.current = pendingApprovals;
     respondingRequestIdsRef.current = respondingRequestIds;
   }, [pendingApprovals, respondingRequestIds]);
+
+  // Servers without launch tags start the thread untagged, so the tag follows as its own command.
+  const ensureCoordinatorTag = async (
+    threadRef: ScopedThreadRef,
+    tagged: boolean,
+    sentDraftId: DraftId | null,
+  ) => {
+    if (sentDraftId !== null) useCoordinatorStore.getState().markDraft(sentDraftId, false);
+    if (tagged) return;
+    const result = await setThreadTag({
+      environmentId: threadRef.environmentId,
+      input: { threadId: threadRef.threadId, tag: COORDINATOR_THREAD_TAG, tagged: true },
+    });
+    if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: "Started as a regular thread",
+          description:
+            "It could not be made a coordinator. Choose Make coordinator from the thread menu to try again.",
+        }),
+      );
+    }
+  };
 
   const onSend = async (
     e?: { preventDefault: () => void },
@@ -1243,9 +1270,11 @@ export function useComposerSend(input: ComposerSendInput) {
     let backgroundDraftOpened = false;
     let turnStartSucceeded = false;
     if (failure === null && turnAttachmentsResult._tag === "Success") {
+      const launchesCoordinator = isLocalDraftThread && isCoordinatorDraft(draftId);
       const bootstrap =
         isLocalDraftThread || baseBranchForWorktree
           ? {
+              ...(launchesCoordinator ? { tags: [COORDINATOR_THREAD_TAG] } : {}),
               ...(isLocalDraftThread
                 ? {
                     createThread: {
@@ -1337,6 +1366,14 @@ export function useComposerSend(input: ComposerSendInput) {
         failure = startResult;
       } else {
         turnStartSucceeded = true;
+        if (launchesCoordinator) {
+          void ensureCoordinatorTag(
+            scopeThreadRef(environmentId, threadIdForSend),
+            "projection" in startResult.value &&
+              isCoordinatorThread(startResult.value.projection.thread),
+            draftId,
+          );
+        }
         if (checkoutPullRequestUrl) {
           linkCheckoutPullRequest(
             scopeThreadRef(environmentId, threadIdForSend),

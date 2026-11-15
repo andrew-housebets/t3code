@@ -1,3 +1,4 @@
+import { coordinatorToggleOf } from "@t3tools/shared/coordinatorThread";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { requestCustomSnooze } from "../components/CustomSnoozeDialog";
 import { openGuestShareDialog } from "../components/chat/guestShareDialogState";
@@ -84,6 +85,7 @@ export function useThreadActionMenu(input: {
     pinThread,
     confirmAndUnpinThread,
     setThreadAutoSettle,
+    setThreadCoordinator,
     archiveThread,
     deleteThread,
     markThreadUnread,
@@ -144,6 +146,7 @@ export function useThreadActionMenu(input: {
         snoozePresets,
         canShareWithGuest,
         canTurnIntoProject: canTurnThreadIntoProject(threadRef),
+        coordinator: coordinatorToggleOf(thread.source),
       });
       const clicked = await settlePromise(() => api.contextMenu.show(items, position));
       if (clicked._tag === "Failure" || clicked.value === null) return;
@@ -237,6 +240,12 @@ export function useThreadActionMenu(input: {
         case "auto-settle:disabled":
           await reportFailure("Failed to update auto-settle", () =>
             setThreadAutoSettle(threadRef, action === "auto-settle:enabled"),
+          );
+          return;
+        case "make-coordinator":
+        case "stop-coordinating":
+          await reportFailure("Failed to change coordinator", () =>
+            setThreadCoordinator(threadRef, action === "make-coordinator"),
           );
           return;
         case "rename":

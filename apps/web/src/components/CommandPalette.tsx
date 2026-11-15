@@ -230,7 +230,12 @@ import {
   reduceCommandPaletteSearchState,
   type SearchOverlayMode,
 } from "./CommandPalette.logic";
-import { threadOverviewPaletteItem } from "./overview/ThreadOverviewEntryPoints";
+import {
+  coordinatorTogglePaletteItem,
+  newCoordinatorPaletteItem,
+  threadOverviewPaletteItem,
+} from "./overview/ThreadOverviewEntryPoints";
+import { useThreadActions } from "../hooks/useThreadActions";
 import { resolveEnvironmentOptionLabel } from "./BranchToolbar.logic";
 import { CommandPaletteContent, type PendingInputSelection } from "./CommandPaletteContent";
 import {
@@ -418,6 +423,7 @@ function OpenCommandPaletteDialog(props: {
 }) {
   const navigate = useNavigate();
   const pathname = useLocation({ select: (location) => location.pathname });
+  const { setThreadCoordinator } = useThreadActions();
   const { openChildSearch, setOpen } = props;
   // Keyed by palette session: the intent and restored search only seed this
   // mount, and closing must not change what the closing palette shows.
@@ -1341,6 +1347,24 @@ function OpenCommandPaletteDialog(props: {
       addonIcon: <SquarePenIcon className={ADDON_ICON_CLASS} />,
       groups: [{ value: NEW_THREAD_IN_GROUP, label: "Projects", items: projectThreadItems }],
     });
+
+    if (activeProjectTitle) {
+      actionItems.push(
+        newCoordinatorPaletteItem(
+          <span className="font-semibold">{activeProjectTitle}</span>,
+          activeProjectTitle,
+          async () => {
+            const projectRef = resolveThreadActionProjectRef({
+              activeDraftThread,
+              activeThread: activeThread ?? undefined,
+              defaultProjectRef,
+              handleNewThread,
+            });
+            if (projectRef) await handleNewThread(projectRef, { coordinator: true });
+          },
+        ),
+      );
+    }
   }
 
   if (scratchTargetEnvironmentId !== null) {
@@ -1490,7 +1514,11 @@ function OpenCommandPaletteDialog(props: {
     });
   }
 
-  if (activeThread !== null) actionItems.push(threadOverviewPaletteItem(activeThread));
+  if (activeThread !== null) {
+    actionItems.push(threadOverviewPaletteItem(activeThread));
+    const toggle = coordinatorTogglePaletteItem(activeThread, setThreadCoordinator);
+    if (toggle !== null) actionItems.push(toggle);
+  }
   if (activeThread !== null && canShareActiveThreadWithGuest) {
     const threadRef = scopeThreadRef(activeThread.environmentId, activeThread.id);
     actionItems.push({

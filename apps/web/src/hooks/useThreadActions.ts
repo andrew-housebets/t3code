@@ -1,3 +1,4 @@
+import { COORDINATOR_THREAD_TAG } from "@t3tools/shared/coordinatorThread";
 import {
   parseScopedThreadKey,
   scopeProjectRef,
@@ -298,6 +299,9 @@ export function useThreadActions() {
     reportFailure: false,
   });
   const setThreadAutoSettleMutation = useOrchestrationCommand(threadEnvironment.setAutoSettle, {
+    reportFailure: false,
+  });
+  const setThreadTagMutation = useOrchestrationCommand(threadEnvironment.setTag, {
     reportFailure: false,
   });
   const reorderPinnedThreadMutation = useOrchestrationCommand(threadEnvironment.reorderPin, {
@@ -746,6 +750,12 @@ export function useThreadActions() {
     });
   };
 
+  const setThreadCoordinator = (target: ScopedThreadRef, coordinator: boolean) =>
+    setThreadTagMutation({
+      environmentId: target.environmentId,
+      input: { threadId: target.threadId, tag: COORDINATOR_THREAD_TAG, tagged: coordinator },
+    });
+
   const sendPin = async (target: ScopedThreadRef, opts: { orderKey?: string } = {}) => {
     if (!readEnvironmentServerConfigLoaded(target.environmentId)) {
       return AsyncResult.failure(
@@ -1029,6 +1039,7 @@ export function useThreadActions() {
     reorderActiveThread,
     markThreadUnread,
     setThreadAutoSettle,
+    setThreadCoordinator,
     turnThreadIntoProject: (target: ScopedThreadRef) =>
       createProjectFromThread({
         environmentId: target.environmentId,

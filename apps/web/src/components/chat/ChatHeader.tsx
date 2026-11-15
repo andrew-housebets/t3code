@@ -10,7 +10,7 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { ChevronDownIcon } from "lucide-react";
+import { ChevronDownIcon, NetworkIcon } from "lucide-react";
 import {
   memo,
   useEffect,
@@ -56,6 +56,8 @@ interface ChatHeaderProps {
   onOpenThread: (threadId: ThreadId) => void;
   rightPanelOpen: boolean;
   onNewThreadInProject: () => void;
+  onNewCoordinatorInProject: () => void;
+  coordinator: boolean;
   onOpenProjectSettings?: (() => void) | undefined;
   onFindInThread?: ((threadRef: ScopedThreadRef) => void) | undefined;
 }
@@ -81,6 +83,8 @@ export const ChatHeader = memo(function ChatHeader({
   onOpenThread,
   rightPanelOpen,
   onNewThreadInProject,
+  onNewCoordinatorInProject,
+  coordinator,
   onOpenProjectSettings,
   onFindInThread,
 }: ChatHeaderProps) {
@@ -236,6 +240,24 @@ export const ChatHeader = memo(function ChatHeader({
     }
     openMenu({ x: event.clientX, y: event.clientY });
   };
+  const handleProjectContextMenu = (event: ReactMouseEvent) => {
+    const api = readLocalApi();
+    if (!api) return;
+    event.preventDefault();
+    event.stopPropagation();
+    void api.contextMenu
+      .show(
+        [
+          { id: "new-thread", label: "New thread", icon: "message-square-plus" },
+          { id: "new-coordinator", label: "New coordinator", icon: "network" },
+        ],
+        { x: event.clientX, y: event.clientY },
+      )
+      .then((action) => {
+        if (action === "new-thread") onNewThreadInProject();
+        if (action === "new-coordinator") onNewCoordinatorInProject();
+      });
+  };
   const handleRenameKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.nativeEvent.isComposing || event.keyCode === 229) return;
     if (event.key === "Enter") {
@@ -270,6 +292,7 @@ export const ChatHeader = memo(function ChatHeader({
                       type="button"
                       aria-label={`New thread in ${activeProjectName}`}
                       onClick={onNewThreadInProject}
+                      onContextMenu={handleProjectContextMenu}
                       className="inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1.5 rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                     />
                   }
@@ -387,6 +410,19 @@ export const ChatHeader = memo(function ChatHeader({
               <TooltipPopup side="top">{activeThreadTitle}</TooltipPopup>
             </Tooltip>
           )}
+          {renamingTitle === null && coordinator ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={<Badge data-coordinator-badge variant="secondary" size="sm" />}
+              >
+                <NetworkIcon aria-hidden />
+                Coordinator
+              </TooltipTrigger>
+              <TooltipPopup side="top">
+                Plans and delegates. Each task runs in a thread of its own.
+              </TooltipPopup>
+            </Tooltip>
+          ) : null}
           {renamingTitle === null && activeThreadLinkOrigin ? (
             <Tooltip>
               <TooltipTrigger render={<Badge variant="info" size="sm" />}>

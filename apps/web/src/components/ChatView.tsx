@@ -1,3 +1,5 @@
+import { isCoordinatorThread } from "@t3tools/shared/coordinatorThread";
+import { useIsCoordinatorDraft } from "./overview/coordinatorStore";
 import { ChildThreadApprovals } from "./chat/ChildThreadApprovals";
 import { workspaceAreaProps } from "../lib/workspaceFocus";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
@@ -1152,6 +1154,10 @@ export default function ChatView(props: ChatViewProps) {
     startNewThreadForProject(activeProjectRef, handleNewThread);
   };
   const handleNewThreadInActiveProjectStable = useStableCallback(handleNewThreadInActiveProject);
+  const handleNewCoordinatorInActiveProjectStable = useStableCallback(() => {
+    if (activeProjectRef !== null) void handleNewThread(activeProjectRef, { coordinator: true });
+  });
+  const coordinatorDraft = useIsCoordinatorDraft(draftId);
   const projectGroupingSettings = selectProjectGroupingSettings(settings);
   const activeDraftLogicalProjectKey =
     !isServerThread && activeProject
@@ -3381,6 +3387,12 @@ export default function ChatView(props: ChatViewProps) {
               onOpenThread={onOpenRelatedThreadStable}
               rightPanelOpen={inlineRightPanelOwnsTitleBar}
               onNewThreadInProject={handleNewThreadInActiveProjectStable}
+              onNewCoordinatorInProject={handleNewCoordinatorInActiveProjectStable}
+              coordinator={
+                isServerThread
+                  ? activeThreadShell != null && isCoordinatorThread(activeThreadShell.source)
+                  : coordinatorDraft
+              }
               {...(activeDraftLogicalProjectKey
                 ? { onOpenProjectSettings: handleOpenDraftProjectSettingsStable }
                 : {})}

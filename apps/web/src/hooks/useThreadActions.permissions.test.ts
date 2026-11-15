@@ -121,6 +121,7 @@ vi.mock("../state/threads", () => ({
       "pin",
       "unpin",
       "reorderPin",
+      "setTag",
       "snooze",
       "unsnooze",
       "stopSession",
@@ -257,6 +258,10 @@ const operations = [
   {
     name: "reorderPin",
     run: (actions: ThreadActions, ref: ScopedThreadRef) => actions.reorderPinnedThread(ref, "b"),
+  },
+  {
+    name: "setTag",
+    run: (actions: ThreadActions, ref: ScopedThreadRef) => actions.setThreadCoordinator(ref, true),
   },
 ] as const;
 

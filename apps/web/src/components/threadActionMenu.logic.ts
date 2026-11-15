@@ -6,6 +6,8 @@ export type ThreadActionMenuId =
   | "new-thread-on-branch"
   | "filter-by-project"
   | "turn-into-project"
+  | "make-coordinator"
+  | "stop-coordinating"
   | "project-settings"
   | "pin"
   | "unpin"
@@ -95,6 +97,8 @@ export interface ThreadActionMenuState {
   readonly canShareWithGuest?: boolean;
   /** A No project thread with its own folder, on a server that can promote it. */
   readonly canTurnIntoProject?: boolean;
+  /** Absent where a thread cannot coordinate, such as a delegated child or a side chat. */
+  readonly coordinator?: "make" | "stop" | undefined;
 }
 
 /** Local navigation, read markers, and copying remain available to read-only clients. */
@@ -203,6 +207,13 @@ export function buildThreadActionMenuItems(
           },
         ]
       : []),
+    ...(state.coordinator === undefined
+      ? []
+      : [
+          state.coordinator === "make"
+            ? { id: "make-coordinator" as const, label: "Make coordinator", icon: "network" }
+            : { id: "stop-coordinating" as const, label: "Stop coordinating", icon: "network" },
+        ]),
     ...(state.supports.autoSettleOptOut
       ? [
           {

@@ -176,6 +176,8 @@ interface StartThreadBootstrap {
     readonly startFromOrigin?: boolean;
   };
   readonly runSetupScript?: boolean;
+  /** Set before the first message runs. */
+  readonly tags?: ReadonlyArray<string>;
 }
 
 export interface StartThreadTurnInput extends ThreadCommandInput {
@@ -567,6 +569,22 @@ export const settleThread = Effect.fn("EnvironmentCommands.settleThread")(functi
   return yield* simpleThreadCommand("thread.settle", input);
 });
 
+export interface SetThreadTagInput extends ThreadCommandInput {
+  readonly tag: string;
+  readonly tagged: boolean;
+}
+export const setThreadTag = Effect.fn("EnvironmentCommands.setThreadTag")(function* (
+  input: SetThreadTagInput,
+) {
+  return yield* dispatch({
+    type: "thread.tag.set",
+    commandId: yield* allocateCommandId(input),
+    threadId: input.threadId,
+    tag: input.tag,
+    tagged: input.tagged,
+  });
+});
+
 export const pinThread = Effect.fn("EnvironmentCommands.pinThread")(function* (
   input: PinThreadInput,
 ) {
@@ -802,6 +820,7 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
         ...(context ? { context } : {}),
         attachments,
       },
+      ...(input.bootstrap?.tags === undefined ? {} : { tags: input.bootstrap.tags }),
     });
   }
 
