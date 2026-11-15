@@ -54,21 +54,27 @@ export function withClaudeCoordinatorOptions(
   };
 }
 
+export const claudeProjectContextUpdate = (projectContext: string) =>
+  `<project_context_update>\nThe project's current standing context. It replaces all earlier project context, including any in your system prompt.\n\n${projectContext}\n</project_context_update>`;
+
+export const claudeCoordinatorBriefUpdate = (coordinator: boolean) =>
+  coordinator
+    ? `<coordinator_brief_update>\nThis thread is now a T3 Code coordinator. These rules apply from this turn on and win over anything earlier in this conversation.\n\n${T3_CODE_COORDINATOR_INSTRUCTIONS}\n</coordinator_brief_update>`
+    : `<coordinator_brief_update>\nThis thread is no longer a T3 Code coordinator. The coordinator rules in your system prompt or earlier in this conversation no longer apply.\n</coordinator_brief_update>`;
+
 // A resumed Claude session keeps the system prompt it was created with, so later changes go in the turn.
-export function withClaudeProjectContextUpdate(
+export function withClaudeTurnUpdates(
   message: SDKUserMessage,
-  projectContext: string,
+  updates: ReadonlyArray<string>,
 ): SDKUserMessage {
+  if (updates.length === 0) return message;
   const content = message.message.content;
   return {
     ...message,
     message: {
       ...message.message,
       content: [
-        {
-          type: "text",
-          text: `<project_context_update>\nThe project's current standing context. It replaces all earlier project context, including any in your system prompt.\n\n${projectContext}\n</project_context_update>`,
-        },
+        ...updates.map((text) => ({ type: "text" as const, text })),
         ...(typeof content === "string" ? [{ type: "text" as const, text: content }] : content),
       ],
     },

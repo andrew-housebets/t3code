@@ -4184,8 +4184,9 @@ describe("ClaudeAdapterV2 background wake turns", () => {
     const startTurn = Effect.fnUntraced(function* (
       harness: ContextHarness,
       ordinal: number,
-      projectContext: string,
+      projectContext: string | undefined,
       nativeThreadHasTurns?: boolean,
+      tags: ReadonlyArray<string> = ["coordinator"],
     ) {
       const turnInput = makeClaudeTestTurnInput({
         threadId: harness.threadId,
@@ -4199,8 +4200,8 @@ describe("ClaudeAdapterV2 background wake turns", () => {
       });
       yield* harness.runtime.startTurn({
         ...turnInput,
-        appThread: { ...turnInput.appThread, tags: ["coordinator"] },
-        projectContext,
+        appThread: { ...turnInput.appThread, tags: [...tags] },
+        ...(projectContext === undefined ? {} : { projectContext }),
       });
     });
     const finishTurn = Effect.fnUntraced(function* (harness: ContextHarness, ordinal: number) {
@@ -4280,6 +4281,94 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         yield* finishTurn(harness, 6);
 
         assert.notInclude(JSON.stringify(harness.events), "PELICAN");
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    const withT3Mcp = Effect.fnUntraced(function* (harness: ContextHarness) {
+      const mcpSessions = yield* McpProviderSessions.McpProviderSessions;
+      yield* mcpSessions.set({
+        environmentId: EnvironmentId.make("environment-coordinator-brief"),
+        threadId: harness.threadId,
+        providerSessionId: "mcp-session-coordinator-brief",
+        providerInstanceId: ProviderInstanceId.make("claudeAgent"),
+        endpoint: "http://127.0.0.1:43123/mcp",
+        authorizationHeader: "Bearer secret-claude-token",
+        browserToolsAvailable: true,
+      });
+    });
+    const compact = (harness: ContextHarness, uuid: string) =>
+      harness.offerAndWait(
+        claudeSdkFrame({
+          type: "system",
+          subtype: "compact_boundary",
+          compact_metadata: { trigger: "auto", pre_tokens: 1500, post_tokens: 400 },
+          uuid,
+          session_id: WAKE_NATIVE_SESSION,
+        }),
+      );
+    const NO_LONGER = "no longer a T3 Code coordinator";
+
+    it.effect("sends the brief once to a session made a coordinator after it started", () =>
+      Effect.gen(function* () {
+        const harness = yield* makeWakeHarnessWithOptions();
+        yield* withT3Mcp(harness);
+        yield* startTurn(harness, 1, undefined, undefined, []);
+        const plainPrompt = offeredText(harness, 0);
+        assert.notInclude(plainPrompt, T3_CODE_COORDINATOR_INSTRUCTIONS);
+        yield* finishTurn(harness, 1);
+
+        yield* startTurn(harness, 2, CONTEXT_A);
+        const converted = offeredText(harness, 1);
+        assert.include(converted, T3_CODE_COORDINATOR_INSTRUCTIONS);
+        assert.include(converted, CONTEXT_A);
+        assert.isTrue(converted.endsWith(USER_TEXT));
+        yield* finishTurn(harness, 2);
+
+        yield* startTurn(harness, 3, CONTEXT_A);
+        assert.equal(offeredText(harness, 2), plainPrompt);
+        yield* compact(harness, "00000000-0000-4000-8000-000000000b01");
+        yield* finishTurn(harness, 3);
+
+        yield* startTurn(harness, 4, CONTEXT_A);
+        assert.include(offeredText(harness, 3), T3_CODE_COORDINATOR_INSTRUCTIONS);
+        yield* finishTurn(harness, 4);
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    it.effect("tells a session born a coordinator once that it no longer coordinates", () =>
+      Effect.gen(function* () {
+        const harness = yield* makeWakeHarnessWithOptions();
+        yield* withT3Mcp(harness);
+        yield* startTurn(harness, 1, CONTEXT_A);
+        const systemPrompt = harness.getOpenedOptions()?.systemPrompt;
+        assert.include(
+          typeof systemPrompt === "object" && "append" in systemPrompt ? systemPrompt.append : "",
+          T3_CODE_COORDINATOR_INSTRUCTIONS,
+        );
+        const plainPrompt = offeredText(harness, 0);
+        assert.notInclude(plainPrompt, T3_CODE_COORDINATOR_INSTRUCTIONS);
+        yield* finishTurn(harness, 1);
+
+        yield* startTurn(harness, 2, undefined, undefined, []);
+        const stopped = offeredText(harness, 1);
+        assert.include(stopped, NO_LONGER);
+        assert.isTrue(stopped.endsWith(USER_TEXT));
+        yield* finishTurn(harness, 2);
+
+        yield* startTurn(harness, 3, undefined, undefined, []);
+        assert.equal(offeredText(harness, 2), plainPrompt);
+        yield* compact(harness, "00000000-0000-4000-8000-000000000b02");
+        yield* finishTurn(harness, 3);
+
+        yield* startTurn(harness, 4, undefined, undefined, []);
+        assert.include(offeredText(harness, 3), NO_LONGER);
+        yield* finishTurn(harness, 4);
+
+        yield* startTurn(harness, 5, CONTEXT_A);
+        const again = offeredText(harness, 4);
+        assert.include(again, T3_CODE_COORDINATOR_INSTRUCTIONS);
+        assert.notInclude(again, NO_LONGER);
+        yield* finishTurn(harness, 5);
       }).pipe(Effect.provide(testLayer)),
     );
 

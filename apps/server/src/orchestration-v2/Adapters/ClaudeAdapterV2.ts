@@ -5,10 +5,13 @@ import {
   toolOutputImages,
 } from "@t3tools/shared/toolOutput";
 import { makeProviderTextDeltaCoalescer } from "./ProviderTextDeltaCoalescer.ts";
+import { isCoordinatorThread } from "@t3tools/shared/coordinatorThread";
 import { claudeTaskOutputRoot, tailClaudeTaskOutput } from "./ClaudeTaskOutputTail.ts";
 import {
+  claudeCoordinatorBriefUpdate,
+  claudeProjectContextUpdate,
   withClaudeCoordinatorOptions,
-  withClaudeProjectContextUpdate,
+  withClaudeTurnUpdates,
 } from "./ClaudeCoordinator.ts";
 import {
   dynamicToolTitle,
@@ -5045,6 +5048,7 @@ interface ClaudeLiveQueryContext {
   readonly launchArgSettings: ClaudeSdkSettings | undefined;
   readonly query: ClaudeAgentSdkQuerySession;
   readonly queryPolicyKey: string;
+  readonly t3Mcp: boolean;
   selection: CompiledClaudeModelSelection;
   readonly closed: Deferred.Deferred<void, never>;
   lastTurn: ActiveClaudeTurnContext | null;
@@ -5877,6 +5881,16 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
         const appliedSessionTitles = new Map<string, string>();
         // The project context each native session can still see, from its system prompt or a turn.
         const deliveredProjectContexts = new Map<string, string>();
+        // Whether each native session follows the coordinator brief now, and whether its system
+        // prompt holds it. Compaction, /clear and rollback drop turn-delivered text, not the prompt.
+        const coordinatorBriefs = new Map<string, boolean>();
+        const systemPromptCoordinatorBriefs = new Map<string, boolean>();
+        const forgetTurnUpdates = (nativeThreadId: string) => {
+          deliveredProjectContexts.delete(nativeThreadId);
+          const systemPromptBrief = systemPromptCoordinatorBriefs.get(nativeThreadId);
+          if (systemPromptBrief === undefined) coordinatorBriefs.delete(nativeThreadId);
+          else coordinatorBriefs.set(nativeThreadId, systemPromptBrief);
+        };
         const goalCheckedTurns = new Set<string>();
         // Background subagents can finish after root settlement; retain their registry for wake evidence and hydration.
         const sessionSubagentsByTaskId = yield* Ref.make(new Map<string, ActiveClaudeSubagent>());
@@ -10783,7 +10797,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
           ) {
             if (message.subtype === "status" && context.compaction?.status === "running") return;
             if (message.subtype === "compact_boundary") {
-              deliveredProjectContexts.delete(context.nativeThreadId);
+              forgetTurnUpdates(context.nativeThreadId);
             }
             const now = yield* DateTime.now;
             const nativeItemId = message.uuid;
@@ -12774,10 +12788,15 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
           if (!shouldResume) {
             appliedSessionTitles.set(nativeThreadId, turnInput.appThread.title);
           }
+          if (!shouldResume) {
+            systemPromptCoordinatorBriefs.set(
+              nativeThreadId,
+              isCoordinatorThread(turnInput.appThread) && mcpOverrides.mcpServers !== undefined,
+            );
+          }
+          if (!shouldResume || resumeSessionAt !== undefined) forgetTurnUpdates(nativeThreadId);
           if (!shouldResume && turnInput.projectContext !== undefined) {
             deliveredProjectContexts.set(nativeThreadId, turnInput.projectContext);
-          } else if (!shouldResume || resumeSessionAt !== undefined) {
-            deliveredProjectContexts.delete(nativeThreadId);
           }
           yield* resetBackgroundTaskStateForNativeThreadProcess(nativeThreadId, {
             status: "active",
@@ -12790,6 +12809,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             launchArgSettings,
             query: querySession,
             queryPolicyKey,
+            t3Mcp: mcpOverrides.mcpServers !== undefined,
             selection: compiledSelection,
             closed,
             lastTurn: null,
@@ -12848,7 +12868,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                     message.session_id !== context.nativeThreadId
                   ) {
                     if (clearedNativeSessions.get(context.nativeThreadId) !== message.session_id) {
-                      deliveredProjectContexts.delete(context.nativeThreadId);
+                      forgetTurnUpdates(context.nativeThreadId);
                     }
                     clearedNativeSessions.set(context.nativeThreadId, message.session_id);
                   }
@@ -13038,19 +13058,35 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                       Effect.provideService(Path.Path, path),
                     );
             const querySession = yield* openQuery(turnInput, nativeThreadId, queryPolicy);
-            // A slash command must open the prompt, so its context waits for the next turn.
-            const projectContextUpdate =
+            // A slash command must open the prompt, so its updates wait for the next turn.
+            const acceptsTurnUpdates =
               userMessage !== null &&
               !turnInput.resume &&
+              !turnInput.message.text.trimStart().startsWith("/");
+            const projectContextUpdate =
+              acceptsTurnUpdates &&
               turnInput.projectContext !== undefined &&
-              !turnInput.message.text.trimStart().startsWith("/") &&
               deliveredProjectContexts.get(nativeThreadId) !== turnInput.projectContext
                 ? turnInput.projectContext
                 : undefined;
+            const coordinator = isCoordinatorThread(turnInput.appThread);
+            const followsBrief = coordinatorBriefs.get(nativeThreadId);
+            const coordinatorBriefUpdate =
+              acceptsTurnUpdates &&
+              (coordinator ? querySession.t3Mcp && followsBrief !== true : followsBrief === true)
+                ? coordinator
+                : undefined;
             const promptMessage =
-              userMessage === null || projectContextUpdate === undefined
+              userMessage === null
                 ? userMessage
-                : withClaudeProjectContextUpdate(userMessage, projectContextUpdate);
+                : withClaudeTurnUpdates(userMessage, [
+                    ...(coordinatorBriefUpdate === undefined
+                      ? []
+                      : [claudeCoordinatorBriefUpdate(coordinatorBriefUpdate)]),
+                    ...(projectContextUpdate === undefined
+                      ? []
+                      : [claudeProjectContextUpdate(projectContextUpdate)]),
+                  ]);
             // `claude --resume` shows the native title. A failed or timed-out rename forgets the
             // applied title so the next turn, even after a restart, sends it again.
             if (appliedSessionTitles.get(nativeThreadId) !== turnInput.appThread.title) {
@@ -13227,6 +13263,9 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                               pdfReservation.commit();
                               if (projectContextUpdate !== undefined) {
                                 deliveredProjectContexts.set(nativeThreadId, projectContextUpdate);
+                              }
+                              if (coordinatorBriefUpdate !== undefined) {
+                                coordinatorBriefs.set(nativeThreadId, coordinatorBriefUpdate);
                               }
                             }),
                           ),
