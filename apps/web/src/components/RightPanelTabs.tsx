@@ -38,6 +38,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   Smartphone,
   BotIcon,
+  LibraryIcon,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -595,6 +596,8 @@ function surfaceTitle(
       return "Pull requests";
     case "overview":
       return "Threads";
+    case "library":
+      return "Library";
     case "device":
       return surface.title ?? surface.target?.name ?? "Device";
     case "side-chat":
@@ -689,6 +692,8 @@ function SurfaceIcon({
       return <PullRequestGlyph.link className="size-3 shrink-0" />;
     case "overview":
       return <BotIcon className="size-3 shrink-0" />;
+    case "library":
+      return <LibraryIcon className="size-3 shrink-0" />;
     case "side-chat":
       return <SideChatTabIcon environmentId={environmentId} threadId={surface.threadId} />;
     case "device":

@@ -7,7 +7,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import { coordinatorToggleOf } from "@t3tools/shared/coordinatorThread";
-import { BotIcon, NetworkIcon } from "lucide-react";
+import { BotIcon, LibraryIcon, NetworkIcon } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 
 import { useRightPanelStore } from "../../rightPanelStore";
@@ -33,6 +33,22 @@ export function threadOverviewPaletteItem(
     title: "Show threads",
     icon: <BotIcon className={ITEM_ICON_CLASS} />,
     run: async () => openOverview(scopeThreadRef(thread.environmentId, thread.id)),
+  };
+}
+
+export function libraryPaletteItem(
+  thread: Pick<EnvironmentThreadShell, "environmentId" | "id">,
+): CommandPaletteActionItem {
+  return {
+    kind: "action",
+    value: "action:open-project-library",
+    searchTerms: ["library", "files", "docs", "reports", "deliverables", "project"],
+    title: "Show project Library",
+    icon: <LibraryIcon className={ITEM_ICON_CLASS} />,
+    run: async () =>
+      useRightPanelStore
+        .getState()
+        .open(scopeThreadRef(thread.environmentId, thread.id), "library"),
   };
 }
 
@@ -100,24 +116,43 @@ export function ThreadOverviewHeaderButton({ threadRef }: { readonly threadRef: 
   if (state === "hidden") return null;
   const waiting = state === "waiting";
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            size="xs"
-            variant="ghost-muted"
-            aria-label={waiting ? "Threads, some waiting on you" : "Threads"}
-            onClick={() => openOverview(threadRef)}
-          />
-        }
-      >
-        <BotIcon aria-hidden />
-        Threads
-        {waiting ? <span aria-hidden className="size-1.5 rounded-full bg-warning" /> : null}
-      </TooltipTrigger>
-      <TooltipPopup side="top">
-        {waiting ? "A thread this one started is waiting on you" : "Threads this thread started"}
-      </TooltipPopup>
-    </Tooltip>
+    <>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              size="xs"
+              variant="ghost-muted"
+              aria-label={waiting ? "Threads, some waiting on you" : "Threads"}
+              onClick={() => openOverview(threadRef)}
+            />
+          }
+        >
+          <BotIcon aria-hidden />
+          Threads
+          {waiting ? <span aria-hidden className="size-1.5 rounded-full bg-warning" /> : null}
+        </TooltipTrigger>
+        <TooltipPopup side="top">
+          {waiting ? "A thread this one started is waiting on you" : "Threads this thread started"}
+        </TooltipPopup>
+      </Tooltip>
+      {coordinator ? (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                size="xs"
+                variant="ghost-muted"
+                onClick={() => useRightPanelStore.getState().open(threadRef, "library")}
+              />
+            }
+          >
+            <LibraryIcon aria-hidden />
+            Library
+          </TooltipTrigger>
+          <TooltipPopup side="top">Files and docs this project's threads produced</TooltipPopup>
+        </Tooltip>
+      ) : null}
+    </>
   );
 }
