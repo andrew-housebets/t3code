@@ -66,6 +66,8 @@ function settleWidth(next: number) {
 }
 
 const CONTROL_OVERLAY_OFFSET = CONTROL_HEIGHT + CONTROL_GAP - COMPOSER_CAPSULE_INSET;
+// The centered capsule keeps clear of the trailing button on both sides.
+const HIDE_KEYBOARD_RESERVED_WIDTH = 2 * (44 + 12);
 export const FLOATING_WORKING_CONTROL_COVERAGE = CONTROL_OVERLAY_OFFSET + CONTROL_GAP;
 
 export function FloatingWorkingControl(props: {
@@ -76,6 +78,7 @@ export function FloatingWorkingControl(props: {
   readonly browserPreview: { readonly count: number; readonly onPress: () => void } | null;
   readonly showScrollToEnd: boolean;
   readonly onScrollToEnd: () => void;
+  readonly onHideKeyboard: (() => void) | null;
   readonly agents: SubagentPillSegment | null;
   readonly onOpenAgents: () => void;
   readonly queuedCount: number;
@@ -104,7 +107,9 @@ export function FloatingWorkingControl(props: {
   const agents = props.agents;
   const hasAgents = agents !== null;
   // Only reserve the scroll button's slot while it is visible.
-  const reservedWidth = props.showScrollToEnd ? CONTROL_HEIGHT + 32 : 16;
+  const reservedWidth =
+    (props.showScrollToEnd ? CONTROL_HEIGHT + 32 : 16) +
+    (props.onHideKeyboard === null ? 0 : HIDE_KEYBOARD_RESERVED_WIDTH);
   const availableLabelWidth = Math.max(
     0,
     Math.min(overlayWidth, windowWidth) -
@@ -164,7 +169,7 @@ export function FloatingWorkingControl(props: {
     width: capsuleWidth.value ?? 0,
   }));
 
-  if (!hasCapsule && !props.showScrollToEnd) {
+  if (!hasCapsule && !props.showScrollToEnd && props.onHideKeyboard === null) {
     return null;
   }
 
@@ -370,7 +375,7 @@ export function FloatingWorkingControl(props: {
             />
           </Animated.View>
         </View>
-      ) : NATIVE_LIQUID_GLASS_SUPPORTED ? (
+      ) : !props.showScrollToEnd ? null : NATIVE_LIQUID_GLASS_SUPPORTED ? (
         <UniwindGlassView
           colorScheme={props.colorScheme}
           glassEffectStyle="regular"
@@ -388,7 +393,40 @@ export function FloatingWorkingControl(props: {
           onPress={props.onScrollToEnd}
         />
       )}
+      {props.onHideKeyboard === null ? null : (
+        <View pointerEvents="box-none" className="absolute right-3 top-0">
+          {NATIVE_LIQUID_GLASS_SUPPORTED ? (
+            <UniwindGlassView
+              colorScheme={props.colorScheme}
+              glassEffectStyle="regular"
+              isInteractive
+              className="h-11 w-11 items-center justify-center overflow-hidden rounded-full"
+            >
+              <HideKeyboardButton
+                className="h-11 w-11 bg-transparent"
+                onPress={props.onHideKeyboard}
+              />
+            </UniwindGlassView>
+          ) : (
+            <HideKeyboardButton
+              className="h-11 w-11 border border-border bg-glass-fallback shadow-md shadow-black/10"
+              onPress={props.onHideKeyboard}
+            />
+          )}
+        </View>
+      )}
     </Animated.View>
+  );
+}
+
+function HideKeyboardButton(props: { readonly className: string; readonly onPress: () => void }) {
+  return (
+    <ControlPill
+      accessibilityLabel="Hide keyboard"
+      className={props.className}
+      icon={{ ios: "keyboard.chevron.compact.down", android: "keyboard_hide" }}
+      onPress={props.onPress}
+    />
   );
 }
 
