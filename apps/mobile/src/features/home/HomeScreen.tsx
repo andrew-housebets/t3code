@@ -65,7 +65,8 @@ import { useThreadListV2 } from "../threads/useThreadListV2";
 import { useThreadListNow } from "../threads/use-thread-list-now";
 import { useSearchScrollRestoration } from "../layout/workspace/useSearchScrollRestoration";
 import { useThreadJumpShortcuts } from "../keyboard/threadKeyboardShortcuts";
-import { DrawerNavigationHeader } from "../threads/DrawerNavigationRows";
+import { DrawerNavigationHeader, DrawerSectionLabel } from "../threads/DrawerNavigationRows";
+import { drawerRecentsIndex } from "../threads/drawerSections";
 import { usePendingThreadOrder } from "../../state/thread-order";
 import { threadListEnvironmentsAtom } from "../../state/presentation";
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
@@ -158,6 +159,21 @@ const ESTIMATED_THREAD_LIST_V2_ROW_HEIGHT = 72;
 // swipe-row-activation), so render further ahead: a fast fling then reaches
 // rows that are already built instead of rows still being rebuilt.
 const THREAD_LIST_V2_DRAW_DISTANCE = 1_000;
+
+type HomeListItem =
+  | ThreadListV2ListItem
+  | { readonly type: "section-label"; readonly key: string; readonly label: string };
+
+const RECENTS_LABEL: HomeListItem = {
+  type: "section-label",
+  key: "recents-label",
+  label: "Recents",
+};
+
+const homeListItemsAreEqual = (previous: HomeListItem, item: HomeListItem) =>
+  previous.type === "section-label" || item.type === "section-label"
+    ? previous === item
+    : threadListV2ListItemsAreEqual(previous, item);
 
 function HomeTopContentSpacer() {
   return <View className="h-4" />;
@@ -280,7 +296,7 @@ export function HomeScreen(props: HomeScreenProps) {
     });
   });
   const swipeRowActivation = createSwipeRowActivation();
-  const activateVisibleRows = (rows: ReadonlyArray<ThreadListV2ListItem>) => {
+  const activateVisibleRows = (rows: ReadonlyArray<{ readonly key: string }>) => {
     const state = listRef.current?.getState();
     if (state === undefined || !(state.end >= 0)) return;
     swipeRowActivation.activate(
@@ -448,12 +464,30 @@ export function HomeScreen(props: HomeScreenProps) {
     onSelectThread(thread);
   };
   useThreadJumpShortcuts(threadListV2Items, selectThread);
+  // The top rows sit above the list, so the threads under them get a label, as in the sidebar.
+  const recentsIndex = workspace && !hasSearchQuery ? drawerRecentsIndex(threadListV2Items) : null;
+  const listItems: ReadonlyArray<HomeListItem> =
+    recentsIndex === null
+      ? threadListV2Items
+      : [
+          ...threadListV2Items.slice(0, recentsIndex),
+          RECENTS_LABEL,
+          ...threadListV2Items.slice(recentsIndex),
+        ];
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reads the list's visible range after commit to enable swipe gestures on those rows
   useEffect(() => {
-    if (swipeEnabled) activateVisibleRows(threadListV2Items);
-  }, [activateVisibleRows, swipeEnabled, threadListV2Items]);
+    if (swipeEnabled) activateVisibleRows(listItems);
+  }, [activateVisibleRows, swipeEnabled, listItems]);
 
-  const renderV2Item = ({ item }: { readonly item: ThreadListV2ListItem }) => {
+  const renderV2Item = ({ item }: { readonly item: HomeListItem }) => {
+    if (item.type === "section-label") {
+      // Lines up with the Pinned label, which sits in the header's own gutter.
+      return (
+        <View className={sidebarSurface ? undefined : "px-3"}>
+          <DrawerSectionLabel label={item.label} />
+        </View>
+      );
+    }
     if (item.type === "v2-pending") {
       const pendingScopeKey = scopedProjectKey(
         item.pendingTask.environmentId,
@@ -590,7 +624,7 @@ export function HomeScreen(props: HomeScreenProps) {
       />
     );
   };
-  const v2KeyExtractor = (item: ThreadListV2ListItem) => item.key;
+  const v2KeyExtractor = (item: HomeListItem) => item.key;
 
   // extraData changes invalidate every visible row; put the minute clock on items to limit updates.
   const v2ExtraData = {
@@ -772,17 +806,17 @@ export function HomeScreen(props: HomeScreenProps) {
                 ref={listRef}
                 onLoad={() => {
                   settleLaunchSplashHomeRows();
-                  activateVisibleRows(threadListV2Items);
+                  activateVisibleRows(listItems);
                 }}
                 onTouchStart={(event) => trackListTouches(event, true)}
                 onTouchEnd={(event) => trackListTouches(event, false)}
                 onTouchCancel={(event) => trackListTouches(event, false)}
                 renderScrollComponent={Platform.OS === "ios" ? renderHomeScrollView : undefined}
-                data={threadListV2Items}
+                data={listItems}
                 renderItem={renderV2Item}
                 keyExtractor={v2KeyExtractor}
                 getItemType={(item) => item.type}
-                itemsAreEqual={threadListV2ListItemsAreEqual}
+                itemsAreEqual={homeListItemsAreEqual}
                 estimatedItemSize={ESTIMATED_THREAD_LIST_V2_ROW_HEIGHT}
                 drawDistance={THREAD_LIST_V2_DRAW_DISTANCE}
                 recycleItems
