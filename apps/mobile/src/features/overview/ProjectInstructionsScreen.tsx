@@ -12,7 +12,7 @@ import {
   type ProjectModelDefaults,
 } from "@t3tools/contracts";
 import type { StaticScreenProps } from "@react-navigation/native";
-import { getPromptControlledTraits } from "@t3tools/client-runtime/model-traits";
+import { isReasoningSelect } from "@t3tools/client-runtime/model-traits";
 import { createModelSelection } from "@t3tools/shared/model";
 import { useState, type ComponentProps } from "react";
 import { Pressable, View } from "react-native";
@@ -172,16 +172,12 @@ function ProjectModelDefaultRows(props: {
         );
         const effort =
           selection === null
-            ? null
-            : getPromptControlledTraits(
-                resolveProviderOptionDescriptors({
-                  capabilities: optionOf(selection)?.capabilities,
-                  selections: selection.options,
-                }),
-                "",
-                false,
-              ).primarySelectDescriptor;
-        if (selection === null || effort === null || effort.type !== "select") return [modelRow];
+            ? undefined
+            : resolveProviderOptionDescriptors({
+                capabilities: optionOf(selection)?.capabilities,
+                selections: selection.options,
+              }).find(isReasoningSelect);
+        if (selection === null || effort === undefined) return [modelRow];
         const chosen = selection.options?.find((option) => option.id === effort.id)?.value;
         const choices = effort.options.filter(
           (choice) => !effort.promptInjectedValues?.includes(choice.id),
