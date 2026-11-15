@@ -219,7 +219,7 @@ export function AppBar(props: AppBarProps) {
       props.confirm ||
       closeInspector ? (
         <Toolbar placement="right">
-          {props.actions?.map(({ loading, ...action }) =>
+          {props.actions?.map(({ loading, attention, ...action }) =>
             loading ? (
               <Toolbar.Custom key={action.accessibilityLabel}>
                 <View
@@ -233,6 +233,8 @@ export function AppBar(props: AppBarProps) {
               <ScreenHeaderButton
                 key={action.accessibilityLabel}
                 {...action}
+                // A bar button item is native and cannot host a dot.
+                tintColor={attention ? colors["--color-warning-foreground"] : action.tintColor}
                 icon={iosIcon(action.icon)}
                 separateBackground={action.separateBackground ?? true}
               />

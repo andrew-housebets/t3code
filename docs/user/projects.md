@@ -16,7 +16,7 @@ The header of a coordinator, or of any thread that delegated work, has three pan
 
 ## On your phone
 
-In the mobile app, tap the checklist button on a new thread to start it as a coordinator, or choose **Make coordinator** from a thread's long-press menu. A coordinator's header has a checklist button that opens its **Overview**, with the same Threads, Library, and Scheduled tabs; it turns amber when something needs you. Long-press a delegated thread to mark it resolved, reopen it, or stop it. The drawer's **Artifacts** row opens the Library of the project you are in. Edit project instructions and memory from the Overview's **⋯** menu or **Settings → Projects → Instructions and memory**.
+In the mobile app, tap the checklist button on a new thread to start it as a coordinator, or choose **Make coordinator** from a thread's long-press menu. A coordinator's header has a checklist button that opens its **Overview**, with the same Threads, Library, and Scheduled tabs; it turns amber on iPhone, or shows a dot on Android, when something needs you. Long-press a delegated thread to mark it resolved, reopen it, or stop it. The drawer's **Artifacts** row opens the Library of the project you are in. Edit project instructions and memory from the Overview's **⋯** menu or **Settings → Projects → Instructions and memory**.
 
 ## Pinned projects
 

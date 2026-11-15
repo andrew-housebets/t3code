@@ -10,6 +10,8 @@ export interface AppBarAction {
   readonly loading?: boolean;
   readonly selected?: boolean;
   readonly tintColor?: ColorValue;
+  /** Something behind the action needs the user: a dot on Android, a warning tint on iOS. */
+  readonly attention?: boolean;
   /** Android overflow menu: the row's second line. */
   readonly subtitle?: string;
   readonly destructive?: boolean;

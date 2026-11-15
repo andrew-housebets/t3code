@@ -23,6 +23,7 @@ export interface AndroidHeaderAction {
   readonly subtitle?: string;
   readonly destructive?: boolean;
   readonly overflowOnly?: boolean;
+  readonly attention?: boolean;
 }
 
 export function AndroidHeaderIconButton(props: {
@@ -140,14 +141,21 @@ export function AndroidScreenHeader(props: {
                     <AppActivityIndicator colorClassName="accent-header-foreground" />
                   </View>
                 ) : (
-                  <AndroidHeaderIconButton
-                    key={action.accessibilityLabel}
-                    accessibilityLabel={action.accessibilityLabel}
-                    disabled={action.disabled}
-                    selected={action.selected}
-                    icon={action.icon}
-                    onPress={action.onPress}
-                  />
+                  <View key={action.accessibilityLabel}>
+                    <AndroidHeaderIconButton
+                      accessibilityLabel={action.accessibilityLabel}
+                      disabled={action.disabled}
+                      selected={action.selected}
+                      icon={action.icon}
+                      onPress={action.onPress}
+                    />
+                    {action.attention ? (
+                      <View
+                        pointerEvents="none"
+                        className="absolute right-2.5 top-2.5 size-2 rounded-full bg-warning-foreground"
+                      />
+                    ) : null}
+                  </View>
                 ),
               )}
               {overflowActions.length > 0 ? (

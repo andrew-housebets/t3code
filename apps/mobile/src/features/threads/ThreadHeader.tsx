@@ -17,7 +17,6 @@ import {
   type ThreadGitControlsProps,
 } from "./ThreadGitControls";
 import { useThreadShell } from "../../state/entities";
-import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import { useMountedThreadFamily, useThreadOverviewEntryState } from "../overview/overviewState";
 
 export function ThreadHeader(props: {
@@ -36,7 +35,6 @@ export function ThreadHeader(props: {
   const { toggleAuxiliaryPane, startNewTask } = useAdaptiveWorkspaceLayout();
   const { panes, fileInspector } = useWorkspacePaneState();
   const navigation = useNavigation();
-  const { themeVariables } = useAppearancePreferences();
   const threadRef = scopeThreadRef(
     EnvironmentId.make(String(props.gitControls.environmentId)),
     ThreadId.make(String(props.gitControls.threadId)),
@@ -50,12 +48,10 @@ export function ThreadHeader(props: {
     overviewState === "hidden" || thread === null || props.onOpenOverviewInspector === undefined
       ? null
       : {
-          accessibilityLabel:
-            overviewState === "waiting" ? "Overview, a thread is waiting on you" : "Overview",
+          accessibilityLabel: overviewState === "waiting" ? "Overview, needs you" : "Overview",
           icon: "checklist",
           selected: overviewVisible,
-          tintColor:
-            overviewState === "waiting" ? themeVariables["--color-warning-foreground"] : undefined,
+          attention: overviewState === "waiting",
           onPress: overviewVisible
             ? toggleAuxiliaryPane
             : fileInspector.supported
