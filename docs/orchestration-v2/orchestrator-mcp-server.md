@@ -17,8 +17,10 @@ agent can use this endpoint to:
 
 These are T3 orchestration operations, not provider-native sub-agent APIs.
 Delegated tasks always create a T3 child thread and run. The child receives
-only the supplied task prompt, plus an optional role instruction supplied in
-the same tool call. Parent conversation history is not copied into the child.
+the supplied task prompt, plus an optional role instruction supplied in the
+same tool call. When the project has standing instructions or memory, the task
+is prefixed with them and the project Library's path. Parent conversation
+history is not copied into the child.
 
 `ThreadManagementService` is the shared server application boundary for V2
 WebSocket commands and MCP. It owns thread lookup, listing, send-mode
@@ -252,8 +254,9 @@ provider's first advertised model.
 Set `target.options` using the options returned by `orchestrator_capabilities`, such as
 `{effort: "max"}`. Supplied values override inherited selections; `{}` or `[]` clears them.
 For local delegation, use `isolation: "worktree"` for a separate prepared checkout from
-the parent's commit; the default `"shared"` uses the parent's checkout. Uncommitted parent
-edits are not copied. A linked-environment target (`target.environmentId`) runs in the remote
+the parent's commit; the default `"shared"` uses the parent's checkout. A coordinator's
+children always get a worktree, whatever `isolation` says, because its own checkout stays
+read-only. Uncommitted parent edits are not copied. A linked-environment target (`target.environmentId`) runs in the remote
 project's checkout and rejects worktree isolation. To launch an isolated thread there, use
 `t3_thread_launch` with `environmentId` and a worktree `workspaceStrategy`.
 

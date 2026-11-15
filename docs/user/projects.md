@@ -1,0 +1,27 @@
+# Coordinators
+
+A coordinator is a thread that plans a project's work and hands each piece to a thread of its own. It reads files and answers quick questions itself. For anything that changes files, it starts a delegated thread, and it tells you when that thread finishes or needs you.
+
+## Start a coordinator
+
+Right-click a project in the sidebar, or the project name in the chat header, and choose **New coordinator**, or search the command palette for "New coordinator". To turn an existing thread into one, choose **Make coordinator** from its thread menu. **Stop coordinating** turns it back into an ordinary thread. Threads a coordinator delegated cannot become coordinators themselves.
+
+## Threads, Library, and Scheduled
+
+A coordinator's header has three panels:
+
+- **Threads** lists the threads it delegated, grouped by what each needs from you, with what each last did. A dot on the button means one is waiting on you.
+- **Library** holds the project's non-code deliverables, such as reports, notes, and docs, with the thread that wrote each. Add or remove files there yourself.
+- **Scheduled**, in the **⋯** menu, lists the project's scheduled tasks.
+
+## Project instructions and memory
+
+Each project has standing instructions and a memory file. Every coordinator and every thread it delegates starts with both, along with the Library's location. Edit them from **⋯ → Project instructions** in a coordinator, the command palette, or **Settings → Projects → Instructions and memory**. Changes reach threads started afterwards, and a running coordinator on its next turn. The same editor sets the model new coordinators start on and the model their delegated threads use.
+
+## Where work happens
+
+Each delegated thread runs in its own git worktree, so threads do not edit the same files and your main checkout stays as it was.
+
+## The read-only lock
+
+A coordinator cannot edit files or run commands in its own checkout, and it can only message or answer for threads it delegated. Claude enforces this fully, and Codex enforces it through its own sandbox. Other providers do not fully lock a coordinator read-only and can change files in the main checkout. T3 Code shows a **Not read-only** badge on such a coordinator and asks before you make one.
