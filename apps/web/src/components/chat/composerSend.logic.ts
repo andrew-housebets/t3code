@@ -37,8 +37,8 @@ export function loadBalancingSendWarning(input: {
 }
 
 /**
- * Why a multiple-model send cannot start: the server predates worktree bootstrap, or the
- * draft is not a new thread on a Git branch with at least one model.
+ * Why a multiple-model send cannot start: the draft is a coordinator, the server predates
+ * worktree bootstrap, or the draft is not a new thread on a Git branch with at least one model.
  */
 export function multipleModelSendBlock(input: {
   readonly selectionCount: number;
@@ -46,7 +46,9 @@ export function multipleModelSendBlock(input: {
   readonly isLocalDraftThread: boolean;
   readonly isGitRepo: boolean;
   readonly branch: string | null;
-}): "server-outdated" | "needs-new-git-thread" | null {
+  readonly coordinator: boolean;
+}): "coordinator" | "server-outdated" | "needs-new-git-thread" | null {
+  if (input.coordinator) return "coordinator";
   if (!input.serverSupportsWorktreeBootstrap) return "server-outdated";
   if (
     !input.isLocalDraftThread ||

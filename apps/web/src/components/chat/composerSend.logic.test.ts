@@ -64,10 +64,15 @@ describe("multipleModelSendBlock", () => {
     isLocalDraftThread: true,
     isGitRepo: true,
     branch: "main",
+    coordinator: false,
   };
 
   it("lets a new Git draft with a branch and models start", () => {
     expect(multipleModelSendBlock(ready)).toBeNull();
+  });
+
+  it("keeps a coordinator draft on one model", () => {
+    expect(multipleModelSendBlock({ ...ready, coordinator: true })).toBe("coordinator");
   });
 
   it("asks for a server update before checking the draft", () => {

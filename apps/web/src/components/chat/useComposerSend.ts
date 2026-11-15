@@ -585,7 +585,19 @@ export function useComposerSend(input: ComposerSendInput) {
             isLocalDraftThread,
             isGitRepo,
             branch: activeThreadBranch,
+            coordinator: isLocalDraftThread && isCoordinatorDraft(draftId),
           });
+    if (multipleModelBlock === "coordinator") {
+      toastManager.add(
+        stackedThreadToast({
+          type: "warning",
+          title: "A coordinator runs on one model",
+          description:
+            "Choose one model for the coordinator. It can start each task on any model as its own thread.",
+        }),
+      );
+      return;
+    }
     if (multipleModelBlock === "server-outdated") {
       setThreadError(activeThread.id, "Update this server before starting multiple models.");
       return;
