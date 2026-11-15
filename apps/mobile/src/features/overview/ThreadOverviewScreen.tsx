@@ -1,10 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import {
-  isThreadOverviewGroupCollapsed,
-  toggleThreadOverviewGroup,
-  type ThreadOverviewGroupCollapse,
-} from "@t3tools/client-runtime/state/coordinator-ui";
+import { isThreadOverviewGroupCollapsed } from "@t3tools/client-runtime/state/coordinator-ui";
 import {
   threadRuntimeIsActive,
   type EnvironmentThreadShell,
@@ -17,7 +13,9 @@ import {
 import {
   groupThreadOverview,
   THREAD_OVERVIEW_GROUP_PRESENTATION,
+  threadOverviewArtifactCue,
   threadOverviewArtifacts,
+  threadOverviewArtifactsChanged,
   threadOverviewStatusLine,
   type ThreadOverviewGroup,
 } from "@t3tools/client-runtime/state/thread-overview";
@@ -31,7 +29,7 @@ import {
   type ScopedThreadRef,
 } from "@t3tools/contracts";
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 
 import { AppBar } from "../../components/ui/AppBar";
@@ -61,8 +59,10 @@ import {
 } from "./OverviewLibraryTab";
 import { OverviewScheduledTab } from "./OverviewScheduledTab";
 import {
+  toggleThreadOverviewGroupCollapse,
   useMountedThreadFamily,
   useThreadOverviewChildren,
+  useThreadOverviewGroupCollapse,
   type OverviewTab,
   type OverviewTarget,
 } from "./overviewState";
@@ -226,7 +226,7 @@ function OverviewThreadsTab(props: {
   const children = useThreadOverviewChildren(threadRef);
   const subagents = useAtomValue(environmentThreadDetails.quietThreadAtom(threadRef))?.projection
     .subagents;
-  const [collapsed, setCollapsed] = useState<ThreadOverviewGroupCollapse>({});
+  const collapsed = useThreadOverviewGroupCollapse(threadRef);
   const nowMs = useNowMinuteMs();
   const selectDetail = useSelectWorkspaceDetail();
   const openArtifact = useOpenProjectArtifact(props.target);
@@ -234,6 +234,15 @@ function OverviewThreadsTab(props: {
   const interruptTurn = useAtomCommand(threadEnvironment.interruptTurn, { reportFailure: false });
   const groups = groupThreadOverview(children);
   const artifacts = threadOverviewArtifacts(props.artifacts ?? []);
+  const { onRefreshArtifacts } = props;
+  const { runningChildren, settledTasks } = threadOverviewArtifactCue(children, subagents);
+  const previousCue = useRef({ runningChildren, settledTasks });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- re-reads the server's artifact listing when a delegated thread stops or its task settles, the moments its files and renders are recorded
+  useEffect(() => {
+    const next = { runningChildren, settledTasks };
+    if (threadOverviewArtifactsChanged(previousCue.current, next)) onRefreshArtifacts();
+    previousCue.current = next;
+  }, [runningChildren, settledTasks, onRefreshArtifacts]);
   const subagentByChild = new Map(
     (subagents ?? []).flatMap((agent) =>
       agent.origin === "app_owned" && agent.childThreadId !== null
@@ -354,7 +363,7 @@ function OverviewThreadsTab(props: {
             <Pressable
               accessibilityRole="button"
               accessibilityState={{ expanded: !folded }}
-              onPress={() => setCollapsed((current) => toggleThreadOverviewGroup(current, group))}
+              onPress={() => toggleThreadOverviewGroupCollapse(threadRef, group)}
               className="flex-row items-center gap-1 px-4 py-2 active:opacity-70"
             >
               <Text className="text-sm text-foreground-muted">

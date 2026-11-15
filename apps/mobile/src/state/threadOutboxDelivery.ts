@@ -9,6 +9,7 @@ import {
 import {
   type AtomCommand,
   type AtomCommandResult,
+  isAtomCommandInterrupted,
   runAtomCommand,
 } from "@t3tools/client-runtime/state/runtime";
 import { threadFamilyRead, type ThreadFamilyRead } from "@t3tools/client-runtime/state/threads";
@@ -22,6 +23,7 @@ import {
   managedRuntimeModeDenial,
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   type EnvironmentId,
+  type ThreadId,
 } from "@t3tools/contracts";
 import { buildTemporaryWorktreeBranchName } from "@t3tools/shared/git";
 import * as Cause from "effect/Cause";
@@ -29,7 +31,10 @@ import { AsyncResult, Atom } from "effect/reactivity";
 
 import { createDebugLogger } from "../lib/debugLog";
 import { scopedThreadKey } from "../lib/scopedEntities";
-import { buildProjectThreadStartTurnInput } from "../lib/projectThreadStartTurn";
+import {
+  buildProjectThreadStartTurnInput,
+  launchDroppedCoordinatorTag,
+} from "../lib/projectThreadStartTurn";
 import { serializeComposerMessageForServer, uploadedComposerContext } from "../lib/composerContext";
 import { prepareTurnAttachments, type PreparedTurnAttachments } from "../lib/attachmentUpload";
 import { randomHex } from "../lib/uuid";
@@ -646,6 +651,19 @@ function deliveredSequence(
   return AsyncResult.isSuccess(result) ? result.value.sequence : undefined;
 }
 
+async function tagLaunchedCoordinator(environmentId: EnvironmentId, threadId: ThreadId) {
+  const result = await runDeliveryCommand(threadEnvironment.setTag, {
+    environmentId,
+    input: { threadId, tag: COORDINATOR_THREAD_TAG, tagged: true },
+  });
+  if (AsyncResult.isFailure(result) && !isAtomCommandInterrupted(result)) {
+    Dialog.alert(
+      "Started as a regular thread",
+      "It could not be made a coordinator. Choose Make coordinator from the thread's menu to try again.",
+    );
+  }
+}
+
 const runDeliveryCommand = <W, A, E>(
   command: AtomCommand<W, A, E>,
   input: W,
@@ -1148,6 +1166,12 @@ export function createThreadOutboxDelivery(): {
       return restoreQueuedMessage(persistedMessage, failure.message);
     }
     recordPendingThreadCreationOutcome({ kind: "delivered", message: persistedMessage });
+    if (
+      AsyncResult.isSuccess(deliveryResult) &&
+      launchDroppedCoordinatorTag(creation.tags, deliveryResult.value)
+    ) {
+      void tagLaunchedCoordinator(queuedMessage.environmentId, queuedMessage.threadId);
+    }
     const outcome = await completeQueuedMessageDelivery(
       persistedMessage,
       deliveryRevision,

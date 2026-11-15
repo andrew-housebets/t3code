@@ -3,6 +3,7 @@ import {
   setCoordinatorDraft,
   useIsCoordinatorDraft,
 } from "../../state/coordinator-drafts";
+import { startCoordinatorDraft } from "../overview/coordinator";
 import { DraftEnvironmentControl } from "./DraftEnvironmentControl";
 import { NativeScrollEdgeEffectsContext } from "../../native/NativeScrollViewMarker";
 import { DraftThreadHeader } from "./DraftThreadHeader";
@@ -981,7 +982,15 @@ export function NewTaskDraftScreen(props: {
             onToggleCoordinator={
               flow.draftKey === null
                 ? undefined
-                : () => setCoordinatorDraft(flow.draftKey!, !coordinatorDraft)
+                : () =>
+                    coordinatorDraft
+                      ? setCoordinatorDraft(flow.draftKey!, false)
+                      : void startCoordinatorDraft({
+                          draftKey: flow.draftKey!,
+                          environmentId: selectedProject.environmentId,
+                          projectId: selectedProject.id,
+                          driver: flow.selectedProviderStatus?.driver ?? null,
+                        })
             }
           />
         }

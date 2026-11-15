@@ -14,6 +14,8 @@ import {
   threadTitleTextFromPrompt,
 } from "@t3tools/client-runtime/operations";
 
+import { COORDINATOR_THREAD_TAG, isCoordinatorThread } from "@t3tools/shared/coordinatorThread";
+
 import type { UploadedMobileAttachment } from "./attachmentUpload";
 
 export interface ProjectThreadStartTurnSpec {
@@ -36,6 +38,19 @@ export interface ProjectThreadStartTurnSpec {
   readonly startFromOrigin: boolean;
   readonly worktreeBranchName: string;
   readonly tags?: ReadonlyArray<string> | undefined;
+}
+
+/** A server that predates launch tags starts the thread untagged; the client then tags it itself. */
+export function launchDroppedCoordinatorTag(
+  requestedTags: ReadonlyArray<string> | undefined,
+  launched:
+    | { readonly sequence: number }
+    | { readonly projection: { readonly thread: { readonly tags?: ReadonlyArray<string> } } },
+): boolean {
+  return (
+    requestedTags?.includes(COORDINATOR_THREAD_TAG) === true &&
+    !("projection" in launched && isCoordinatorThread(launched.projection.thread))
+  );
 }
 
 export function buildProjectThreadStartTurnInput(spec: ProjectThreadStartTurnSpec) {

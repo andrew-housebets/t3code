@@ -10,9 +10,17 @@ import {
   coordinatorToggleOf,
 } from "@t3tools/shared/coordinatorThread";
 
+import type { EnvironmentId, ModelSelection, ProjectId } from "@t3tools/contracts";
+import * as Effect from "effect/Effect";
+import { AtomRegistry } from "effect/reactivity";
+
 import * as Dialog from "../../components/ui/Dialog";
 import { appAtomRegistry } from "../../state/atom-registry";
+import { setCoordinatorDraft } from "../../state/coordinator-drafts";
+import { projectEnvironment } from "../../state/projects";
+import { environmentServerConfigsAtom } from "../../state/server";
 import { threadEnvironment } from "../../state/threads";
+import { updateComposerDraftSettings } from "../../state/use-composer-drafts";
 
 const MAKE_COORDINATOR_ITEM = {
   id: "make-coordinator",
@@ -67,5 +75,58 @@ export function runCoordinatorMenuAction(
     confirmText: "Make coordinator",
     destructive: true,
     onConfirm: () => void setCoordinatorTag(thread, true),
+  });
+}
+
+function readCoordinatorModelDefault(
+  environmentId: EnvironmentId,
+  projectId: ProjectId,
+): Promise<ModelSelection | null> {
+  return Effect.runPromise(
+    AtomRegistry.getResult(
+      appAtomRegistry,
+      projectEnvironment.readModelDefaults({ environmentId, input: { projectId } }),
+      { suspendOnWaiting: true },
+    ).pipe(
+      Effect.map((defaults) => defaults.coordinatorModelSelection),
+      Effect.timeout("5 seconds"),
+      Effect.orElseSucceed(() => null),
+    ),
+  );
+}
+
+/**
+ * A draft turned into a coordinator moves to the project's coordinator model, and first
+ * warns when the provider it will run on does not enforce the read-only lock.
+ */
+export async function startCoordinatorDraft(input: {
+  readonly draftKey: string;
+  readonly environmentId: EnvironmentId;
+  readonly projectId: ProjectId;
+  readonly driver: string | null;
+}) {
+  const selection = await readCoordinatorModelDefault(input.environmentId, input.projectId);
+  const driver =
+    selection === null
+      ? input.driver
+      : (appAtomRegistry
+          .get(environmentServerConfigsAtom)
+          .get(input.environmentId)
+          ?.providers.find((provider) => provider.instanceId === selection.instanceId)?.driver ??
+        input.driver);
+  const start = () => {
+    setCoordinatorDraft(input.draftKey, true);
+    if (selection !== null) {
+      updateComposerDraftSettings(input.draftKey, { modelSelection: selection });
+    }
+  };
+  const warning = coordinatorProviderWarning(driver);
+  if (warning === null) return start();
+  Dialog.confirm({
+    title: "Start as a coordinator?",
+    message: warning,
+    confirmText: "Start as coordinator",
+    destructive: true,
+    onConfirm: start,
   });
 }

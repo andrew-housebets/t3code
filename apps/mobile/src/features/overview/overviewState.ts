@@ -5,12 +5,17 @@ import {
   threadKey,
 } from "@t3tools/client-runtime/state/entities";
 import {
+  toggleThreadOverviewGroup,
+  type ThreadOverviewGroupCollapse,
+} from "@t3tools/client-runtime/state/coordinator-ui";
+import {
   presentThreadShell,
   type EnvironmentThreadShell,
 } from "@t3tools/client-runtime/state/models";
 import {
   isThreadOverviewChild,
   threadOverviewGroupOf,
+  type ThreadOverviewGroup,
 } from "@t3tools/client-runtime/state/thread-overview";
 import type {
   EnvironmentId,
@@ -20,10 +25,11 @@ import type {
   ThreadId,
 } from "@t3tools/contracts";
 import { isCoordinatorThread } from "@t3tools/shared/coordinatorThread";
-import { Atom } from "effect/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { useEffect } from "react";
 
 import { appAtomRegistry } from "../../state/atom-registry";
+import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
 import {
   environmentThreadDetails,
   environmentThreadShells,
@@ -108,4 +114,29 @@ const HIDDEN_ENTRY_ATOM = Atom.make<ThreadOverviewEntryState>("hidden").pipe(
 
 export function useThreadOverviewEntryState(ref: ScopedThreadRef | null): ThreadOverviewEntryState {
   return useAtomValue(ref === null ? HIDDEN_ENTRY_ATOM : entryStateAtomFamily(threadKey(ref)));
+}
+
+export function useThreadOverviewGroupCollapse(
+  ref: ScopedThreadRef,
+): ThreadOverviewGroupCollapse | undefined {
+  const preferences = useAtomValue(mobilePreferencesAtom);
+  return AsyncResult.isSuccess(preferences)
+    ? preferences.value.overviewCollapsedGroups?.[threadKey(ref)]
+    : undefined;
+}
+
+// ponytail: entries for deleted threads stay until preferences are cleared; prune by live thread keys if it grows.
+export function toggleThreadOverviewGroupCollapse(
+  ref: ScopedThreadRef,
+  group: ThreadOverviewGroup,
+) {
+  const key = threadKey(ref);
+  appAtomRegistry.set(updateMobilePreferencesAtom, {
+    transform: (current) => ({
+      overviewCollapsedGroups: {
+        ...current.overviewCollapsedGroups,
+        [key]: toggleThreadOverviewGroup(current.overviewCollapsedGroups?.[key], group),
+      },
+    }),
+  });
 }

@@ -14,7 +14,9 @@ import { isThreadOverviewGroupCollapsed } from "@t3tools/client-runtime/state/co
 import {
   groupThreadOverview,
   THREAD_OVERVIEW_GROUP_PRESENTATION,
+  threadOverviewArtifactCue,
   threadOverviewArtifacts,
+  threadOverviewArtifactsChanged,
   threadOverviewStatusLine,
   type ThreadOverviewGroup,
 } from "@t3tools/client-runtime/state/thread-overview";
@@ -31,7 +33,6 @@ import {
   SquareIcon,
   type LucideIcon,
 } from "lucide-react";
-import * as DateTime from "effect/DateTime";
 import { useEffect, useRef, type ReactNode } from "react";
 
 import { useThreadActions } from "../../hooks/useThreadActions";
@@ -73,13 +74,6 @@ const GROUP_TONES = {
 } satisfies Record<GroupPresentation["tone"], string>;
 
 type RowAction = "resolve" | "reopen" | "stop";
-
-const SETTLED_TASK: ReadonlySet<OrchestrationV2Subagent["status"]> = new Set([
-  "completed",
-  "failed",
-  "cancelled",
-  "interrupted",
-]);
 
 const ROW_ACTIONS = {
   resolve: { label: "Mark resolved", Icon: CircleCheckIcon, failure: "Could not mark resolved" },
@@ -236,22 +230,13 @@ export function ThreadOverviewPanel({ threadRef }: { readonly threadRef: ScopedT
   const groups = groupThreadOverview(children);
   const listing = useProjectArtifacts(threadRef);
   const refreshArtifacts = listing.refresh;
-  const runningChildren = children.filter((child) => threadRuntimeIsActive(child.runtime)).length;
-  // A task settles after its run's artifacts are recorded, so its settling is the reliable cue.
-  const settledTasks = (subagents ?? [])
-    .filter((agent) => agent.origin === "app_owned" && SETTLED_TASK.has(agent.status))
-    .map((agent) => `${agent.id}:${DateTime.toEpochMillis(agent.updatedAt)}`)
-    .join(",");
+  const { runningChildren, settledTasks } = threadOverviewArtifactCue(children, subagents);
   const previous = useRef({ runningChildren, settledTasks });
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- re-reads the server's artifact listing when a delegated thread stops or its task settles, the moments its files and renders are recorded
   useEffect(() => {
-    if (
-      runningChildren < previous.current.runningChildren ||
-      settledTasks !== previous.current.settledTasks
-    ) {
-      refreshArtifacts();
-    }
-    previous.current = { runningChildren, settledTasks };
+    const next = { runningChildren, settledTasks };
+    if (threadOverviewArtifactsChanged(previous.current, next)) refreshArtifacts();
+    previous.current = next;
   }, [runningChildren, settledTasks, refreshArtifacts]);
   const artifacts = threadOverviewArtifacts(listing.data?.artifacts ?? []);
 

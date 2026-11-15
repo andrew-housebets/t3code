@@ -1,4 +1,8 @@
-import { persistedObjectOf, type KeySet } from "@t3tools/client-runtime/state/coordinator-ui";
+import {
+  persistedObjectOf,
+  type KeySet,
+  type ThreadOverviewGroupCollapse,
+} from "@t3tools/client-runtime/state/coordinator-ui";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -144,6 +148,8 @@ export interface Preferences {
   readonly workspaceSelections?: WorkspaceSelections;
   /** New-task drafts started as coordinators; the tag goes on at launch. */
   readonly coordinatorDraftKeys?: KeySet;
+  /** Overview groups folded or opened, by thread key. */
+  readonly overviewCollapsedGroups?: Readonly<Record<string, ThreadOverviewGroupCollapse>>;
 }
 
 export class MobilePreferencesLoadError extends Schema.TaggedError<MobilePreferencesLoadError>()(
@@ -229,6 +235,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     pullRequestListFilters?: PullRequestListPreferences;
     workspaceSelections?: WorkspaceSelections;
     coordinatorDraftKeys?: KeySet;
+    overviewCollapsedGroups?: Readonly<Record<string, ThreadOverviewGroupCollapse>>;
   } = {};
 
   if (Array.isArray(parsed.hiddenNavigationTabs)) {
@@ -371,6 +378,9 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   }
   if (parsed.coordinatorDraftKeys !== undefined) {
     preferences.coordinatorDraftKeys = persistedObjectOf(parsed.coordinatorDraftKeys);
+  }
+  if (parsed.overviewCollapsedGroups !== undefined) {
+    preferences.overviewCollapsedGroups = persistedObjectOf(parsed.overviewCollapsedGroups);
   }
   if (typeof parsed.threadListSnoozedShelfExpanded === "boolean") {
     preferences.threadListSnoozedShelfExpanded = parsed.threadListSnoozedShelfExpanded;

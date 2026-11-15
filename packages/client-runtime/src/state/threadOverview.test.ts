@@ -1,6 +1,7 @@
 import {
   EnvironmentId,
   MessageId,
+  NodeId,
   RunId,
   RuntimeRequestId,
   type ProjectArtifact,
@@ -17,6 +18,8 @@ import { v2Now, v2ThreadShell } from "./orchestrationV2TestFixtures.ts";
 import {
   groupThreadOverview,
   isThreadOverviewChild,
+  threadOverviewArtifactCue,
+  threadOverviewArtifactsChanged,
   threadOverviewGroupOf,
   threadOverviewArtifacts,
   threadOverviewStatusLine,
@@ -350,5 +353,53 @@ describe("threadOverviewArtifacts", () => {
     const overview = threadOverviewArtifacts(artifacts);
     expect(overview.strip.map((entry) => entry.id)).toEqual(strip);
     expect(Object.fromEntries(overview.countByThread)).toEqual(counts);
+  });
+});
+
+describe("threadOverviewArtifactsChanged", () => {
+  const task = (status: "running" | "completed", updatedAt = "2026-06-20T00:00:00.000Z") => ({
+    id: NodeId.make("task-1"),
+    origin: "app_owned" as const,
+    status,
+    updatedAt: DateTime.makeUnsafe(updatedAt),
+  });
+  it.each([
+    {
+      name: "a child stops running",
+      before: [[child(running)], []],
+      after: [[child()], []],
+      changed: true,
+    },
+    {
+      name: "a child starts running",
+      before: [[child()], []],
+      after: [[child(running)], []],
+      changed: false,
+    },
+    {
+      name: "a task settles",
+      before: [[], [task("running")]],
+      after: [[], [task("completed")]],
+      changed: true,
+    },
+    {
+      name: "a settled task records again",
+      before: [[], [task("completed")]],
+      after: [[], [task("completed", "2026-06-20T00:01:00.000Z")]],
+      changed: true,
+    },
+    {
+      name: "nothing moves",
+      before: [[child()], [task("completed")]],
+      after: [[child()], [task("completed")]],
+      changed: false,
+    },
+  ] as const)("re-reads artifacts when $name: $changed", ({ before, after, changed }) => {
+    expect(
+      threadOverviewArtifactsChanged(
+        threadOverviewArtifactCue(before[0], before[1]),
+        threadOverviewArtifactCue(after[0], after[1]),
+      ),
+    ).toBe(changed);
   });
 });

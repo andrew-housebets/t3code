@@ -9,8 +9,9 @@ import {
 } from "@t3tools/contracts";
 import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
 import { groupBy } from "effect/Array";
+import * as DateTime from "effect/DateTime";
 
-import type { EnvironmentThreadShell } from "./models.ts";
+import { threadRuntimeIsActive, type EnvironmentThreadShell } from "./models.ts";
 import { isThreadWorking } from "./threadInbox.ts";
 import { toSortableTimestamp } from "./threadSort.ts";
 
@@ -200,3 +201,37 @@ export function threadOverviewArtifacts(artifacts: ReadonlyArray<ProjectArtifact
   }
   return { strip: artifacts.slice(0, ARTIFACT_STRIP_TILES), countByThread };
 }
+
+const SETTLED_TASK: ReadonlySet<OrchestrationV2Subagent["status"]> = new Set([
+  "completed",
+  "failed",
+  "cancelled",
+  "interrupted",
+]);
+
+export interface ThreadOverviewArtifactCue {
+  readonly runningChildren: number;
+  readonly settledTasks: string;
+}
+
+/** A delegated thread's files and renders are recorded when it stops running or its task settles. */
+export function threadOverviewArtifactCue(
+  children: ReadonlyArray<EnvironmentThreadShell>,
+  subagents:
+    | ReadonlyArray<Pick<OrchestrationV2Subagent, "id" | "origin" | "status" | "updatedAt">>
+    | undefined,
+): ThreadOverviewArtifactCue {
+  return {
+    runningChildren: children.filter((child) => threadRuntimeIsActive(child.runtime)).length,
+    settledTasks: (subagents ?? [])
+      .filter((agent) => agent.origin === "app_owned" && SETTLED_TASK.has(agent.status))
+      .map((agent) => `${agent.id}:${DateTime.toEpochMillis(agent.updatedAt)}`)
+      .join(","),
+  };
+}
+
+/** Whether the artifact listing should be read again; a child starting does not count. */
+export const threadOverviewArtifactsChanged = (
+  previous: ThreadOverviewArtifactCue,
+  next: ThreadOverviewArtifactCue,
+) => next.runningChildren < previous.runningChildren || next.settledTasks !== previous.settledTasks;
