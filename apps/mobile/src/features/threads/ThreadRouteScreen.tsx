@@ -85,6 +85,7 @@ import { ThreadScreenBinding, ThreadScreenFallback, ThreadScreenHost } from "./T
 import { draftRouteIdentity } from "./thread-route-state";
 import { NewTaskDraftRouteScreen, type NewTaskDraftRouteParams } from "./NewTaskDraftRouteScreen";
 import { GitOverviewSheet } from "./git/GitOverviewSheet";
+import { ThreadOverview } from "../overview/ThreadOverviewScreen";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useSelectedThreadGitActions } from "../../state/use-selected-thread-git-actions";
 import { useSelectedThreadGitState } from "../../state/use-selected-thread-git-state";
@@ -588,6 +589,11 @@ function ThreadRouteContent(
     setChosenInspectorMode(props.renderInspector === undefined ? "files" : "route");
     showInspector();
   };
+  const handleOpenOverviewInspector = () => {
+    navigation.setParams({ inspector: undefined });
+    setChosenInspectorMode("overview");
+    showInspector();
+  };
   const handleSelectInspectorFile = (path: string) => {
     if (selectedThread === null) {
       return;
@@ -659,6 +665,19 @@ function ThreadRouteContent(
               : []),
             { key: "files", render: renderFilesInspector, prewarm: true },
             { key: "git", render: renderGitInspector, prewarm: true },
+            {
+              key: "overview",
+              render: () =>
+                selectedThread === null ? null : (
+                  <ThreadOverview
+                    target={{
+                      environmentId: selectedThread.environmentId,
+                      projectId: selectedThread.projectId,
+                      threadId: selectedThread.id,
+                    }}
+                  />
+                ),
+            },
             ...(props.renderInspector ? [{ key: "route", render: props.renderInspector }] : []),
           ],
         };
@@ -1002,6 +1021,7 @@ function ThreadRouteContent(
                 hasThreadCwd={selectedThreadCwd !== null}
                 inspectorMode={inspectorMode}
                 onOpenFilesInspector={handleOpenFilesInspector}
+                onOpenOverviewInspector={handleOpenOverviewInspector}
                 onReturnToThread={props.onReturnToThread}
               />
             )

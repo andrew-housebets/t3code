@@ -1,0 +1,107 @@
+import { useAtomValue } from "@effect/atom-react";
+import {
+  arrayElementsEqual,
+  parseThreadKey,
+  threadKey,
+} from "@t3tools/client-runtime/state/entities";
+import {
+  presentThreadShell,
+  type EnvironmentThreadShell,
+} from "@t3tools/client-runtime/state/models";
+import {
+  isThreadOverviewChild,
+  threadOverviewGroupOf,
+} from "@t3tools/client-runtime/state/thread-overview";
+import type {
+  EnvironmentId,
+  OrchestrationV2ThreadShell,
+  ProjectId,
+  ScopedThreadRef,
+  ThreadId,
+} from "@t3tools/contracts";
+import { isCoordinatorThread } from "@t3tools/shared/coordinatorThread";
+import { Atom } from "effect/reactivity";
+import { useEffect } from "react";
+
+import { appAtomRegistry } from "../../state/atom-registry";
+import {
+  environmentThreadDetails,
+  environmentThreadShells,
+  threadFamilies,
+} from "../../state/threads";
+
+export type OverviewTab = "threads" | "library" | "scheduled";
+
+export interface OverviewTarget {
+  readonly environmentId: EnvironmentId;
+  readonly projectId: ProjectId;
+  readonly threadId: ThreadId | null;
+}
+
+const EMPTY_CHILDREN: ReadonlyArray<EnvironmentThreadShell> = [];
+
+const childrenAtomFamily = Atom.family((key: string) => {
+  const ref = parseThreadKey(key);
+  let previousSources: ReadonlyArray<OrchestrationV2ThreadShell> = [];
+  let previousRequests: ReadonlyMap<unknown, unknown> | null = null;
+  let previous = EMPTY_CHILDREN;
+  return Atom.make((get) => {
+    const requests = get(environmentThreadShells.pendingSubagentRequestsAtom(ref.environmentId));
+    const sources = get(environmentThreadShells.environmentThreadsAtom(ref.environmentId)).filter(
+      (thread) => isThreadOverviewChild(thread, ref.threadId),
+    );
+    if (requests === previousRequests && arrayElementsEqual(previousSources, sources)) {
+      return previous;
+    }
+    previousSources = sources;
+    previousRequests = requests;
+    previous = sources.map((thread) =>
+      presentThreadShell(ref.environmentId, thread, requests.get(thread.id) ?? null),
+    );
+    return previous;
+  }).pipe(Atom.withLabel(`mobile-thread-overview-children:${key}`));
+});
+
+export function useThreadOverviewChildren(
+  ref: ScopedThreadRef,
+): ReadonlyArray<EnvironmentThreadShell> {
+  return useAtomValue(childrenAtomFamily(threadKey(ref)));
+}
+
+/** The live shell drops idle delegated children, so the family is mounted while it is on screen. */
+export function useMountedThreadFamily(ref: ScopedThreadRef | null) {
+  const environmentId = ref?.environmentId ?? null;
+  const threadId = ref?.threadId ?? null;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- keeps this thread's family in the shell rows while mounted, so idle children are listed
+  useEffect(() => {
+    if (environmentId === null || threadId === null) return;
+    return threadFamilies.mount(appAtomRegistry, environmentId, threadId);
+  }, [environmentId, threadId]);
+}
+
+export type ThreadOverviewEntryState = "hidden" | "shown" | "waiting";
+
+const entryStateAtomFamily = Atom.family((key: string) =>
+  Atom.make((get): ThreadOverviewEntryState => {
+    const ref = parseThreadKey(key);
+    const children = get(childrenAtomFamily(key));
+    if (children.some((thread) => threadOverviewGroupOf(thread) === "waiting_on_you")) {
+      return "waiting";
+    }
+    const thread = get(environmentThreadShells.environmentThreadIndexAtom(ref.environmentId)).get(
+      ref.threadId,
+    );
+    if (children.length > 0 || (thread !== undefined && isCoordinatorThread(thread))) {
+      return "shown";
+    }
+    const subagents =
+      get(environmentThreadDetails.quietThreadAtom(ref))?.projection.subagents ?? [];
+    return subagents.some((agent) => agent.origin === "app_owned" && agent.childThreadId !== null)
+      ? "shown"
+      : "hidden";
+  }).pipe(Atom.withLabel(`mobile-thread-overview-entry:${key}`)),
+);
+
+export function useThreadOverviewEntryState(ref: ScopedThreadRef): ThreadOverviewEntryState {
+  return useAtomValue(entryStateAtomFamily(threadKey(ref)));
+}

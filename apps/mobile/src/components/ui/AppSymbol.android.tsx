@@ -97,6 +97,7 @@ import IconMinus from "@tabler/icons-react-native/IconMinus";
 import IconMoon from "@tabler/icons-react-native/IconMoon";
 import IconNetwork from "@tabler/icons-react-native/IconNetwork";
 import IconPalette from "@tabler/icons-react-native/IconPalette";
+import IconListCheck from "@tabler/icons-react-native/IconListCheck";
 import IconPencil from "@tabler/icons-react-native/IconPencil";
 import IconPlug from "@tabler/icons-react-native/IconPlug";
 import IconPhoto from "@tabler/icons-react-native/IconPhoto";
@@ -227,6 +228,7 @@ const ANDROID_ICON_BY_SF_SYMBOL = {
   keyboard: IconKeyboard,
   laptopcomputer: IconDeviceLaptop,
   link: IconLink,
+  checklist: IconListCheck,
   "list.number": IconListNumbers,
   "line.3.horizontal": IconMenu2,
   "line.3.horizontal.decrease": IconFilter,
