@@ -7,7 +7,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import { coordinatorToggleOf } from "@t3tools/shared/coordinatorThread";
-import { BotIcon, LibraryIcon, NetworkIcon } from "lucide-react";
+import { BotIcon, CalendarClockIcon, EllipsisIcon, LibraryIcon, NetworkIcon } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 
 import { useRightPanelStore } from "../../rightPanelStore";
@@ -15,6 +15,7 @@ import { appAtomRegistry } from "../../rpc/atomRegistry";
 import { threadFamilies } from "../../state/threads";
 import { ITEM_ICON_CLASS, type CommandPaletteActionItem } from "../CommandPalette.logic";
 import { Button } from "../ui/button";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { useCoordinatorStore } from "./coordinatorStore";
@@ -36,20 +37,34 @@ export function threadOverviewPaletteItem(
   };
 }
 
-export function libraryPaletteItem(
-  thread: Pick<EnvironmentThreadShell, "environmentId" | "id">,
-): CommandPaletteActionItem {
-  return {
-    kind: "action",
+const PROJECT_PANELS = {
+  library: {
     value: "action:open-project-library",
     searchTerms: ["library", "files", "docs", "reports", "deliverables", "project"],
     title: "Show project Library",
-    icon: <LibraryIcon className={ITEM_ICON_CLASS} />,
-    run: async () =>
-      useRightPanelStore
-        .getState()
-        .open(scopeThreadRef(thread.environmentId, thread.id), "library"),
-  };
+    Icon: LibraryIcon,
+  },
+  scheduled: {
+    value: "action:open-project-scheduled",
+    searchTerms: ["scheduled", "tasks", "recurring", "automation", "cron", "project"],
+    title: "Show project scheduled tasks",
+    Icon: CalendarClockIcon,
+  },
+} as const;
+
+export function projectPanelPaletteItems(
+  thread: Pick<EnvironmentThreadShell, "environmentId" | "id">,
+): ReadonlyArray<CommandPaletteActionItem> {
+  const ref = scopeThreadRef(thread.environmentId, thread.id);
+  return (Object.keys(PROJECT_PANELS) as Array<keyof typeof PROJECT_PANELS>).map((kind) => {
+    const { Icon, ...item } = PROJECT_PANELS[kind];
+    return {
+      kind: "action",
+      ...item,
+      icon: <Icon className={ITEM_ICON_CLASS} />,
+      run: async () => useRightPanelStore.getState().open(ref, kind),
+    };
+  });
 }
 
 export function newCoordinatorPaletteItem(
@@ -152,6 +167,23 @@ export function ThreadOverviewHeaderButton({ threadRef }: { readonly threadRef: 
           </TooltipTrigger>
           <TooltipPopup side="top">Files and docs this project's threads produced</TooltipPopup>
         </Tooltip>
+      ) : null}
+      {coordinator ? (
+        <Menu>
+          <MenuTrigger
+            render={
+              <Button size="icon-xs" variant="ghost-muted" aria-label="More project panels" />
+            }
+          >
+            <EllipsisIcon aria-hidden />
+          </MenuTrigger>
+          <MenuPopup align="end">
+            <MenuItem onClick={() => useRightPanelStore.getState().open(threadRef, "scheduled")}>
+              <CalendarClockIcon />
+              Scheduled tasks
+            </MenuItem>
+          </MenuPopup>
+        </Menu>
       ) : null}
     </>
   );

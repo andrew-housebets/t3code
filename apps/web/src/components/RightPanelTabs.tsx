@@ -38,6 +38,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   Smartphone,
   BotIcon,
+  CalendarClockIcon,
   LibraryIcon,
   ChevronDown,
   ChevronLeft,
@@ -598,6 +599,8 @@ function surfaceTitle(
       return "Threads";
     case "library":
       return "Library";
+    case "scheduled":
+      return "Scheduled";
     case "device":
       return surface.title ?? surface.target?.name ?? "Device";
     case "side-chat":
@@ -694,6 +697,8 @@ function SurfaceIcon({
       return <BotIcon className="size-3 shrink-0" />;
     case "library":
       return <LibraryIcon className="size-3 shrink-0" />;
+    case "scheduled":
+      return <CalendarClockIcon className="size-3 shrink-0" />;
     case "side-chat":
       return <SideChatTabIcon environmentId={environmentId} threadId={surface.threadId} />;
     case "device":

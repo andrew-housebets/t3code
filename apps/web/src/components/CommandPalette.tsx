@@ -232,8 +232,8 @@ import {
 } from "./CommandPalette.logic";
 import {
   coordinatorTogglePaletteItem,
-  libraryPaletteItem,
   newCoordinatorPaletteItem,
+  projectPanelPaletteItems,
   threadOverviewPaletteItem,
 } from "./overview/ThreadOverviewEntryPoints";
 import { useThreadActions } from "../hooks/useThreadActions";
@@ -1516,7 +1516,10 @@ function OpenCommandPaletteDialog(props: {
   }
 
   if (activeThread !== null) {
-    actionItems.push(threadOverviewPaletteItem(activeThread), libraryPaletteItem(activeThread));
+    actionItems.push(
+      threadOverviewPaletteItem(activeThread),
+      ...projectPanelPaletteItems(activeThread),
+    );
     const toggle = coordinatorTogglePaletteItem(activeThread, setThreadCoordinator);
     if (toggle !== null) actionItems.push(toggle);
   }
