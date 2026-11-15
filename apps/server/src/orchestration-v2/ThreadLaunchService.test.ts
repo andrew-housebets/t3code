@@ -956,6 +956,21 @@ it.effect("a rejected initial message leaves no title change and no new thread",
       }
       assert.equal(rejected.operation, "create-thread");
       assert.isNull(yield* threads.getThreadShell(newThreadId));
+
+      // A tagged launch sends its message on its own, and still leaves no thread behind.
+      const taggedThreadId = ThreadId.make("thread:launch:rejected-tagged-thread");
+      yield* launches
+        .launch({
+          ...launchInput({
+            command: "command:launch:rejected-tagged",
+            thread: taggedThreadId,
+            message: "/goal pause",
+          }),
+          modelSelection: claudeModelSelection,
+          tags: ["coordinator"],
+        })
+        .pipe(Effect.flip);
+      assert.isNull(yield* threads.getThreadShell(taggedThreadId));
     }).pipe(Effect.provide(harness.layer));
   }),
 );

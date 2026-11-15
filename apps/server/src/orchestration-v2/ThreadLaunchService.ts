@@ -1364,6 +1364,19 @@ const make = Effect.gen(function* () {
                       interactionMode: input.interactionMode,
                     })
                   : (effect) => effect,
+                // A tagged create carried no message, so a refused one must not leave it behind.
+                Effect.tapError(() =>
+                  tags.length > 0 && input.reuseExistingThread !== true
+                    ? threads
+                        .dispatch({
+                          type: "thread.delete",
+                          commandId: CommandId.make(`${input.commandId}:discard`),
+                          threadId,
+                          onlyIfUnused: true,
+                        })
+                        .pipe(Effect.ignore)
+                    : Effect.void,
+                ),
                 Effect.mapError(mapError(input, "dispatch-message", threadId)),
               );
           }

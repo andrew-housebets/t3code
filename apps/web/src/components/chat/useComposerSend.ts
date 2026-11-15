@@ -1269,8 +1269,8 @@ export function useComposerSend(input: ComposerSendInput) {
 
     let backgroundDraftOpened = false;
     let turnStartSucceeded = false;
+    const launchesCoordinator = isLocalDraftThread && isCoordinatorDraft(draftId);
     if (failure === null && turnAttachmentsResult._tag === "Success") {
-      const launchesCoordinator = isLocalDraftThread && isCoordinatorDraft(draftId);
       const bootstrap =
         isLocalDraftThread || baseBranchForWorktree
           ? {
@@ -1427,7 +1427,9 @@ export function useComposerSend(input: ComposerSendInput) {
         restoreFailedDraftThread(
           draftId,
           draftThread,
-          wasBootstrapThreadDeleted(squashAtomCommandFailure(failure))
+          wasBootstrapThreadDeleted(squashAtomCommandFailure(failure)) ||
+            // The server discards a coordinator it created when its first message is refused.
+            (launchesCoordinator && !isAtomCommandInterrupted(failure))
             ? newThreadId()
             : threadIdForSend,
         );
