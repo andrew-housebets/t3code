@@ -198,6 +198,7 @@ export function threadOverviewStatusLine(
     (candidate) => candidate.snapshot !== null,
   );
   if (link?.snapshot) return pullRequestLine(link.number, link.snapshot);
+  if (thread.latestRun?.status === "interrupted") return "Stopped";
   const latest = thread.source.latestVisibleMessage;
   return (
     firstLine(subagent?.result) ??

@@ -8,7 +8,7 @@ Right-click a project in the sidebar, or the project name in the chat header, an
 
 ## Threads, Library, and Scheduled
 
-A coordinator's header has three panels:
+The header of a coordinator, or of any thread that delegated work, has three panels:
 
 - **Threads** lists the threads it delegated, grouped by what each needs from you, with what each last did. A dot on the button means something needs you: a delegated thread is waiting on you or has a pull request ready for your review, or the thread itself is asking, failed, or finished since you last looked.
 - **Library** holds the project's non-code deliverables, such as reports, notes, and docs, with the thread that wrote each. Add or remove files there yourself.

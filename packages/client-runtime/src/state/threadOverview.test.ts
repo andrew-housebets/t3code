@@ -283,6 +283,18 @@ describe("threadOverviewStatusLine", () => {
       "Rate limited",
     ],
     [
+      "a failed run's error over the task's closing note",
+      child({ status: "failed", lastError: "Out of credits" }),
+      { progress: "", result: "Child task ended with status failed." },
+      "Out of credits",
+    ],
+    [
+      "a run you stopped",
+      child({ status: "interrupted", ...message("assistant", "Halfway through") }),
+      { progress: "", result: "Child task ended with status interrupted." },
+      "Stopped",
+    ],
+    [
       "a stale error on a run that did not fail",
       child({ lastError: "Old failure", ...message("assistant", "All done") }),
       undefined,

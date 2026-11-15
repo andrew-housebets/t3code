@@ -151,7 +151,7 @@ export function ThreadOverviewHeaderButton({ threadRef }: { readonly threadRef: 
             <Button
               size="xs"
               variant="ghost-muted"
-              aria-label={waiting ? "Threads, some waiting on you" : "Threads"}
+              aria-label={waiting ? "Threads, needs you" : "Threads"}
               onClick={() => openOverview(threadRef)}
             />
           }
@@ -161,50 +161,46 @@ export function ThreadOverviewHeaderButton({ threadRef }: { readonly threadRef: 
           {waiting ? <span aria-hidden className="size-1.5 rounded-full bg-warning" /> : null}
         </TooltipTrigger>
         <TooltipPopup side="top">
-          {waiting ? "A thread this one started is waiting on you" : "Threads this thread started"}
+          {waiting
+            ? "Something here needs you: a question, a failure or a review"
+            : "Threads this thread started"}
         </TooltipPopup>
       </Tooltip>
-      {coordinator ? (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                size="xs"
-                variant="ghost-muted"
-                aria-label="Library"
-                onClick={() => useRightPanelStore.getState().open(threadRef, "library")}
-              />
-            }
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              size="xs"
+              variant="ghost-muted"
+              aria-label="Library"
+              onClick={() => useRightPanelStore.getState().open(threadRef, "library")}
+            />
+          }
+        >
+          <LibraryIcon aria-hidden />
+          <span className="@max-[48rem]/chat-header:sr-only">Library</span>
+        </TooltipTrigger>
+        <TooltipPopup side="top">Files and docs this project's threads produced</TooltipPopup>
+      </Tooltip>
+      <Menu>
+        <MenuTrigger
+          render={<Button size="icon-xs" variant="ghost-muted" aria-label="More project panels" />}
+        >
+          <EllipsisIcon aria-hidden />
+        </MenuTrigger>
+        <MenuPopup align="end">
+          <MenuItem onClick={() => useRightPanelStore.getState().open(threadRef, "scheduled")}>
+            <CalendarClockIcon />
+            Scheduled tasks
+          </MenuItem>
+          <MenuItem
+            onClick={() => useRightPanelStore.getState().open(threadRef, "project-instructions")}
           >
-            <LibraryIcon aria-hidden />
-            <span className="@max-[48rem]/chat-header:sr-only">Library</span>
-          </TooltipTrigger>
-          <TooltipPopup side="top">Files and docs this project's threads produced</TooltipPopup>
-        </Tooltip>
-      ) : null}
-      {coordinator ? (
-        <Menu>
-          <MenuTrigger
-            render={
-              <Button size="icon-xs" variant="ghost-muted" aria-label="More project panels" />
-            }
-          >
-            <EllipsisIcon aria-hidden />
-          </MenuTrigger>
-          <MenuPopup align="end">
-            <MenuItem onClick={() => useRightPanelStore.getState().open(threadRef, "scheduled")}>
-              <CalendarClockIcon />
-              Scheduled tasks
-            </MenuItem>
-            <MenuItem
-              onClick={() => useRightPanelStore.getState().open(threadRef, "project-instructions")}
-            >
-              <ScrollTextIcon />
-              Project instructions
-            </MenuItem>
-          </MenuPopup>
-        </Menu>
-      ) : null}
+            <ScrollTextIcon />
+            Project instructions
+          </MenuItem>
+        </MenuPopup>
+      </Menu>
     </>
   );
 }
