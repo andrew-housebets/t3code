@@ -38,6 +38,23 @@ if (
   );
 }
 
+// Fork builds sign with their own paid team and never reuse upstream's Expo project or OTA channel.
+const forkTeamId = repoEnv.T3CODE_IOS_TEAM_ID?.trim() || undefined;
+const forkBundleIdentifier = repoEnv.T3CODE_IOS_BUNDLE_ID?.trim();
+const isForkBuild = forkTeamId !== undefined;
+const forkEasProjectId = repoEnv.T3CODE_EAS_PROJECT_ID?.trim() || undefined;
+
+if (
+  isForkBuild &&
+  (!forkBundleIdentifier || !IOS_BUNDLE_IDENTIFIER_PATTERN.test(forkBundleIdentifier))
+) {
+  throw new Error(
+    "T3CODE_IOS_BUNDLE_ID must be a reverse-DNS identifier such as com.example.t3code when T3CODE_IOS_TEAM_ID is set.",
+  );
+}
+const easProjectId = isForkBuild ? forkEasProjectId : "d763fcb8-d37c-41ea-a773-b54a0ab4a454";
+const expoOwner = isForkBuild ? repoEnv.T3CODE_EXPO_OWNER?.trim() || undefined : "pingdotgg";
+
 const DEVELOPMENT_ASSETS = {
   appIcon: fromRepoRoot(BRAND_ASSET_PATHS.developmentIosIconPng),
   iosIcon: fromRepoRoot(BRAND_ASSET_PATHS.developmentIconComposerProject),
@@ -122,7 +139,9 @@ const variant = VARIANT_CONFIG[APP_VARIANT];
 const HOSTED_APP_HOST = "app.t3.codes";
 const iosBundleIdentifier = isIosPersonalTeamBuild
   ? personalTeamBundleIdentifier!
-  : variant.iosBundleIdentifier;
+  : isForkBuild
+    ? forkBundleIdentifier!
+    : variant.iosBundleIdentifier;
 
 const dmSansFonts = {
   regular: "@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.ttf",
@@ -233,7 +252,7 @@ const sharingPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
 // Match iOS PostScript names on Android so RN and the native composer share fonts before runtime loading.
 
 const config: ExpoConfig = {
-  name: variant.appName,
+  name: repoEnv.T3CODE_APP_NAME?.trim() || variant.appName,
   slug: "t3-code",
   platforms: ["ios", "android"],
   scheme: variant.scheme,
@@ -246,8 +265,8 @@ const config: ExpoConfig = {
   icon: variant.assets.appIcon,
   userInterfaceStyle: "automatic",
   updates: {
-    enabled: repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0",
-    url: "https://u.expo.dev/d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+    enabled: easProjectId !== undefined && repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0",
+    ...(easProjectId ? { url: `https://u.expo.dev/${easProjectId}` } : {}),
     checkAutomatically: "ON_LOAD",
     fallbackToCacheTimeout: 0,
   },
@@ -257,14 +276,14 @@ const config: ExpoConfig = {
     requireFullScreen: process.env.T3_SHOWCASE_CAPTURE_BUILD === "1",
     bundleIdentifier: iosBundleIdentifier,
     // Avoid Personal Team fallback: it cannot sign App Groups, Apple sign-in or push entitlements.
-    appleTeamId: "ARK85ZXQ4Z",
+    appleTeamId: forkTeamId ?? "ARK85ZXQ4Z",
     associatedDomains: [
       `applinks:${variant.relyingParty}`,
       `webcredentials:${variant.relyingParty}`,
       `applinks:${HOSTED_APP_HOST}`,
     ],
     entitlements: {
-      "keychain-access-groups": [`$(AppIdentifierPrefix)${variant.iosBundleIdentifier}`],
+      "keychain-access-groups": [`$(AppIdentifierPrefix)${iosBundleIdentifier}`],
     },
     infoPlist: {
       UISupportedInterfaceOrientations: [
@@ -486,11 +505,11 @@ const config: ExpoConfig = {
       tracesToken: repoEnv.EXPO_PUBLIC_OTLP_TRACES_TOKEN ?? null,
     },
     eas: {
-      projectId: "d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+      ...(easProjectId ? { projectId: easProjectId } : {}),
       observe: { endpointUrl: observeEndpointUrl },
     },
   },
-  owner: "pingdotgg",
+  ...(expoOwner ? { owner: expoOwner } : {}),
   experiments: {
     // Metro only runs babel-plugin-react-compiler when this is set; see src/reactCompilerCoverage.test.ts.
     reactCompiler: true,

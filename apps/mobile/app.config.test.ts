@@ -6,7 +6,13 @@ import assetLinks from "../web/public/.well-known/assetlinks.json";
 
 // Keep config parsing independent of local env files and build credentials.
 vi.mock("../../scripts/lib/public-config.ts", () => ({
-  loadRepoEnv: () => ({ APP_VARIANT: process.env.APP_VARIANT }),
+  // app.config.ts copies this into process.env, where an undefined value becomes "undefined".
+  loadRepoEnv: () =>
+    Object.fromEntries(
+      ["APP_VARIANT", "T3CODE_IOS_TEAM_ID", "T3CODE_IOS_BUNDLE_ID"].flatMap((key) =>
+        process.env[key] === undefined ? [] : [[key, process.env[key]]],
+      ),
+    ),
 }));
 
 afterEach(() => {
@@ -44,4 +50,18 @@ it.each([
     { scheme: "https", host, pathPrefix: "/threads/" },
   ]);
   expect(assetLinks.map((link) => link.target.package_name)).toContain(identifier);
+});
+
+it("signs fork builds with their own identity and no upstream Expo project", async () => {
+  vi.stubEnv("T3CODE_IOS_TEAM_ID", "TEAM123456");
+  vi.stubEnv("T3CODE_IOS_BUNDLE_ID", "com.example.fork");
+  const config = await loadConfig("production");
+  expect(config.ios?.appleTeamId).toBe("TEAM123456");
+  expect(config.ios?.bundleIdentifier).toBe("com.example.fork");
+  expect(config.ios?.entitlements?.["keychain-access-groups"]).toEqual([
+    "$(AppIdentifierPrefix)com.example.fork",
+  ]);
+  expect(config.owner).toBeUndefined();
+  expect(config.extra?.eas?.projectId).toBeUndefined();
+  expect(config.updates?.enabled).toBe(false);
 });
