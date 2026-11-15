@@ -96,12 +96,15 @@ export const layer = Layer.effect(
 
     const recordRun = Effect.fn("ProjectArtifactRecorder.recordRun")(
       function* (input: { readonly threadId: ThreadId; readonly runId: RunId }) {
+        const shell = yield* projections.getThreadShell(input.threadId);
+        if (shell === null) return;
+        const libraryDir = path.join(yield* projectContext.directory(shell.projectId), "library");
+        if (!(yield* fileSystem.exists(libraryDir))) return;
         const { thread, turnItems } = yield* projections.getThreadRecords(
           input.threadId,
           ["turnItems"],
           { turnItemRunId: input.runId },
         );
-        const libraryDir = path.join(yield* projectContext.directory(thread.projectId), "library");
         const found = runArtifacts({
           path,
           threadId: thread.id,
@@ -124,6 +127,9 @@ export const layer = Layer.effect(
         yield* sidecar.recordArtifacts(present.flatMap(Option.toArray));
       },
       Effect.catch((cause) =>
+        Effect.logWarning("Failed to record a run's project artifacts.", { cause }),
+      ),
+      Effect.catchDefect((cause) =>
         Effect.logWarning("Failed to record a run's project artifacts.", { cause }),
       ),
     );
