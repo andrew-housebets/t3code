@@ -139,7 +139,8 @@ EXTRA = """
 [data-sidebar-nav]{margin-top:2px!important;gap:2px!important}
 :is([data-sidebar-nav-row],[data-sidebar-pinned-project]){height:32px!important;padding:0 10px!important;gap:10px!important;border-radius:8px!important;font-size:14px!important;font-weight:400!important;color:var(--app-theme-sidebar-foreground)!important;
 &:hover{background:var(--app-theme-sidebar-row-hover)!important}
-& svg{width:16px!important;height:16px!important;flex:0 0 16px;color:var(--app-theme-sidebar-foreground)!important}}
+& svg{width:16px!important;height:16px!important;flex:0 0 16px}}
+[data-sidebar-nav-row] svg{color:var(--app-theme-sidebar-foreground)!important}
 [data-sidebar-pinned-projects]{gap:2px!important}
 [data-sidebar-pinned-projects-label]{padding:18px 9px 8px!important;font-size:12px!important;font-weight:400!important;color:var(--app-theme-sidebar-muted-foreground)!important}
 section[aria-labelledby^=thread-overview-]{border-top:none!important;padding:8px 8px 14px!important;

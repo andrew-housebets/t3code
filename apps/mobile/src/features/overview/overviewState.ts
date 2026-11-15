@@ -108,6 +108,11 @@ const entryStateAtomFamily = Atom.family((key: string) =>
   }).pipe(Atom.withLabel(`mobile-thread-overview-entry:${key}`)),
 );
 
+/** Whether the thread's detail, and so its delegated tasks, has loaded. */
+export function useThreadOverviewDetailLoaded(ref: ScopedThreadRef): boolean {
+  return useAtomValue(environmentThreadDetails.quietThreadAtom(ref)) !== null;
+}
+
 const HIDDEN_ENTRY_ATOM = Atom.make<ThreadOverviewEntryState>("hidden").pipe(
   Atom.withLabel("mobile-thread-overview-entry:none"),
 );

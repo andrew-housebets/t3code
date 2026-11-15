@@ -16,7 +16,7 @@ import { AtomRegistry } from "effect/reactivity";
 
 import * as Dialog from "../../components/ui/Dialog";
 import { appAtomRegistry } from "../../state/atom-registry";
-import { setCoordinatorDraft } from "../../state/coordinator-drafts";
+import { isCoordinatorDraft, setCoordinatorDraft } from "../../state/coordinator-drafts";
 import { projectEnvironment } from "../../state/projects";
 import { environmentServerConfigsAtom } from "../../state/server";
 import { threadEnvironment } from "../../state/threads";
@@ -96,8 +96,8 @@ function readCoordinatorModelDefault(
 }
 
 /**
- * A draft turned into a coordinator moves to the project's coordinator model, and first
- * warns when the provider it will run on does not enforce the read-only lock.
+ * A draft turned into a coordinator moves to the project's coordinator model, then warns,
+ * without blocking, when the provider it ends on does not enforce the read-only lock.
  */
 export async function startCoordinatorDraft(input: {
   readonly draftKey: string;
@@ -105,7 +105,12 @@ export async function startCoordinatorDraft(input: {
   readonly projectId: ProjectId;
   readonly driver: string | null;
 }) {
+  setCoordinatorDraft(input.draftKey, true);
   const selection = await readCoordinatorModelDefault(input.environmentId, input.projectId);
+  if (!isCoordinatorDraft(input.draftKey)) return;
+  if (selection !== null) {
+    updateComposerDraftSettings(input.draftKey, { modelSelection: selection });
+  }
   const driver =
     selection === null
       ? input.driver
@@ -114,19 +119,6 @@ export async function startCoordinatorDraft(input: {
           .get(input.environmentId)
           ?.providers.find((provider) => provider.instanceId === selection.instanceId)?.driver ??
         input.driver);
-  const start = () => {
-    setCoordinatorDraft(input.draftKey, true);
-    if (selection !== null) {
-      updateComposerDraftSettings(input.draftKey, { modelSelection: selection });
-    }
-  };
   const warning = coordinatorProviderWarning(driver);
-  if (warning === null) return start();
-  Dialog.confirm({
-    title: "Start as a coordinator?",
-    message: warning,
-    confirmText: "Start as coordinator",
-    destructive: true,
-    onConfirm: start,
-  });
+  if (warning !== null) Dialog.alert("Not read-only", warning);
 }

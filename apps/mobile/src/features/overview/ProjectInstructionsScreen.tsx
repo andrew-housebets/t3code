@@ -121,6 +121,31 @@ function ProjectModelDefaultRows(props: {
     <SettingsSection title="Models">
       {MODEL_ROWS.map(({ key, label, unset }, index) => {
         const selection = defaults[key];
+        const row = (
+          <Pressable
+            key={key}
+            accessibilityRole="button"
+            accessibilityLabel={`${label}, ${selection === null ? "Default" : labelOf(selection)}`}
+            accessibilityHint={selection === null ? unset : undefined}
+            accessibilityState={{ disabled: !canWrite }}
+            className={
+              index === 0
+                ? "flex-row items-center gap-3 px-4 py-3 active:bg-subtle"
+                : "flex-row items-center gap-3 border-t border-border-subtle px-4 py-3 active:bg-subtle"
+            }
+          >
+            <View className="min-w-0 flex-1 gap-0.5">
+              <Text className="text-base text-foreground">{label}</Text>
+              <Text className="text-sm text-foreground-muted" numberOfLines={2}>
+                {selection === null ? unset : labelOf(selection)}
+              </Text>
+            </View>
+            {canWrite ? (
+              <SymbolView name="chevron.down" size={13} tintColorClassName="accent-icon-muted" />
+            ) : null}
+          </Pressable>
+        );
+        if (!canWrite) return row;
         return (
           <Menu
             key={key}
@@ -154,25 +179,7 @@ function ProjectModelDefaultRows(props: {
               if (option) void save({ ...defaults, [key]: option.selection });
             }}
           >
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`${label}, ${selection === null ? "Default" : labelOf(selection)}`}
-              accessibilityHint={selection === null ? unset : undefined}
-              disabled={!canWrite}
-              className={
-                index === 0
-                  ? "flex-row items-center gap-3 px-4 py-3 active:bg-subtle"
-                  : "flex-row items-center gap-3 border-t border-border-subtle px-4 py-3 active:bg-subtle"
-              }
-            >
-              <View className="min-w-0 flex-1 gap-0.5">
-                <Text className="text-base text-foreground">{label}</Text>
-                <Text className="text-sm text-foreground-muted" numberOfLines={2}>
-                  {selection === null ? unset : labelOf(selection)}
-                </Text>
-              </View>
-              <SymbolView name="chevron.down" size={13} tintColorClassName="accent-icon-muted" />
-            </Pressable>
+            {row}
           </Menu>
         );
       })}
@@ -216,7 +223,6 @@ function ProjectContextFields(props: {
     const result = await write({ environmentId, input: { projectId, ...draft } });
     setSaving(false);
     if (result._tag === "Success") {
-      setDraft(null);
       saved.refresh();
       return;
     }

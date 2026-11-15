@@ -32,6 +32,7 @@ import {
   MessageId,
   ThreadId,
   type ProjectScript,
+  type ScopedThreadRef,
 } from "@t3tools/contracts";
 import {
   projectScriptCwd,
@@ -86,7 +87,10 @@ import { draftRouteIdentity } from "./thread-route-state";
 import { NewTaskDraftRouteScreen, type NewTaskDraftRouteParams } from "./NewTaskDraftRouteScreen";
 import { GitOverviewSheet } from "./git/GitOverviewSheet";
 import { ThreadOverview } from "../overview/ThreadOverviewScreen";
-import { useThreadOverviewEntryState } from "../overview/overviewState";
+import {
+  useThreadOverviewDetailLoaded,
+  useThreadOverviewEntryState,
+} from "../overview/overviewState";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useSelectedThreadGitActions } from "../../state/use-selected-thread-git-actions";
 import { useSelectedThreadGitState } from "../../state/use-selected-thread-git-state";
@@ -497,18 +501,6 @@ function ThreadRouteContent(
   // The chosen mode survives thread switches; "route" only applies while the route
   // supplies an inspector, which is also the default whenever it does.
   const [chosenInspectorMode, setChosenInspectorMode] = useState<ThreadInspectorMode | null>(null);
-  const { panes } = useWorkspacePaneState();
-  const overviewEntry = useThreadOverviewEntryState(
-    selectedThread === null
-      ? null
-      : scopeThreadRef(selectedThread.environmentId, selectedThread.id),
-  );
-  // Until the thread's detail loads, its delegated tasks are unknown and the entry reads hidden.
-  const overviewEmpty =
-    chosenInspectorMode === "overview" &&
-    selectedThread !== null &&
-    selectedThreadDetail?.thread.id === selectedThread.id &&
-    overviewEntry === "hidden";
   const previewTarget = props.inspectorPresentation ? undefined : params.inspector;
   const inspectorMode = (() => {
     if (previewTarget) return "preview";
@@ -520,20 +512,13 @@ function ThreadRouteContent(
         : chosenInspectorMode === null || chosenInspectorMode === "route"
           ? "route"
           : chosenInspectorMode;
-    if (mode === "files" && selectedThreadCwd === null) return null;
-    return mode === "overview" && overviewEmpty ? null : mode;
+    return mode === "files" && selectedThreadCwd === null ? null : mode;
   })();
   const revealPreview = useEffectEvent(() => showInspector());
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- opens the workspace navigator's inspector pane when route params bring a preview target
   useEffect(() => {
     if (previewTarget) revealPreview();
   }, [previewTarget]);
-  const overviewPaneOpen = overviewEmpty && inspectorMode === null && panes.auxiliaryPaneVisible;
-  const closeOverviewPane = useEffectEvent(() => toggleAuxiliaryPane());
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- closes the workspace's inspector pane when the open thread has no delegated work to show in it
-  useEffect(() => {
-    if (overviewPaneOpen) closeOverviewPane();
-  }, [overviewPaneOpen]);
   const routeEnvironmentRuntime = useRemoteEnvironmentRuntime(environmentId);
   const routeConnectionState =
     routeEnvironmentRuntime?.connectionState ?? (environmentId ? "available" : connectionState);
@@ -690,13 +675,18 @@ function ThreadRouteContent(
               key: "overview",
               render: () =>
                 selectedThread === null ? null : (
-                  <ThreadOverview
-                    target={{
-                      environmentId: selectedThread.environmentId,
-                      projectId: selectedThread.projectId,
-                      threadId: selectedThread.id,
-                    }}
-                  />
+                  <>
+                    <EmptyOverviewPaneCloser
+                      threadRef={scopeThreadRef(selectedThread.environmentId, selectedThread.id)}
+                    />
+                    <ThreadOverview
+                      target={{
+                        environmentId: selectedThread.environmentId,
+                        projectId: selectedThread.projectId,
+                        threadId: selectedThread.id,
+                      }}
+                    />
+                  </>
                 ),
             },
             ...(props.renderInspector ? [{ key: "route", render: props.renderInspector }] : []),
@@ -1186,6 +1176,22 @@ export function FullscreenThreadRouteScreen(
       />
     </InspectorContentScope>
   );
+}
+
+/** A thread with no delegated work has nothing for the Overview pane, so the pane closes. */
+function EmptyOverviewPaneCloser(props: { readonly threadRef: ScopedThreadRef }) {
+  const { panes } = useWorkspacePaneState();
+  const { toggleAuxiliaryPane } = useAdaptiveWorkspaceLayout();
+  const entry = useThreadOverviewEntryState(props.threadRef);
+  // Until the thread's detail loads, its delegated tasks are unknown and the entry reads hidden.
+  const loaded = useThreadOverviewDetailLoaded(props.threadRef);
+  const empty = panes.auxiliaryPaneVisible && loaded && entry === "hidden";
+  const close = useEffectEvent(() => toggleAuxiliaryPane());
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- closes the workspace's inspector pane when the open thread has no delegated work to show in it
+  useEffect(() => {
+    if (empty) close();
+  }, [empty]);
+  return null;
 }
 
 /** Reads the pane state itself, so a sidebar toggle doesn't re-render the whole thread screen. */
