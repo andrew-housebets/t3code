@@ -2,7 +2,12 @@ export const BUILT_IN_THEME_IDS = ["t3-chat", "grove", "ocean", "ember", "iris"]
 
 export const MOBILE_DEFAULT_THEME_ID = "t3-code";
 
-export const MOBILE_THEME_IDS = [MOBILE_DEFAULT_THEME_ID, ...BUILT_IN_THEME_IDS] as const;
+const CLAUDE_THEME_ID = "claude";
+
+/** Palettes only the mobile app offers; web and desktop import the Claude theme from `themes/claude-desktop`. */
+export const MOBILE_PALETTE_THEME_IDS = [...BUILT_IN_THEME_IDS, CLAUDE_THEME_ID] as const;
+
+export const MOBILE_THEME_IDS = [MOBILE_DEFAULT_THEME_ID, ...MOBILE_PALETTE_THEME_IDS] as const;
 
 /** Reserve appearance keywords, built-ins, and legacy aliases so custom themes cannot capture stored preferences. */
 export const RESERVED_THEME_IDS: ReadonlySet<string> = new Set([
@@ -21,9 +26,11 @@ export const RESERVED_THEME_IDS: ReadonlySet<string> = new Set([
 export const UNPUBLISHABLE_THEME_IDS: ReadonlySet<string> = new Set([
   ...RESERVED_THEME_IDS,
   MOBILE_DEFAULT_THEME_ID,
+  CLAUDE_THEME_ID,
 ]);
 
 export type BuiltInThemeId = (typeof BUILT_IN_THEME_IDS)[number];
+export type MobilePaletteThemeId = (typeof MOBILE_PALETTE_THEME_IDS)[number];
 export type MobileThemeId = (typeof MOBILE_THEME_IDS)[number];
 export type ThemeAppearance = "light" | "dark";
 
@@ -916,6 +923,145 @@ export const BUILT_IN_THEMES: ReadonlyArray<ThemeDefinition> = [
   OCEAN_THEME,
   EMBER_THEME,
   IRIS_THEME,
+];
+
+const CLAUDE_THEME: ThemeDefinition = {
+  id: CLAUDE_THEME_ID,
+  label: "Claude",
+  appearance: "dark",
+  colors: {
+    searchMatchBackground: "#2d4a6e",
+    searchMatchForeground: "#ffffff",
+    searchMatchActiveBackground: "#2376d4",
+    searchMatchActiveForeground: "#ffffff",
+    canvas: "#191919",
+    chrome: "#202021",
+    toolbar: "#191919",
+    toolbarForeground: "#e4e4e4",
+    toolbarBorder: "#2e2e2e",
+    toolbarControl: "#262626",
+    toolbarControlForeground: "#e4e4e4",
+    toolbarControlHover: "#2c2c2d",
+    surface: "#202021",
+    surfaceRaised: "#262626",
+    surfaceOverlay: "#262626",
+    text: "#e4e4e4",
+    textMuted: "#919191",
+    border: "#363636",
+    input: "#363636",
+    focus: "#257de0",
+    accent: "#257de0",
+    accentForeground: "#ffffff",
+    secondary: "#262626",
+    secondaryForeground: "#e4e4e4",
+    muted: "#303030",
+    mutedForeground: "#919191",
+    placeholder: "#838383",
+    secondaryLabel: "#7f7f7f",
+    iconMuted: "#919191",
+    error: "#e5644e",
+    errorForeground: "#f07a66",
+    errorSurface: "#33191a",
+    warning: "#e49c08",
+    warningForeground: "#e49c08",
+    warningSurface: "#2e2310",
+    update: "#257de0",
+    updateForeground: "#5b9eea",
+    updateSurface: "#14243a",
+    accentSurface: "#2c2c2c",
+    accentSurfaceForeground: "#e4e4e4",
+    messageSurface: "#25242e",
+    messageForeground: "#e4e4e4",
+    messageAction: "#2376d4",
+    messageActionForeground: "#ffffff",
+    messageActionHover: "#1f69bd",
+    codeBackground: "#202020",
+    codeForeground: "#e4e4e4",
+    sidebar: "#141414",
+    sidebarForeground: "#e4e4e4",
+    sidebarMutedForeground: "#919191",
+    sidebarControlSurface: "#262626",
+    sidebarRowHover: "#262626",
+    sidebarRowActive: "#414242",
+    sidebarRowSelected: "#414242",
+    sidebarBorder: "#262626",
+    terminalBackground: "#191919",
+    terminalForeground: "#e4e4e4",
+    terminalCursor: "#257de0",
+    terminalSelection: "#264f78",
+    terminalScrollbar: "#363636",
+    terminalScrollbarHover: "#4a4a4a",
+  },
+  variants: {
+    light: {
+      searchMatchBackground: "#cfe1f7",
+      searchMatchForeground: "#141413",
+      searchMatchActiveBackground: "#2376d4",
+      searchMatchActiveForeground: "#ffffff",
+      canvas: "#faf9f5",
+      chrome: "#f5f4ee",
+      toolbar: "#faf9f5",
+      toolbarForeground: "#141413",
+      toolbarBorder: "#e5e2d9",
+      toolbarControl: "#ffffff",
+      toolbarControlForeground: "#141413",
+      toolbarControlHover: "#f0eee6",
+      surface: "#ffffff",
+      surfaceRaised: "#ffffff",
+      surfaceOverlay: "#ffffff",
+      text: "#141413",
+      textMuted: "#6b6a65",
+      border: "#e5e2d9",
+      input: "#dad7cd",
+      focus: "#2376d4",
+      accent: "#2376d4",
+      accentForeground: "#ffffff",
+      secondary: "#f0eee6",
+      secondaryForeground: "#141413",
+      muted: "#f0eee6",
+      mutedForeground: "#6b6a65",
+      placeholder: "#8a8983",
+      secondaryLabel: "#73726c",
+      iconMuted: "#73726c",
+      error: "#b5452f",
+      errorForeground: "#a33d29",
+      errorSurface: "#f9e9e4",
+      warning: "#c98a06",
+      warningForeground: "#8a5a04",
+      warningSurface: "#faf0d9",
+      update: "#2376d4",
+      updateForeground: "#1f69bd",
+      updateSurface: "#e3edf9",
+      accentSurface: "#f0eee6",
+      accentSurfaceForeground: "#141413",
+      messageSurface: "#f0eee6",
+      messageForeground: "#141413",
+      messageAction: "#2376d4",
+      messageActionForeground: "#ffffff",
+      messageActionHover: "#1f69bd",
+      codeBackground: "#f5f4ee",
+      codeForeground: "#141413",
+      sidebar: "#f5f4ee",
+      sidebarForeground: "#141413",
+      sidebarMutedForeground: "#6b6a65",
+      sidebarControlSurface: "#ebe9e1",
+      sidebarRowHover: "#ebe9e1",
+      sidebarRowActive: "#e5e2d9",
+      sidebarRowSelected: "#e5e2d9",
+      sidebarBorder: "#e5e2d9",
+      terminalBackground: "#faf9f5",
+      terminalForeground: "#141413",
+      terminalCursor: "#2376d4",
+      terminalSelection: "#cfe1f7",
+      terminalScrollbar: "#dad7cd",
+      terminalScrollbarHover: "#bfbcb2",
+    },
+  },
+};
+
+export const MOBILE_PALETTE_THEMES: ReadonlyArray<ThemeDefinition> = [
+  ...BUILT_IN_THEMES,
+  CLAUDE_THEME,
 ];
 
 export function getThemeColorsForAppearance(
