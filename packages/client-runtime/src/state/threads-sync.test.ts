@@ -958,6 +958,66 @@ describe("EnvironmentThreads", () => {
     }),
   );
 
+  it.effect.each(["application-active-probe", "application-active-long"] as const)(
+    "stays live while a %s wakeup catches up on the live session",
+    (reason) =>
+      Effect.gen(function* () {
+        const harness = yield* makeHarness({ cached: BASE_PROJECTION, completionMarker: true });
+        yield* Queue.offer(harness.inputs, synchronized());
+        yield* awaitThreadState(harness.observed, (value) => value.status === "live");
+
+        yield* Queue.offer(harness.wakeups, reason);
+        yield* SubscriptionRef.changes(harness.subscriptionCount).pipe(
+          Stream.filter((count) => count >= 2),
+          Stream.runHead,
+        );
+        expect((yield* Ref.get(harness.latest)).status).toBe("live");
+        yield* Queue.offer(harness.inputs, titleUpdated("Caught up", CACHED_SNAPSHOT_SEQUENCE + 1));
+        const caughtUp = yield* awaitThreadState(
+          harness.observed,
+          (value) => Option.isSome(value.data) && value.data.value.thread.title === "Caught up",
+        );
+
+        expect(caughtUp.status).toBe("live");
+        expect(yield* Ref.get(harness.lastSubscribeAfterSequence)).toBe(CACHED_SNAPSHOT_SEQUENCE);
+      }),
+  );
+
+  it.effect("shows sync progress when a wakeup finds the socket dead", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness({ cached: BASE_PROJECTION, completionMarker: true });
+      yield* Queue.offer(harness.inputs, synchronized());
+      yield* awaitThreadState(harness.observed, (value) => value.status === "live");
+
+      yield* Queue.offer(harness.wakeups, "application-active-probe");
+      yield* SubscriptionRef.changes(harness.subscriptionCount).pipe(
+        Stream.filter((count) => count >= 2),
+        Stream.runHead,
+      );
+      yield* SubscriptionRef.set(harness.supervisorState, {
+        ...AVAILABLE_CONNECTION_STATE,
+        desired: true,
+        phase: "connecting" as const,
+      });
+      yield* awaitThreadState(harness.observed, (value) => value.status === "synchronizing");
+
+      yield* harness.replaceSession;
+      yield* SubscriptionRef.changes(harness.subscriptionCount).pipe(
+        Stream.filter((count) => count >= 3),
+        Stream.runHead,
+      );
+      yield* Queue.offer(harness.inputs, titleUpdated("Replayed", CACHED_SNAPSHOT_SEQUENCE + 1));
+      const replayed = yield* awaitThreadState(
+        harness.observed,
+        (value) => Option.isSome(value.data) && value.data.value.thread.title === "Replayed",
+      );
+      expect(replayed.status).toBe("synchronizing");
+
+      yield* Queue.offer(harness.inputs, synchronized());
+      yield* awaitThreadState(harness.observed, (value) => value.status === "live");
+    }),
+  );
+
   describe("cached work (#18188)", () => {
     const at = DateTime.makeUnsafe("2026-06-20T00:00:00.000Z");
     const parentThreadId = ThreadId.make("thread:parent");

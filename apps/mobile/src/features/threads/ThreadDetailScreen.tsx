@@ -189,6 +189,7 @@ import {
   FLOATING_WORKING_CONTROL_COVERAGE,
   FloatingWorkingControl,
 } from "./floating-working-control";
+import { useSoftKeyboardShowing } from "../keyboard/useSoftKeyboardShowing";
 import { connectionFloatingStatus, type FloatingWorkingStatus } from "./floating-working-status";
 import {
   derivePendingUserInputMaxHeight,
@@ -960,6 +961,7 @@ function ThreadDetailBody(
   const questionInFlow = Platform.OS === "android" && activeUserInputRequestId !== null;
   const composerSlotHidden =
     activeUserInputRequestId !== null || props.creationState?.kind === "failed";
+  const softKeyboardShowing = useSoftKeyboardShowing();
   const pendingMessageEditBlocked =
     queuedRunEditBlockedReason({ openQuestionCount: activeUserInputRequestId === null ? 0 : 1 }) !==
     null;
@@ -1619,6 +1621,9 @@ function ThreadDetailBody(
                     }
                     showScrollToEnd={showScrollToEndButton}
                     onScrollToEnd={handleScrollToEnd}
+                    onHideKeyboard={
+                      Platform.OS === "ios" && softKeyboardShowing ? Keyboard.dismiss : null
+                    }
                     agents={agentsSegment}
                     onOpenAgents={() => {
                       Keyboard.dismiss();

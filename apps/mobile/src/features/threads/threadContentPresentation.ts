@@ -47,6 +47,9 @@ export function projectThreadContentPresentation(input: {
   };
 }
 
+// Messages on screen stay usable while a reconnect catches up, so only a long one is worth a label.
+export const SYNCING_MESSAGES_LABEL_DELAY_MS = 3_000;
+
 export function threadSyncStatusLabel(
   status: EnvironmentThreadStatus,
   presentation: ThreadContentPresentation["kind"],

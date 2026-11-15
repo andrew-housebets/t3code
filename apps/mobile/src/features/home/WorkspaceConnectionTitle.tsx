@@ -13,6 +13,8 @@ import {
 } from "./workspace-connection-status";
 
 const STATUS_SHOW_DELAY_MS = 800;
+// Rows already on screen stay usable through a reconnect, so only a long one is worth a status.
+const HELD_ROWS_STATUS_SHOW_DELAY_MS = 3_000;
 const FADE_IN_MS = 250;
 
 type ConnectionStatus = WorkspaceConnectionStatusPresentation & {
@@ -39,10 +41,11 @@ export function WorkspaceConnectionStatusProvider(props: { readonly children: Re
     setStatusSince(hasStatus ? Date.now() : null);
   }
   const since = hasStatus ? statusSince : null;
-  const fadeStarted = useDeadlinePassed(since === null ? null : since + STATUS_SHOW_DELAY_MS);
-  const fadeEnded = useDeadlinePassed(
-    since === null ? null : since + STATUS_SHOW_DELAY_MS + FADE_IN_MS,
-  );
+  const showDelayMs = state.hasLoadedShellSnapshot
+    ? HELD_ROWS_STATUS_SHOW_DELAY_MS
+    : STATUS_SHOW_DELAY_MS;
+  const fadeStarted = useDeadlinePassed(since === null ? null : since + showDelayMs);
+  const fadeEnded = useDeadlinePassed(since === null ? null : since + showDelayMs + FADE_IN_MS);
 
   const label = presentation?.label;
   const showsProgress = presentation?.showsProgress ?? false;

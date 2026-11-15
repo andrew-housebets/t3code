@@ -75,6 +75,15 @@ connection nor overwrite newer live data during a reconnect. Loading and
 resuming snapshots belongs to the shared state services, so every view agrees
 on which data is current.
 
+Returning to the app resubscribes the shell and the open thread from their
+cursors, because a suspended socket can look alive after missing events. On the
+session that is already live, that catch-up keeps the status `live`: the replay
+is ordinary stream events, and a dead socket still flips the status once the
+supervisor's probe replaces it. Any other resubscribe (a new session, a stream
+retry, a reload over HTTP) shows `synchronizing` until its completion marker.
+Actions on pending requests do not rely on this status; the server refuses an
+answer to a request that is no longer pending.
+
 The shell snapshot loads over HTTP, which needs only the prepared connection, so
 the [shell state](../../packages/client-runtime/src/state/shell.ts) can ask for
 it before the socket and the config are ready. Two constraints follow. The live
@@ -86,7 +95,7 @@ ready. A proxy that drops `/api` without an answer then does not hold the
 connect for the HTTP timeout.
 
 Each environment synchronizes at its own time, so a thread list that follows every
-snapshot moves once per environment on each cold start and resume. Mobile lists read
+snapshot moves once per environment on each cold start and reconnect. Mobile lists read
 [steady shells](../../packages/client-runtime/src/state/steadyShells.ts): an
 environment's rows stay as shown until its connection's server snapshot arrives,
 it is synchronized, or it disconnects, and environments that get there within two

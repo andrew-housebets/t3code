@@ -27,6 +27,7 @@ import {
   type PreparedConnection,
 } from "../connection/model.ts";
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
+import * as ConnectionWakeups from "../connection/wakeups.ts";
 import * as Persistence from "../platform/persistence.ts";
 import * as RpcSession from "../rpc/session.ts";
 import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
@@ -1187,6 +1188,7 @@ describe("environment shell cold start", () => {
     const httpLoads = yield* Ref.make(0);
     const loadOptions = yield* Queue.unbounded<ShellSnapshotLoader.ShellSnapshotOptions>();
     const releases = yield* Queue.unbounded<void>();
+    const wakeups = yield* Queue.unbounded<ConnectionWakeups.ConnectionWakeup>();
     const scope = yield* Effect.scope;
     const holdLoad =
       early?.holdLoads === "uninterruptible"
@@ -1264,6 +1266,10 @@ describe("environment shell cold start", () => {
       Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
       Effect.provideService(Persistence.EnvironmentCacheStore, cache),
       Effect.provideService(ShellSnapshotLoader.ShellSnapshotLoader, snapshotLoader),
+      Effect.provideService(
+        ConnectionWakeups.ConnectionWakeups,
+        ConnectionWakeups.ConnectionWakeups.of({ changes: Stream.fromQueue(wakeups) }),
+      ),
     );
     const nextConnection = Effect.suspend(() =>
       SubscriptionRef.set(
@@ -1304,6 +1310,7 @@ describe("environment shell cold start", () => {
           httpAuthorization: { _tag: "Bearer" as const, token: "rotated" },
         })),
       ),
+      wakeups,
       liveAt: (sequence: number) =>
         SubscriptionRef.changes(shellState).pipe(
           Stream.filter(
@@ -1646,6 +1653,49 @@ describe("environment shell cold start", () => {
       const retried = yield* Queue.take(h.subscriptions);
       expect(retried.input).toMatchObject({ afterSequence: CACHED_SEQUENCE + 2 });
     }),
+  );
+
+  it.effect.each(["application-active-probe", "application-active-long"] as const)(
+    "keeps held rows live while a %s wakeup catches up on the live session",
+    (reason) =>
+      Effect.gen(function* () {
+        const h = yield* makeColdStart(RECENT_ORIGIN);
+        const rowUpdate = (sequence: number) => ({
+          kind: "thread.updated" as const,
+          sequence,
+          location: "active" as const,
+          thread: { ...v2ThreadShell, title: `Row ${sequence}` },
+        });
+        const first = yield* Queue.take(h.subscriptions);
+        yield* Queue.offerAll(first.events, [
+          rowUpdate(CACHED_SEQUENCE + 1),
+          { kind: "synchronized" },
+        ]);
+        yield* h.liveAt(CACHED_SEQUENCE + 1);
+
+        yield* Queue.offer(h.wakeups, reason);
+        const catchUp = yield* Queue.take(h.subscriptions);
+        expect(catchUp.input).toMatchObject({ afterSequence: CACHED_SEQUENCE + 1 });
+        expect((yield* SubscriptionRef.get(h.shellState)).status).toBe("live");
+        yield* Queue.offer(catchUp.events, rowUpdate(CACHED_SEQUENCE + 2));
+        const caughtUp = yield* SubscriptionRef.changes(h.shellState).pipe(
+          Stream.filter((state) =>
+            Option.exists(
+              state.snapshot,
+              (snapshot) => snapshot.snapshotSequence === CACHED_SEQUENCE + 2,
+            ),
+          ),
+          Stream.runHead,
+          Effect.map(Option.getOrThrow),
+        );
+        expect(caughtUp.status).toBe("live");
+        expect(yield* Ref.get(h.httpLoads)).toBe(0);
+
+        // A replacement session still waits for its completion marker.
+        yield* h.reconnect;
+        yield* Queue.take(h.subscriptions);
+        expect((yield* SubscriptionRef.get(h.shellState)).status).toBe("synchronizing");
+      }),
   );
 
   it.effect("reloads over HTTP when the server answers a resume with snapshot-required", () =>
