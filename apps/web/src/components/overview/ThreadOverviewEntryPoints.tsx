@@ -7,7 +7,14 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import { coordinatorToggleOf } from "@t3tools/shared/coordinatorThread";
-import { BotIcon, CalendarClockIcon, EllipsisIcon, LibraryIcon, NetworkIcon } from "lucide-react";
+import {
+  BotIcon,
+  CalendarClockIcon,
+  EllipsisIcon,
+  LibraryIcon,
+  NetworkIcon,
+  ScrollTextIcon,
+} from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 
 import { useRightPanelStore } from "../../rightPanelStore";
@@ -49,6 +56,12 @@ const PROJECT_PANELS = {
     searchTerms: ["scheduled", "tasks", "recurring", "automation", "cron", "project"],
     title: "Show project scheduled tasks",
     Icon: CalendarClockIcon,
+  },
+  "project-instructions": {
+    value: "action:open-project-instructions",
+    searchTerms: ["project instructions", "memory", "standing", "context", "coordinator"],
+    title: "Edit project instructions",
+    Icon: ScrollTextIcon,
   },
 } as const;
 
@@ -181,6 +194,12 @@ export function ThreadOverviewHeaderButton({ threadRef }: { readonly threadRef: 
             <MenuItem onClick={() => useRightPanelStore.getState().open(threadRef, "scheduled")}>
               <CalendarClockIcon />
               Scheduled tasks
+            </MenuItem>
+            <MenuItem
+              onClick={() => useRightPanelStore.getState().open(threadRef, "project-instructions")}
+            >
+              <ScrollTextIcon />
+              Project instructions
             </MenuItem>
           </MenuPopup>
         </Menu>

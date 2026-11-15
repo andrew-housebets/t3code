@@ -40,6 +40,7 @@ import {
   BotIcon,
   CalendarClockIcon,
   LibraryIcon,
+  ScrollTextIcon,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -601,6 +602,8 @@ function surfaceTitle(
       return "Library";
     case "scheduled":
       return "Scheduled";
+    case "project-instructions":
+      return "Project instructions";
     case "device":
       return surface.title ?? surface.target?.name ?? "Device";
     case "side-chat":
@@ -699,6 +702,8 @@ function SurfaceIcon({
       return <LibraryIcon className="size-3 shrink-0" />;
     case "scheduled":
       return <CalendarClockIcon className="size-3 shrink-0" />;
+    case "project-instructions":
+      return <ScrollTextIcon className="size-3 shrink-0" />;
     case "side-chat":
       return <SideChatTabIcon environmentId={environmentId} threadId={surface.threadId} />;
     case "device":

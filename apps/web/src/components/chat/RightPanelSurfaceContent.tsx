@@ -27,6 +27,7 @@ import { ThreadPullRequestsPanel } from "../pullRequest/ThreadPullRequestsPanel"
 import { ThreadOverviewPanel } from "../overview/ThreadOverviewPanel";
 import { ProjectLibraryPanel } from "../overview/ProjectLibraryPanel";
 import { ProjectScheduledPanel } from "../overview/ProjectScheduledPanel";
+import { ProjectInstructionsPanel } from "../overview/ProjectInstructionsEditor";
 
 const PreviewPanel = lazy(() =>
   import("../preview/PreviewPanel").then((module) => ({ default: module.PreviewPanel })),
@@ -182,6 +183,8 @@ export function RightPanelSurfaceContent(props: {
       return <ProjectLibraryPanel threadRef={threadRef} />;
     case "scheduled":
       return <ProjectScheduledPanel threadRef={threadRef} />;
+    case "project-instructions":
+      return <ProjectInstructionsPanel threadRef={threadRef} />;
     case "side-chat":
       // Not lazy: revealing a suspended tiptap editor tears down its view and crashes the composer.
       return (

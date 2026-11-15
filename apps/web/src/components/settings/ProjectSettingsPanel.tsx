@@ -51,6 +51,7 @@ import {
 } from "./ProjectFaviconPickerDialog";
 import { ProjectActionsSettings } from "./ProjectActionsSettings";
 import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
+import { ProjectInstructionsEditor } from "../overview/ProjectInstructionsEditor";
 import {
   defaultProjectIcon,
   hasDefaultProjectIcon,
@@ -665,6 +666,14 @@ function ProjectDetail({
           ) : null}
         </SettingsSection>
         <ProjectDefaultsSettings category="project" />
+        <SettingsSection id="project-instructions" title="Instructions and memory">
+          <div className="p-3 sm:p-4">
+            <ProjectInstructionsEditor
+              environmentId={filePickerProject.environmentId}
+              projectId={filePickerProject.id}
+            />
+          </div>
+        </SettingsSection>
         <ProjectActionsSettings />
         {checkoutChoices}
         <SettingsSection title="Danger">

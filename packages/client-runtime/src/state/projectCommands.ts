@@ -162,6 +162,20 @@ export function createProjectEnvironmentAtoms<R, E>(
       tag: WS_METHODS.projectContextListLibrary,
       staleTimeMs: 15_000,
     }),
+    readContext: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:projects:read-context",
+      tag: WS_METHODS.projectContextRead,
+      staleTimeMs: 0,
+    }),
+    writeContext: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:projects:write-context",
+      tag: WS_METHODS.projectContextWrite,
+      scheduler: projectScheduler,
+      concurrency: {
+        mode: "serial",
+        key: ({ environmentId, input }) => JSON.stringify([environmentId, input.projectId]),
+      },
+    }),
     listIgnoredFiles: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:projects:list-ignored-files",
       tag: WS_METHODS.projectsListIgnoredFiles,

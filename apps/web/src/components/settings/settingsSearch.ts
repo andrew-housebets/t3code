@@ -284,6 +284,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["name icon emoji image checkout remove delete"],
   },
   {
+    id: "project-instructions",
+    title: "Project instructions and memory",
+    to: "/settings/projects",
+    searchTerms: ["coordinator delegated threads standing context memory conventions"],
+  },
+  {
     id: "default-model",
     title: "Default model",
     to: "/settings/threads",
