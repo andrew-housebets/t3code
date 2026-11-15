@@ -35,6 +35,7 @@ import {
   createInboxReturnTracker,
   isThreadWorking,
 } from "@t3tools/client-runtime/state/thread-inbox";
+import { pinnedProjects } from "@t3tools/client-runtime/state/pinned-projects";
 import { sortSettledThreads } from "@t3tools/client-runtime/state/thread-sort";
 import {
   nextShownOrder,
@@ -146,6 +147,7 @@ import {
   useDelegatedUnderParent,
   useProjects,
   useServerConfigs,
+  useQuietThreadShell,
   useQuietThreadShells,
 } from "../state/entities";
 import { environmentPresentations } from "../state/presentation";
@@ -276,6 +278,8 @@ import {
   SidebarSectionHeader,
   SidebarSectionPlaceholder,
 } from "./sidebar/SidebarListMarkers";
+import { SidebarNavRows, SidebarPinnedProjects } from "./sidebar/SidebarProjectNav";
+import { openProjectLibrary } from "./overview/projectArtifacts";
 
 function sameSidebarProviderEntries(
   left: ReadonlyMap<string, SidebarProviderEntry>,
@@ -1098,6 +1102,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           ),
         );
   const threads = useQuietThreadShells();
+  const pinnedProjectEntries = pinnedProjects(
+    projectGroups,
+    (group) => group.memberProjects,
+    threads,
+  );
+  const routeThreadShell = useQuietThreadShell(routeThreadRef);
   const promotingDraftThreadKeys = usePromotingDraftThreadKeys();
   const listedThreads =
     promotingDraftThreadKeys.length === 0
@@ -3217,10 +3227,36 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               activeSearchResultIndex={activeSearchResultIndex}
               onClearSearch={clearThreadSearch}
             />
+            <SidebarNavRows
+              onOpenArtifacts={
+                routeThreadRef === null || routeThreadShell === null
+                  ? null
+                  : () => {
+                      if (isMobile) setOpenMobile(false);
+                      openProjectLibrary(routeThreadRef, null);
+                    }
+              }
+              onOpenScheduled={() => {
+                if (isMobile) setOpenMobile(false);
+                void router.navigate({ to: "/settings/scheduled-tasks" });
+              }}
+            />
           </SidebarGroup>
         }
       >
         <SidebarGroup className="flex-1" role="presentation">
+          {isSearchingThreads ? null : (
+            <SidebarPinnedProjects
+              entries={pinnedProjectEntries}
+              activeThreadKey={routeThreadKey}
+              onOpen={({ group, coordinator }) =>
+                coordinator === null
+                  ? startThreadInProjectFolder(group, { coordinator: true })
+                  : void navigateToThread(coordinator)
+              }
+              onContextMenu={handleProjectFolderContextMenu}
+            />
+          )}
           {isSearchingThreads ? (
             threadSearchResults.length > 0 ? (
               <TooltipProvider

@@ -359,6 +359,10 @@
       "types": "./src/state/coordinatorUi.ts",
       "default": "./src/state/coordinatorUi.ts"
     },
+    "./state/pinned-projects": {
+      "types": "./src/state/pinnedProjects.ts",
+      "default": "./src/state/pinnedProjects.ts"
+    },
     "./state/project-library": {
       "types": "./src/state/projectLibrary.ts",
       "default": "./src/state/projectLibrary.ts"

@@ -136,6 +136,12 @@ EXTRA = """
 [data-right-panel-tabbar] [data-active-tab]{background:transparent!important;font-size:13px;color:var(--mu)!important}
 [data-right-panel-tabbar] [data-right-panel-tab-list]:has([data-active-tab=false]) [data-active-tab=true]{color:var(--hi)!important;background:var(--app-theme-accent-surface)!important}
 [data-chat-column]:has(~[data-workspace-area=panel][aria-label$=Overview]) button[aria-label=Threads]{color:var(--o4)!important;background:rgba(BLUE_RGB,.14)!important}
+[data-sidebar-nav]{margin-top:2px!important;gap:2px!important}
+:is([data-sidebar-nav-row],[data-sidebar-pinned-project]){height:32px!important;padding:0 10px!important;gap:10px!important;border-radius:8px!important;font-size:14px!important;font-weight:400!important;color:var(--app-theme-sidebar-foreground)!important;
+&:hover{background:var(--app-theme-sidebar-row-hover)!important}
+& svg{width:16px!important;height:16px!important;flex:0 0 16px;color:var(--app-theme-sidebar-foreground)!important}}
+[data-sidebar-pinned-projects]{gap:2px!important}
+[data-sidebar-pinned-projects-label]{padding:18px 9px 8px!important;font-size:12px!important;font-weight:400!important;color:var(--app-theme-sidebar-muted-foreground)!important}
 section[aria-labelledby^=thread-overview-]{border-top:none!important;padding:8px 8px 14px!important;
 &>div:first-child{justify-content:flex-start!important;gap:5px!important}
 & h3{font-size:13px!important;font-weight:400!important;color:var(--mu)!important}
