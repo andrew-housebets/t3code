@@ -2182,6 +2182,7 @@ export const layerWsRpc = (
                                     : { context: input.initialMessage.context }),
                                 },
                               }),
+                          ...(input.tags === undefined ? {} : { tags: input.tags }),
                           createdBy: "user",
                           creationSource: input.creationSource ?? "web",
                         }),

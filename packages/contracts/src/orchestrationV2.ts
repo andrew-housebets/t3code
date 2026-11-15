@@ -3905,6 +3905,8 @@ export const OrchestrationV2ThreadLaunchInput = Schema.Struct({
       attachments: Schema.Array(ChatAttachment),
     }),
   ),
+  /** Committed before the first message, so its run already carries them. Older servers ignore it. */
+  tags: Schema.optional(Schema.Array(ThreadTag).check(Schema.isMaxLength(8))),
 });
 export type OrchestrationV2ThreadLaunchInput = typeof OrchestrationV2ThreadLaunchInput.Type;
 

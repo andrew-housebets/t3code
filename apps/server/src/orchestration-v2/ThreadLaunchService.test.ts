@@ -2000,6 +2000,33 @@ it.effect("replays a server-allocated launch", () =>
   }),
 );
 
+it.effect("tags a launched thread before its first message creates a run", () => {
+  const harness = makeHarness();
+  return Effect.gen(function* () {
+    const launches = yield* ThreadLaunch.ThreadLaunchService;
+    const threads = yield* ThreadManagement.ThreadManagementService;
+    const input = {
+      ...launchInput({ command: "command:tagged", thread: "thread:tagged", message: "Plan it" }),
+      tags: ["coordinator"],
+    };
+    const first = yield* launches.launch(input);
+    const order = yield* threads.streamStoredEventsFrom({ threadId: first.threadId }).pipe(
+      Stream.map((stored) => stored.event.type),
+      Stream.filter((type) => type === "thread.tags-updated" || type === "run.created"),
+      Stream.take(2),
+      Stream.runCollect,
+    );
+    assert.deepEqual(Array.from(order), ["thread.tags-updated", "run.created"]);
+    assert.deepEqual(first.projection.thread.tags, ["coordinator"]);
+
+    const retry = yield* launches.launch(input);
+    assert.isTrue(retry.resumed);
+    assert.deepEqual(retry.projection.thread.tags, ["coordinator"]);
+    assert.equal(retry.projection.runs.length, 1);
+    assert.equal(retry.projection.messages.length, 1);
+  }).pipe(Effect.provide(harness.layer));
+});
+
 it.effect("replays an accepted launch after the project disables the instance", () => {
   const harness = makeHarness();
   return Effect.gen(function* () {

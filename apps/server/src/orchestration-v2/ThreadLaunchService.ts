@@ -20,6 +20,7 @@ import {
   type RuntimeMode,
   type ScheduledTaskId,
   ThreadId,
+  type ThreadTag,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -94,6 +95,8 @@ export interface ThreadLaunchInput {
   readonly interactionMode: ProviderInteractionMode;
   readonly workspaceStrategy: ThreadLaunchWorkspaceStrategy;
   readonly initialMessage?: ThreadLaunchInitialMessage;
+  /** Set before the first message, so its run already sees them. */
+  readonly tags?: ReadonlyArray<ThreadTag>;
   readonly importedNativeThread?: {
     readonly ref: {
       readonly driver: ProviderDriverKind;
@@ -1269,6 +1272,7 @@ const make = Effect.gen(function* () {
                 ...(input.initialMessage.context ? { context: input.initialMessage.context } : {}),
                 ...(input.generateTitle === true ? { titleSeed: input.title } : {}),
               };
+        const tags = input.tags ?? [];
         const claimDispatch =
           input.reuseExistingThread === true
             ? threads.dispatch({
@@ -1297,7 +1301,7 @@ const make = Effect.gen(function* () {
                   : { delegatedFrom: input.delegatedFrom }),
                 createdBy: input.createdBy,
                 creationSource: input.creationSource,
-                ...(initialMessage === undefined
+                ...(initialMessage === undefined || tags.length > 0
                   ? {}
                   : { initialMessage: { ...initialMessage, workspaceStrategy } }),
               });
@@ -1315,6 +1319,17 @@ const make = Effect.gen(function* () {
             .threadId ?? candidateThreadId;
         if (project.id !== input.projectId) {
           return yield* mapError(input, "resolve-project", threadId)("Project identity changed.");
+        }
+        for (const tag of tags) {
+          yield* threads
+            .dispatch({
+              type: "thread.tag.set",
+              commandId: CommandId.make(`${input.commandId}:tag:${tag}`),
+              threadId,
+              tag,
+              tagged: true,
+            })
+            .pipe(Effect.mapError(mapError(input, "update-thread", threadId)));
         }
         let runId: RunId | null = null;
         let messageSequence: number | undefined;
