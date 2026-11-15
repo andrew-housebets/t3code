@@ -200,6 +200,8 @@ export default defineConfig({
       "apps/mobile/modules/t3-highlights/cpp/generated/**",
       "apps/mobile/modules/t3-highlights/nitrogen/generated/**",
       "*.icon/**",
+      // The upstream theme copy and the JSON generated from it stay byte for byte.
+      "themes/claude-desktop/*.json",
     ],
     sortPackageJson: {},
     overrides: [
