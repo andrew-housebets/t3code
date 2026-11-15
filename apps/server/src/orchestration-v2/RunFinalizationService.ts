@@ -64,6 +64,8 @@ const make = Effect.gen(function* () {
   const finalize: RunFinalizationService["Service"]["finalize"] = Effect.fn(
     "RunFinalizationService.finalize",
   )(function* (input) {
+    // Before the capture, so the delegated task's completion follows the artifacts it produced.
+    yield* artifactRecorder.recordRun({ threadId: input.threadId, runId: input.runId });
     yield* checkpointCapture
       .execute(input)
       .pipe(
@@ -71,9 +73,6 @@ const make = Effect.gen(function* () {
           (cause) => new RunFinalizationError({ ...input, operation: "capture-checkpoint", cause }),
         ),
       );
-    yield* artifactRecorder
-      .recordRun({ threadId: input.threadId, runId: input.runId })
-      .pipe(FiberSet.run(refreshes));
     const projection = yield* projections
       .getCheckpointContext(input.threadId)
       .pipe(
