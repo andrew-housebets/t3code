@@ -355,6 +355,14 @@
       "types": "./src/state/threadInbox.ts",
       "default": "./src/state/threadInbox.ts"
     },
+    "./state/coordinator-ui": {
+      "types": "./src/state/coordinatorUi.ts",
+      "default": "./src/state/coordinatorUi.ts"
+    },
+    "./state/project-library": {
+      "types": "./src/state/projectLibrary.ts",
+      "default": "./src/state/projectLibrary.ts"
+    },
     "./state/thread-overview": {
       "types": "./src/state/threadOverview.ts",
       "default": "./src/state/threadOverview.ts"

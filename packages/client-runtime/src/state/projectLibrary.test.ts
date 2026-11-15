@@ -1,7 +1,7 @@
 import type { ProjectLibraryEntry } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { visibleLibraryRows } from "./projectLibrary.logic";
+import { visibleLibraryRows } from "./projectLibrary.ts";
 
 const file = (path: string): ProjectLibraryEntry => ({
   path,

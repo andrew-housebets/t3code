@@ -24,7 +24,7 @@ export function visibleLibraryRows(
   );
   const rows: Array<ProjectLibraryRow> = [];
   const walk = (folder: string, depth: number) => {
-    const children = (childrenOf[folder] ?? []).toSorted(
+    const children = [...(childrenOf[folder] ?? [])].sort(
       (left, right) =>
         Number(left.kind === "file") - Number(right.kind === "file") ||
         collator.compare(left.path, right.path),

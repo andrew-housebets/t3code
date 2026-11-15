@@ -1,3 +1,11 @@
+import {
+  isCoordinatorDraftId,
+  type KeySet,
+  persistedObjectOf,
+  type ThreadOverviewGroupCollapse,
+  toggleThreadOverviewGroup,
+  withKey,
+} from "@t3tools/client-runtime/state/coordinator-ui";
 import type { ThreadOverviewGroup } from "@t3tools/client-runtime/state/thread-overview";
 import type { ThreadId } from "@t3tools/contracts";
 import { create } from "zustand";
@@ -5,30 +13,12 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 import { resolveStorage } from "../../lib/storage";
 
-type KeySet = Readonly<Record<string, true>>;
-
-const withKey = (set: KeySet, key: string, present: boolean): KeySet => {
-  if (present === key in set) return set;
-  if (present) return { ...set, [key]: true };
-  const { [key]: _removed, ...rest } = set;
-  return rest;
-};
-
-const objectOf = <T = KeySet>(value: unknown): T =>
-  (typeof value === "object" && value !== null && !Array.isArray(value) ? value : {}) as T;
-
-type GroupCollapse = Readonly<Partial<Record<ThreadOverviewGroup, boolean>>>;
-
-/** Resolved threads start folded away; every other group starts open. */
-export const isGroupCollapsed = (stored: GroupCollapse | undefined, group: ThreadOverviewGroup) =>
-  stored?.[group] ?? group === "resolved";
-
 interface CoordinatorStoreState {
   /** Drafts started as coordinators; the tag goes on at launch. */
   readonly draftIds: KeySet;
   /** Coordinator threads whose Overview this browser already opened once. */
   readonly overviewShownThreadKeys: KeySet;
-  readonly collapsedGroups: Readonly<Record<string, GroupCollapse>>;
+  readonly collapsedGroups: Readonly<Record<string, ThreadOverviewGroupCollapse>>;
   /** The thread whose artifacts a coordinator's Library shows; not persisted. */
   readonly libraryFilters: Readonly<Record<string, ThreadId>>;
   readonly setLibraryFilter: (threadKey: string, threadId: ThreadId | null) => void;
@@ -52,15 +42,12 @@ export const useCoordinatorStore = create<CoordinatorStoreState>()(
           return { libraryFilters: threadId === null ? rest : { ...rest, [threadKey]: threadId } };
         }),
       toggleGroup: (threadKey, group) =>
-        set((state) => {
-          const stored = state.collapsedGroups[threadKey];
-          return {
-            collapsedGroups: {
-              ...state.collapsedGroups,
-              [threadKey]: { ...stored, [group]: !isGroupCollapsed(stored, group) },
-            },
-          };
-        }),
+        set((state) => ({
+          collapsedGroups: {
+            ...state.collapsedGroups,
+            [threadKey]: toggleThreadOverviewGroup(state.collapsedGroups[threadKey], group),
+          },
+        })),
       markDraft: (draftId, coordinator) =>
         set((state) => ({ draftIds: withKey(state.draftIds, draftId, coordinator) })),
       claimFirstOverview: (threadKey) => {
@@ -82,12 +69,12 @@ export const useCoordinatorStore = create<CoordinatorStoreState>()(
         collapsedGroups,
       }),
       merge: (persisted, current) => {
-        const stored = objectOf<Partial<Record<string, unknown>>>(persisted);
+        const stored = persistedObjectOf<Partial<Record<string, unknown>>>(persisted);
         return {
           ...current,
-          draftIds: objectOf(stored.draftIds),
-          overviewShownThreadKeys: objectOf(stored.overviewShownThreadKeys),
-          collapsedGroups: objectOf<CoordinatorStoreState["collapsedGroups"]>(
+          draftIds: persistedObjectOf(stored.draftIds),
+          overviewShownThreadKeys: persistedObjectOf(stored.overviewShownThreadKeys),
+          collapsedGroups: persistedObjectOf<CoordinatorStoreState["collapsedGroups"]>(
             stored.collapsedGroups,
           ),
         };
@@ -97,7 +84,7 @@ export const useCoordinatorStore = create<CoordinatorStoreState>()(
 );
 
 export const isCoordinatorDraft = (draftId: string | null) =>
-  draftId !== null && draftId in useCoordinatorStore.getState().draftIds;
+  isCoordinatorDraftId(useCoordinatorStore.getState().draftIds, draftId);
 
 export const useIsCoordinatorDraft = (draftId: string | null) =>
-  useCoordinatorStore((state) => draftId !== null && draftId in state.draftIds);
+  useCoordinatorStore((state) => isCoordinatorDraftId(state.draftIds, draftId));

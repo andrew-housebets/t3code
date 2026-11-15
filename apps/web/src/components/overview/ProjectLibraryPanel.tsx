@@ -24,7 +24,7 @@ import {
   removeFromLibrary,
   useProjectArtifacts,
 } from "./projectArtifacts";
-import { visibleLibraryRows } from "./projectLibrary.logic";
+import { visibleLibraryRows } from "@t3tools/client-runtime/state/project-library";
 
 function ArtifactOwner(props: {
   readonly threadRef: ScopedThreadRef;

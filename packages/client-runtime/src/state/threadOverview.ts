@@ -24,6 +24,23 @@ const THREAD_OVERVIEW_GROUPS = [
 ] as const;
 export type ThreadOverviewGroup = (typeof THREAD_OVERVIEW_GROUPS)[number];
 
+/** What each client draws for a group; it maps the icon and tone to its own glyphs and colours. */
+export const THREAD_OVERVIEW_GROUP_PRESENTATION = {
+  waiting_on_you: { label: "Waiting on you", icon: "alert", tone: "warning" },
+  ready_for_review: { label: "Ready for review", icon: "pull-request", tone: "info" },
+  working: { label: "Working", icon: "in-progress", tone: "info" },
+  landing: { label: "Landing", icon: "pull-request", tone: "success" },
+  idle: { label: "Idle", icon: "idle", tone: "muted" },
+  resolved: { label: "Resolved", icon: "done", tone: "muted" },
+} as const satisfies Record<
+  ThreadOverviewGroup,
+  {
+    readonly label: string;
+    readonly icon: "alert" | "pull-request" | "in-progress" | "idle" | "done";
+    readonly tone: "warning" | "info" | "success" | "muted";
+  }
+>;
+
 /** Threads a coordinator delegated with `delegate_task`; provider-native subagents are read-only. */
 export function isThreadOverviewChild(
   thread: OrchestrationV2ThreadShell,

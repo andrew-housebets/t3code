@@ -10,8 +10,10 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { threadFamilyRead } from "@t3tools/client-runtime/state/threads";
+import { isThreadOverviewGroupCollapsed } from "@t3tools/client-runtime/state/coordinator-ui";
 import {
   groupThreadOverview,
+  THREAD_OVERVIEW_GROUP_PRESENTATION,
   threadOverviewArtifacts,
   threadOverviewStatusLine,
   type ThreadOverviewGroup,
@@ -48,30 +50,27 @@ import { Button } from "../ui/button";
 import { Spinner } from "../ui/spinner";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-import { isGroupCollapsed, useCoordinatorStore } from "./coordinatorStore";
+import { useCoordinatorStore } from "./coordinatorStore";
 import { ProjectArtifactsStrip } from "./ProjectArtifactsStrip";
 import { openProjectArtifact, openProjectLibrary, useProjectArtifacts } from "./projectArtifacts";
 import { useThreadOverviewChildren } from "./threadOverviewState";
 
-const GROUPS = {
-  waiting_on_you: {
-    label: "Waiting on you",
-    Icon: CircleAlertIcon,
-    tone: "text-warning",
-  },
-  ready_for_review: {
-    label: "Ready for review",
-    Icon: PullRequestGlyph.pullRequest,
-    tone: "text-info",
-  },
-  working: { label: "Working", Icon: CircleDotDashedIcon, tone: "text-info" },
-  landing: { label: "Landing", Icon: PullRequestGlyph.pullRequest, tone: "text-success" },
-  idle: { label: "Idle", Icon: CircleDashedIcon, tone: "text-muted-foreground" },
-  resolved: { label: "Resolved", Icon: CircleCheckIcon, tone: "text-muted-foreground" },
-} satisfies Record<
-  ThreadOverviewGroup,
-  { readonly label: string; readonly Icon: LucideIcon; readonly tone: string }
->;
+type GroupPresentation = (typeof THREAD_OVERVIEW_GROUP_PRESENTATION)[ThreadOverviewGroup];
+
+const GROUP_ICONS = {
+  alert: CircleAlertIcon,
+  "pull-request": PullRequestGlyph.pullRequest,
+  "in-progress": CircleDotDashedIcon,
+  idle: CircleDashedIcon,
+  done: CircleCheckIcon,
+} satisfies Record<GroupPresentation["icon"], LucideIcon>;
+
+const GROUP_TONES = {
+  warning: "text-warning",
+  info: "text-info",
+  success: "text-success",
+  muted: "text-muted-foreground",
+} satisfies Record<GroupPresentation["tone"], string>;
 
 type RowAction = "resolve" | "reopen" | "stop";
 
@@ -126,7 +125,8 @@ function OverviewRow(props: {
   readonly onAction: (action: RowAction) => void;
 }) {
   const { thread, group } = props;
-  const { Icon, tone } = GROUPS[group];
+  const { label, icon, tone } = THREAD_OVERVIEW_GROUP_PRESENTATION[group];
+  const Icon = GROUP_ICONS[icon];
   const status = thread.source.activityRunStatus ?? thread.source.status;
   const line =
     threadOverviewStatusLine(thread, props.subagent) ??
@@ -144,7 +144,7 @@ function OverviewRow(props: {
         onClick={props.onOpen}
         className="flex w-full min-w-0 items-start gap-2 rounded-md px-3 py-1.5 text-left hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
       >
-        <Icon aria-label={GROUPS[group].label} className={cn("mt-0.5 size-3.5 shrink-0", tone)} />
+        <Icon aria-label={label} className={cn("mt-0.5 size-3.5 shrink-0", GROUP_TONES[tone])} />
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="flex min-w-0 items-center gap-1.5">
             <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
@@ -343,7 +343,7 @@ export function ThreadOverviewPanel({ threadRef }: { readonly threadRef: ScopedT
         />
       ) : null}
       {groups.map(({ group, threads }) => {
-        const folded = isGroupCollapsed(collapsed, group);
+        const folded = isThreadOverviewGroupCollapsed(collapsed, group);
         const headingId = `thread-overview-${threadKey}-${group}`;
         return (
           <section key={group} data-thread-overview-group={group} aria-labelledby={headingId}>
@@ -355,7 +355,8 @@ export function ThreadOverviewPanel({ threadRef }: { readonly threadRef: ScopedT
                 className="flex w-full items-center gap-1 px-3 py-1.5 text-left text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
               >
                 <span>
-                  {GROUPS[group].label} · <span className="tabular-nums">{threads.length}</span>
+                  {THREAD_OVERVIEW_GROUP_PRESENTATION[group].label} ·{" "}
+                  <span className="tabular-nums">{threads.length}</span>
                 </span>
                 <ChevronDownIcon
                   aria-hidden
