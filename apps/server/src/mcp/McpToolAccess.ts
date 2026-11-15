@@ -25,6 +25,7 @@ import { assertNotLinked, assertSameLink, callerLinkOrigin } from "./linkOrigin.
 import * as McpInvocationContext from "./McpInvocationContext.ts";
 import { resolveInteractionMode, resolveRuntimeMode } from "./delegatedTaskModes.ts";
 import {
+  assertCoordinatorDelegated,
   assertFullAccess,
   assertLiveCaller,
   assertTargetWithinLimits,
@@ -210,6 +211,7 @@ export const writesThreads = <P, A, E, R>(
           if (target !== null && target.deletedAt === null) {
             yield* assertTargetWithinLimits(caller.limits, target);
             yield* assertSameLink(caller, target);
+            yield* assertCoordinatorDelegated(caller, target);
           }
         }
         // Modes can rise after this check; the orchestrator rechecks under lock and records refusal before handlers wrap errors.

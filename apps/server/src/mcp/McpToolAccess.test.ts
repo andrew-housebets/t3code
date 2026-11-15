@@ -39,7 +39,24 @@ const backgroundShell = (threadId: ThreadId, providerInstanceId: ProviderInstanc
   ],
 });
 
+const coordinatorThreadId = ThreadId.make("thread:coordinator");
+const delegatedThreadId = ThreadId.make("thread:delegated");
+const nestedThreadId = ThreadId.make("thread:delegated-by-delegated");
+const forkedThreadId = ThreadId.make("thread:coordinator-fork");
+const childOf = (
+  threadId: ThreadId,
+  parentThreadId: ThreadId,
+  relationshipToParent: "subagent" | "fork" = "subagent",
+) => ({
+  ...liveThreadShell(threadId),
+  lineage: { rootThreadId: coordinatorThreadId, parentThreadId, relationshipToParent },
+});
+
 const shells = new Map([
+  [coordinatorThreadId, { ...liveThreadShell(coordinatorThreadId), tags: ["coordinator"] }],
+  [delegatedThreadId, childOf(delegatedThreadId, coordinatorThreadId)],
+  [nestedThreadId, childOf(nestedThreadId, delegatedThreadId)],
+  [forkedThreadId, childOf(forkedThreadId, coordinatorThreadId, "fork")],
   [supervisedThreadId, liveThreadShell(supervisedThreadId, { runtimeMode: "approval-required" })],
   [
     planThreadId,
@@ -218,6 +235,7 @@ const call = (
   );
 
 const supervised = threadCaller(supervisedThreadId);
+const coordinator = threadCaller(coordinatorThreadId);
 const plan = threadCaller(planThreadId);
 const fullAccess = threadCaller(fullAccessThreadId);
 const ended = threadCaller(endedThreadId);
@@ -299,6 +317,12 @@ it.effect.each([
     "runtime_mode_escalation_denied",
   ],
   ["writes_threads", supervised, { threadId: "thread:missing" }, "ran"],
+  ["writes_threads", coordinator, {}, "ran"],
+  ["writes_threads", coordinator, { threadId: delegatedThreadId }, "ran"],
+  ["writes_threads", coordinator, { threadId: nestedThreadId }, "ran"],
+  ["writes_threads", coordinator, { threadId: fullAccessThreadId }, "capability_denied"],
+  ["writes_threads", coordinator, { threadId: forkedThreadId }, "capability_denied"],
+  ["writes_threads", fullAccess, { threadId: delegatedThreadId }, "ran"],
 
   ["starts_threads", supervised, {}, "approval-required/default"],
   ["starts_threads", supervised, { runtimeMode: "full-access" }, "runtime_mode_escalation_denied"],

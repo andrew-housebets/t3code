@@ -12,6 +12,7 @@ import {
   ThreadId,
   type OrchestrationV2ThreadShell,
 } from "@t3tools/contracts";
+import { isCoordinatorThread } from "@t3tools/shared/coordinatorThread";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 
@@ -157,6 +158,32 @@ export const assertTargetWithinLimits = (
         }),
     ),
   );
+
+/** A coordinator stays read-only through other threads too, so it changes only threads it delegated, at any depth. */
+export const assertCoordinatorDelegated = Effect.fn("mcp.assertCoordinatorDelegated")(function* (
+  { caller, threads }: Caller,
+  target: OrchestrationV2ThreadShell,
+) {
+  if (caller === undefined || !isCoordinatorThread(caller)) return;
+  const seen = new Set<ThreadId>();
+  let thread: OrchestrationV2ThreadShell | null = target;
+  while (
+    thread !== null &&
+    thread.lineage.relationshipToParent === "subagent" &&
+    thread.lineage.parentThreadId !== null &&
+    !seen.has(thread.id)
+  ) {
+    if (thread.lineage.parentThreadId === caller.id) return;
+    seen.add(thread.id);
+    thread = yield* threads
+      .getThreadShell(thread.lineage.parentThreadId)
+      .pipe(Effect.mapError(unavailable));
+  }
+  return yield* new OrchestratorMcpFailure({
+    code: "capability_denied",
+    message: `A coordinator changes only threads it delegated, and "${target.id}" is not one. Start the work with delegate_task, or tell the user to act in that thread.`,
+  });
+});
 
 /** Background subagents retain credentials until provider exit; archived threads and other instances cannot act. */
 export const isLiveCallerShell = (
