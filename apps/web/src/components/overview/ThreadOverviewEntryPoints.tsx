@@ -157,7 +157,7 @@ export function ThreadOverviewHeaderButton({ threadRef }: { readonly threadRef: 
           }
         >
           <BotIcon aria-hidden />
-          Threads
+          <span className="@max-[48rem]/chat-header:sr-only">Threads</span>
           {waiting ? <span aria-hidden className="size-1.5 rounded-full bg-warning" /> : null}
         </TooltipTrigger>
         <TooltipPopup side="top">
@@ -171,12 +171,13 @@ export function ThreadOverviewHeaderButton({ threadRef }: { readonly threadRef: 
               <Button
                 size="xs"
                 variant="ghost-muted"
+                aria-label="Library"
                 onClick={() => useRightPanelStore.getState().open(threadRef, "library")}
               />
             }
           >
             <LibraryIcon aria-hidden />
-            Library
+            <span className="@max-[48rem]/chat-header:sr-only">Library</span>
           </TooltipTrigger>
           <TooltipPopup side="top">Files and docs this project's threads produced</TooltipPopup>
         </Tooltip>

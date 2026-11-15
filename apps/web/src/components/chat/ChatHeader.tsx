@@ -273,7 +273,7 @@ export const ChatHeader = memo(function ChatHeader({
     <div
       ref={breadcrumbContainerRef}
       className={cn(
-        "flex min-w-0 flex-1 items-center gap-2 sm:gap-3",
+        "@container/chat-header flex min-w-0 flex-1 items-center gap-2 sm:gap-3",
         rightPanelOpen ? "pr-10" : "pr-24",
       )}
       onContextMenu={handleHeaderContextMenu}
@@ -284,7 +284,7 @@ export const ChatHeader = memo(function ChatHeader({
       >
         {activeProject ? (
           <>
-            <WorkspaceBreadcrumbItem className="shrink">
+            <WorkspaceBreadcrumbItem className="shrink-[100]">
               <Tooltip>
                 <TooltipTrigger
                   render={
@@ -347,7 +347,7 @@ export const ChatHeader = memo(function ChatHeader({
             </WorkspaceBreadcrumbSeparator>
           </>
         ) : null}
-        <WorkspaceBreadcrumbItem current className="min-w-10 flex-1">
+        <WorkspaceBreadcrumbItem current className="min-w-10 flex-auto">
           {renamingTitle !== null ? (
             <input
               autoFocus
@@ -416,7 +416,7 @@ export const ChatHeader = memo(function ChatHeader({
                 render={<Badge data-coordinator-badge variant="secondary" size="sm" />}
               >
                 <NetworkIcon aria-hidden />
-                Coordinator
+                <span className="@max-[40rem]/chat-header:sr-only">Coordinator</span>
               </TooltipTrigger>
               <TooltipPopup side="top">
                 Plans and delegates. Each task runs in a thread of its own.
