@@ -298,6 +298,22 @@ describe("mobile themes", () => {
     }
   });
 
+  it("sends with the primary colour, except Claude's clay with a legible glyph", () => {
+    for (const themeId of [DEFAULT_MOBILE_THEME_ID, ...MOBILE_PALETTE_THEME_IDS] as const) {
+      for (const appearance of ["light", "dark"] as const) {
+        const variables = getMobileThemeVariables(themeId, appearance);
+        if (themeId === "claude") {
+          expect(variables["--color-send"]).toBe("#c4674b");
+          expect(
+            contrastRatio(variables["--color-primary-foreground"], variables["--color-send"]),
+          ).toBeGreaterThanOrEqual(3);
+        } else {
+          expect(variables["--color-send"]).toBe(variables["--color-primary"]);
+        }
+      }
+    }
+  });
+
   it("keeps the default user bubble readable in both appearances", () => {
     for (const appearance of ["light", "dark"] as const) {
       const variables = readDefaultMobileThemeVariables(appearance);

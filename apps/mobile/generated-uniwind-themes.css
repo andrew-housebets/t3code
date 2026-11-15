@@ -37,6 +37,7 @@
       --color-primary-foreground: #ffffff;
       --color-primary-text: #1b4ed8;
       --color-primary-shadow: #000000;
+      --color-send: #1b4ed8;
       --color-secondary: #fafafa;
       --color-secondary-foreground: #27272a;
       --color-secondary-border: #e4e4e7;
@@ -200,6 +201,7 @@
       --color-primary-foreground: #ffffff;
       --color-primary-text: #4b7cf3;
       --color-primary-shadow: #000000;
+      --color-send: #346bf1;
       --color-secondary: #111111;
       --color-secondary-foreground: #f5f5f5;
       --color-secondary-border: #191919;
@@ -363,6 +365,7 @@
       --color-primary-foreground: #ffffff;
       --color-primary-text: #aa1e5d;
       --color-primary-shadow: #000000;
+      --color-send: #db2777;
       --color-secondary: #f1c4e6;
       --color-secondary-foreground: #77347c;
       --color-secondary-border: #eee1ed;
@@ -526,6 +529,7 @@
       --color-primary-foreground: #fbd0e8;
       --color-primary-text: #d07ea4;
       --color-primary-shadow: #000000;
+      --color-send: #a3004c;
       --color-secondary: #362d3d;
       --color-secondary-foreground: #d4c7e1;
       --color-secondary-border: #27242c;
@@ -689,6 +693,7 @@
       --color-primary-foreground: #fffaff;
       --color-primary-text: #8d6210;
       --color-primary-shadow: #000000;
+      --color-send: #8f6410;
       --color-secondary: #e2ede7;
       --color-secondary-foreground: #241523;
       --color-secondary-border: #cbd5d1;
@@ -852,6 +857,7 @@
       --color-primary-foreground: #241523;
       --color-primary-text: #e3b34e;
       --color-primary-shadow: #000000;
+      --color-send: #e3b34e;
       --color-secondary: #2a4b39;
       --color-secondary-foreground: #fffaff;
       --color-secondary-border: #415f4f;
@@ -1015,6 +1021,7 @@
       --color-primary-foreground: #fffaff;
       --color-primary-text: #0a6f75;
       --color-primary-shadow: #000000;
+      --color-send: #0a6f75;
       --color-secondary: #e4ecf2;
       --color-secondary-foreground: #241523;
       --color-secondary-border: #cdd4dc;
@@ -1178,6 +1185,7 @@
       --color-primary-foreground: #241523;
       --color-primary-text: #5bd0d6;
       --color-primary-shadow: #000000;
+      --color-send: #5bd0d6;
       --color-secondary: #293f52;
       --color-secondary-foreground: #fffaff;
       --color-secondary-border: #405567;
@@ -1341,6 +1349,7 @@
       --color-primary-foreground: #fffaff;
       --color-primary-text: #b23535;
       --color-primary-shadow: #000000;
+      --color-send: #b23535;
       --color-secondary: #f3eae5;
       --color-secondary-foreground: #241523;
       --color-secondary-border: #ddd2ce;
@@ -1504,6 +1513,7 @@
       --color-primary-foreground: #241523;
       --color-primary-text: #f78a7a;
       --color-primary-shadow: #000000;
+      --color-send: #f78a7a;
       --color-secondary: #513728;
       --color-secondary-foreground: #fffaff;
       --color-secondary-border: #664c3f;
@@ -1667,6 +1677,7 @@
       --color-primary-foreground: #fffaff;
       --color-primary-text: #a82c87;
       --color-primary-shadow: #000000;
+      --color-send: #a82c87;
       --color-secondary: #edeaf4;
       --color-secondary-foreground: #241523;
       --color-secondary-border: #d6d1de;
@@ -1830,6 +1841,7 @@
       --color-primary-foreground: #241523;
       --color-primary-text: #f099d8;
       --color-primary-shadow: #000000;
+      --color-send: #f099d8;
       --color-secondary: #362d51;
       --color-secondary-foreground: #fffaff;
       --color-secondary-border: #4d4366;
@@ -1993,6 +2005,7 @@
       --color-primary-foreground: #ffffff;
       --color-primary-text: #206cc3;
       --color-primary-shadow: #000000;
+      --color-send: #c4674b;
       --color-secondary: #f0eee6;
       --color-secondary-foreground: #141413;
       --color-secondary-border: #e5e2d9;
@@ -2156,6 +2169,7 @@
       --color-primary-foreground: #ffffff;
       --color-primary-text: #5e9adf;
       --color-primary-shadow: #000000;
+      --color-send: #c4674b;
       --color-secondary: #262626;
       --color-secondary-foreground: #e4e4e4;
       --color-secondary-border: #363636;
