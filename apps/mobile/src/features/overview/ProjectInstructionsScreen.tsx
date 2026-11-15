@@ -12,7 +12,9 @@ import {
   type ProjectModelDefaults,
 } from "@t3tools/contracts";
 import type { StaticScreenProps } from "@react-navigation/native";
-import { useState } from "react";
+import { getPromptControlledTraits } from "@t3tools/client-runtime/model-traits";
+import { createModelSelection } from "@t3tools/shared/model";
+import { useState, type ComponentProps } from "react";
 import { Pressable, View } from "react-native";
 
 import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
@@ -22,6 +24,10 @@ import { Button } from "../../components/ui/Button";
 import * as Dialog from "../../components/ui/Dialog";
 import { Menu } from "../../components/ui/Menu";
 import { buildModelOptions, groupByProvider } from "../../lib/modelOptions";
+import {
+  pickModelKeepingOptions,
+  resolveProviderOptionDescriptors,
+} from "../../lib/providerOptions";
 import { useEnvironmentServerConfig } from "../../state/entities";
 import { projectEnvironment } from "../../state/projects";
 import { useEnvironmentQuery } from "../../state/query";
@@ -64,6 +70,8 @@ const MODEL_ROWS = [
 }>;
 
 const DEFAULT_MODEL_ACTION = "default";
+// Outside any provider's option ids, which could include "default".
+const DEFAULT_EFFORT_ACTION = "t3:default";
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : undefined);
 
@@ -108,48 +116,29 @@ function ProjectModelDefaultRows(props: {
     }
     saved.refresh();
   };
-  const labelOf = (selection: ModelSelection) => {
-    const option = options.find(
+  const optionOf = (selection: ModelSelection) =>
+    options.find(
       (candidate) =>
         candidate.selection.instanceId === selection.instanceId &&
         candidate.selection.model === selection.model,
     );
+  const labelOf = (selection: ModelSelection) => {
+    const option = optionOf(selection);
     return option ? `${option.providerLabel} · ${option.label}` : selection.model;
   };
 
   return (
     <SettingsSection title="Models">
-      {MODEL_ROWS.map(({ key, label, unset }, index) => {
+      {MODEL_ROWS.flatMap(({ key, label, unset }, index) => {
         const selection = defaults[key];
-        const row = (
-          <Pressable
+        const modelRow = (
+          <MenuRow
             key={key}
-            accessibilityRole="button"
-            accessibilityLabel={`${label}, ${selection === null ? "Default" : labelOf(selection)}`}
-            accessibilityHint={selection === null ? unset : undefined}
-            accessibilityState={{ disabled: !canWrite }}
-            className={
-              index === 0
-                ? "flex-row items-center gap-3 px-4 py-3 active:bg-subtle"
-                : "flex-row items-center gap-3 border-t border-border-subtle px-4 py-3 active:bg-subtle"
-            }
-          >
-            <View className="min-w-0 flex-1 gap-0.5">
-              <Text className="text-base text-foreground">{label}</Text>
-              <Text className="text-sm text-foreground-muted" numberOfLines={2}>
-                {selection === null ? unset : labelOf(selection)}
-              </Text>
-            </View>
-            {canWrite ? (
-              <SymbolView name="chevron.down" size={13} tintColorClassName="accent-icon-muted" />
-            ) : null}
-          </Pressable>
-        );
-        if (!canWrite) return row;
-        return (
-          <Menu
-            key={key}
-            title={label}
+            label={label}
+            value={selection === null ? "Default" : labelOf(selection)}
+            detail={selection === null ? unset : labelOf(selection)}
+            canWrite={canWrite}
+            first={index === 0}
             actions={[
               {
                 id: DEFAULT_MODEL_ACTION,
@@ -170,20 +159,115 @@ function ProjectModelDefaultRows(props: {
                 })),
               })),
             ]}
-            onPressAction={({ nativeEvent }) => {
-              if (nativeEvent.event === DEFAULT_MODEL_ACTION) {
+            onAction={(id) => {
+              if (id === DEFAULT_MODEL_ACTION) {
                 void save({ ...defaults, [key]: null });
                 return;
               }
-              const option = options.find((candidate) => candidate.key === nativeEvent.event);
-              if (option) void save({ ...defaults, [key]: option.selection });
+              const option = options.find((candidate) => candidate.key === id);
+              if (option)
+                void save({ ...defaults, [key]: pickModelKeepingOptions(selection, option) });
             }}
-          >
-            {row}
-          </Menu>
+          />
         );
+        const effort =
+          selection === null
+            ? null
+            : getPromptControlledTraits(
+                resolveProviderOptionDescriptors({
+                  capabilities: optionOf(selection)?.capabilities,
+                  selections: selection.options,
+                }),
+                "",
+                false,
+              ).primarySelectDescriptor;
+        if (selection === null || effort === null || effort.type !== "select") return [modelRow];
+        const chosen = selection.options?.find((option) => option.id === effort.id)?.value;
+        const choices = effort.options.filter(
+          (choice) => !effort.promptInjectedValues?.includes(choice.id),
+        );
+        const chosenChoice = choices.find((choice) => choice.id === chosen);
+        const chosenLabel = chosenChoice?.label ?? "Default";
+        return [
+          modelRow,
+          <MenuRow
+            key={`${key}:effort`}
+            label={effort.label}
+            value={chosenLabel}
+            detail={chosenLabel}
+            canWrite={canWrite}
+            first={false}
+            actions={[
+              {
+                id: DEFAULT_EFFORT_ACTION,
+                title: "Default",
+                state: chosenChoice === undefined ? "on" : "off",
+              },
+              ...choices.map((choice) => ({
+                id: choice.id,
+                title: choice.label,
+                state: choice === chosenChoice ? ("on" as const) : ("off" as const),
+              })),
+            ]}
+            onAction={(id) => {
+              const others = (selection.options ?? []).filter((option) => option.id !== effort.id);
+              void save({
+                ...defaults,
+                [key]: createModelSelection(
+                  selection.instanceId,
+                  selection.model,
+                  id === DEFAULT_EFFORT_ACTION ? others : [...others, { id: effort.id, value: id }],
+                ),
+              });
+            }}
+          />,
+        ];
       })}
     </SettingsSection>
+  );
+}
+
+function MenuRow(props: {
+  readonly label: string;
+  readonly value: string;
+  readonly detail: string;
+  readonly canWrite: boolean;
+  readonly first: boolean;
+  readonly actions: ComponentProps<typeof Menu>["actions"];
+  readonly onAction: (id: string) => void;
+}) {
+  const row = (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${props.label}, ${props.value}`}
+      accessibilityHint={props.detail === props.value ? undefined : props.detail}
+      accessibilityState={{ disabled: !props.canWrite }}
+      className={
+        props.first
+          ? "flex-row items-center gap-3 px-4 py-3 active:bg-subtle"
+          : "flex-row items-center gap-3 border-t border-border-subtle px-4 py-3 active:bg-subtle"
+      }
+    >
+      <View className="min-w-0 flex-1 gap-0.5">
+        <Text className="text-base text-foreground">{props.label}</Text>
+        <Text className="text-sm text-foreground-muted" numberOfLines={2}>
+          {props.detail}
+        </Text>
+      </View>
+      {props.canWrite ? (
+        <SymbolView name="chevron.down" size={13} tintColorClassName="accent-icon-muted" />
+      ) : null}
+    </Pressable>
+  );
+  if (!props.canWrite) return row;
+  return (
+    <Menu
+      title={props.label}
+      actions={props.actions}
+      onPressAction={({ nativeEvent }) => props.onAction(nativeEvent.event)}
+    >
+      {row}
+    </Menu>
   );
 }
 
