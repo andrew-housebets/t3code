@@ -76,10 +76,8 @@ import {
 } from "./threadListV2";
 import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
 import { NativeScrollView } from "../../native/NativeScrollViewMarker";
-import { useNavigation } from "@react-navigation/native";
-import { openSettings } from "../settings/settings-navigation";
-import { DrawerNavigationRows, DrawerSectionLabel } from "./DrawerNavigationRows";
-import { drawerPinnedProjects, drawerRecentsIndex } from "./drawerSections";
+import { DrawerNavigationHeader, DrawerSectionLabel } from "./DrawerNavigationRows";
+import { drawerRecentsIndex } from "./drawerSections";
 
 type SidebarListItem =
   | ThreadListV2ListItem
@@ -314,12 +312,8 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
         ]
       : threadListV2Items;
 
-  const navigation = useNavigation();
-  const pinnedProjects = useMemo(
-    () => drawerPinnedProjects(projects, threads),
-    [projects, threads],
-  );
-  const recentsIndex = drawerRecentsIndex(listItems);
+  const searching = props.searchQuery.trim().length > 0;
+  const recentsIndex = searching ? null : drawerRecentsIndex(listItems);
   const displayItems: readonly SidebarListItem[] =
     recentsIndex === null
       ? listItems
@@ -328,52 +322,16 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
           { type: "section-label", key: "recents-label", label: "Recents" },
           ...listItems.slice(recentsIndex),
         ];
-  const selectedThread =
-    props.selectedThreadKey === null
-      ? undefined
-      : threads.find(
-          (thread) => scopedThreadKey(thread.environmentId, thread.id) === props.selectedThreadKey,
-        );
-  const filteredProjectRef =
-    selectedProjectScope?.projectRefs.length === 1
-      ? selectedProjectScope.projectRefs[0]
-      : undefined;
-  const artifactsProject =
-    filteredProjectRef ??
-    (selectedThread === undefined
-      ? undefined
-      : { environmentId: selectedThread.environmentId, projectId: selectedThread.projectId });
   const drawerHeader = (
-    <DrawerNavigationRows
-      onOpenProjects={() => openSettings(navigation, "SettingsProjectOverview")}
-      onOpenArtifacts={
-        artifactsProject === undefined
-          ? null
-          : () =>
-              navigation.navigate("ThreadOverview", {
-                environmentId: String(artifactsProject.environmentId),
-                projectId: String(artifactsProject.projectId),
-                tab: "library",
-              })
-      }
-      onOpenScheduled={() => openSettings(navigation, "SettingsScheduledTasks")}
-      pinnedProjects={pinnedProjects}
+    <DrawerNavigationHeader
+      projects={projects}
+      threads={threads}
+      projectScopes={projectScopes}
+      selectedProjectScope={selectedProjectScope}
+      selectedThreadKey={props.selectedThreadKey}
       hasPinnedThreads={recentsIndex !== 0 && listItems.length > 0}
-      onSelectPinnedProject={({ project, coordinatorThreadId }) => {
-        if (coordinatorThreadId !== null) {
-          selectDetail({
-            name: "Thread",
-            params: { environmentId: String(project.environmentId), threadId: coordinatorThreadId },
-          });
-          return;
-        }
-        const scope = projectScopes.find((candidate) =>
-          candidate.projectRefs.some(
-            (ref) => ref.environmentId === project.environmentId && ref.projectId === project.id,
-          ),
-        );
-        if (scope !== undefined) setSelectedProjectKey(scope.key);
-      }}
+      searching={searching}
+      onSelectProjectKey={setSelectedProjectKey}
     />
   );
 

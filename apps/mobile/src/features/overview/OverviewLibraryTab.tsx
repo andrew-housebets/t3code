@@ -59,7 +59,7 @@ async function addLibraryFile(
       supportsImageUploads: true,
     });
     const attachmentId = prepared.status === "ready" ? prepared.pendingAttachmentIds[0] : undefined;
-    if (attachmentId === undefined) return;
+    if (attachmentId === undefined) return fail("The upload did not finish.");
     let result = await add(attachmentId, file.name, false);
     if (
       result._tag === "Failure" &&
@@ -107,6 +107,33 @@ export function useAddLibraryFiles(target: OverviewTarget, onAdded: () => void) 
   return { allowed, adding, pick };
 }
 
+/** Library files open in the file viewer, HTML renders in the attachment viewer. */
+export function useOpenProjectArtifact(target: OverviewTarget) {
+  const navigation = useNavigation();
+  const openFile = (libraryPath: string, path: string) =>
+    navigation.navigate("ThreadFile", {
+      environmentId: String(target.environmentId),
+      ...(target.threadId === null ? {} : { threadId: String(target.threadId) }),
+      cwd: libraryPath,
+      path: path.split("/"),
+    });
+  return (libraryPath: string, artifact: ProjectArtifact | { readonly path: string }) => {
+    if (!("source" in artifact) || artifact.source !== "html_render") {
+      return openFile(libraryPath, artifact.path);
+    }
+    const threadId = artifact.threadId ?? target.threadId;
+    if (threadId === null) return;
+    navigation.navigate("ThreadAttachment", {
+      environmentId: String(target.environmentId),
+      threadId: String(threadId),
+      attachmentId: artifact.path,
+      name: htmlRenderFileName(artifact.title),
+      mimeType: "text/html",
+      sizeBytes: String(Math.max(1, artifact.sizeBytes ?? 1)),
+    });
+  };
+}
+
 export function OverviewLibraryTab(props: {
   readonly target: OverviewTarget;
   readonly listing: EnvironmentQueryView<ProjectArtifactListing>;
@@ -114,7 +141,7 @@ export function OverviewLibraryTab(props: {
   readonly onClearOwner: () => void;
 }) {
   const { target, listing } = props;
-  const navigation = useNavigation();
+  const open = useOpenProjectArtifact(target);
   const nowMs = useNowMinuteMs();
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   const canRemove = useAtomValue(
@@ -147,26 +174,8 @@ export function OverviewLibraryTab(props: {
       ? null
       : artifacts.filter((artifact) => artifact.threadId === props.ownerThreadId);
 
-  const openFile = (path: string) =>
-    navigation.navigate("ThreadFile", {
-      environmentId: String(target.environmentId),
-      ...(target.threadId === null ? {} : { threadId: String(target.threadId) }),
-      cwd: library.path,
-      path: path.split("/"),
-    });
-  const openArtifact = (artifact: ProjectArtifact) => {
-    if (artifact.source !== "html_render") return openFile(artifact.path);
-    const threadId = artifact.threadId ?? target.threadId;
-    if (threadId === null) return;
-    navigation.navigate("ThreadAttachment", {
-      environmentId: String(target.environmentId),
-      threadId: String(threadId),
-      attachmentId: artifact.path,
-      name: htmlRenderFileName(artifact.title),
-      mimeType: "text/html",
-      sizeBytes: String(Math.max(1, artifact.sizeBytes ?? 1)),
-    });
-  };
+  const openFile = (path: string) => open(library.path, { path });
+  const openArtifact = (artifact: ProjectArtifact) => open(library.path, artifact);
   const confirmRemove = (path: string) =>
     Dialog.confirm({
       title: `Remove ${path}?`,

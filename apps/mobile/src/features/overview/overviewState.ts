@@ -102,6 +102,10 @@ const entryStateAtomFamily = Atom.family((key: string) =>
   }).pipe(Atom.withLabel(`mobile-thread-overview-entry:${key}`)),
 );
 
-export function useThreadOverviewEntryState(ref: ScopedThreadRef): ThreadOverviewEntryState {
-  return useAtomValue(entryStateAtomFamily(threadKey(ref)));
+const HIDDEN_ENTRY_ATOM = Atom.make<ThreadOverviewEntryState>("hidden").pipe(
+  Atom.withLabel("mobile-thread-overview-entry:none"),
+);
+
+export function useThreadOverviewEntryState(ref: ScopedThreadRef | null): ThreadOverviewEntryState {
+  return useAtomValue(ref === null ? HIDDEN_ENTRY_ATOM : entryStateAtomFamily(threadKey(ref)));
 }

@@ -54,7 +54,11 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { useThreadListActions } from "../home/useThreadListActions";
 import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
 import { PullRequestGlyph } from "../pull-requests/pullRequestGlyphs";
-import { OverviewLibraryTab, useAddLibraryFiles } from "./OverviewLibraryTab";
+import {
+  OverviewLibraryTab,
+  useAddLibraryFiles,
+  useOpenProjectArtifact,
+} from "./OverviewLibraryTab";
 import { OverviewScheduledTab } from "./OverviewScheduledTab";
 import {
   useMountedThreadFamily,
@@ -186,6 +190,7 @@ export function ThreadOverview(props: {
           <OverviewThreadsTab
             threadRef={scopeThreadRef(target.environmentId, target.threadId)}
             artifacts={listing.data?.artifacts ?? null}
+            libraryPath={listing.data?.library.path ?? null}
             onRefreshArtifacts={listing.refresh}
             onOpenLibrary={openLibraryFor}
             target={target}
@@ -209,6 +214,7 @@ function OverviewThreadsTab(props: {
   readonly threadRef: ScopedThreadRef;
   readonly target: OverviewTarget;
   readonly artifacts: ReadonlyArray<ProjectArtifact> | null;
+  readonly libraryPath: string | null;
   readonly onRefreshArtifacts: () => void;
   readonly onOpenLibrary: (ownerThreadId: ThreadId | null) => void;
 }) {
@@ -223,6 +229,7 @@ function OverviewThreadsTab(props: {
   const [collapsed, setCollapsed] = useState<ThreadOverviewGroupCollapse>({});
   const nowMs = useNowMinuteMs();
   const selectDetail = useSelectWorkspaceDetail();
+  const openArtifact = useOpenProjectArtifact(props.target);
   const { settleThread, unsettleThread } = useThreadListActions();
   const interruptTurn = useAtomCommand(threadEnvironment.interruptTurn, { reportFailure: false });
   const groups = groupThreadOverview(children);
@@ -243,8 +250,7 @@ function OverviewThreadsTab(props: {
 
   const runAction = async (thread: EnvironmentThreadShell, action: RowAction) => {
     if (action === "resolve" || action === "reopen") {
-      const done = await (action === "resolve" ? settleThread(thread) : unsettleThread(thread));
-      if (!done) Dialog.alert(ROW_ACTIONS[action].failure);
+      await (action === "resolve" ? settleThread(thread) : unsettleThread(thread));
       return;
     }
     const agent = subagentByChild.get(thread.id);
@@ -313,7 +319,11 @@ function OverviewThreadsTab(props: {
                   key={artifact.id}
                   accessibilityRole="button"
                   accessibilityLabel={`Open ${artifact.title}`}
-                  onPress={() => props.onOpenLibrary(artifact.threadId)}
+                  onPress={() =>
+                    props.libraryPath === null
+                      ? props.onOpenLibrary(artifact.threadId)
+                      : openArtifact(props.libraryPath, artifact)
+                  }
                   className="w-36 gap-1.5 active:opacity-70"
                 >
                   <View className="h-24 items-center justify-center rounded-xl border border-border bg-card">

@@ -65,6 +65,7 @@ import { useThreadListV2 } from "../threads/useThreadListV2";
 import { useThreadListNow } from "../threads/use-thread-list-now";
 import { useSearchScrollRestoration } from "../layout/workspace/useSearchScrollRestoration";
 import { useThreadJumpShortcuts } from "../keyboard/threadKeyboardShortcuts";
+import { DrawerNavigationHeader } from "../threads/DrawerNavigationRows";
 import { usePendingThreadOrder } from "../../state/thread-order";
 import { threadListEnvironmentsAtom } from "../../state/presentation";
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
@@ -674,6 +675,22 @@ export function HomeScreen(props: HomeScreenProps) {
   const v2ListHeader = (
     <>
       {listHeader}
+      {workspace ? (
+        <View className={sidebarSurface ? "px-2" : "px-3"}>
+          <DrawerNavigationHeader
+            projects={props.projects}
+            threads={props.threads}
+            projectScopes={projectScopes}
+            selectedProjectScope={v2ScopedProjectGroup}
+            selectedThreadKey={selectedThreadKey}
+            hasPinnedThreads={threadListV2Items.some(
+              (item) => item.type === "v2-thread" && item.item.pinned,
+            )}
+            searching={hasSearchQuery}
+            onSelectProjectKey={props.onProjectChange}
+          />
+        </View>
+      ) : null}
       {Platform.OS === "ios" && workspace ? (
         <ThreadListFilters
           gutter={sidebarSurface ? 8 : 0}

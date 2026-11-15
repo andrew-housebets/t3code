@@ -1,3 +1,6 @@
+import { COORDINATOR_THREAD_TAG } from "@t3tools/shared/coordinatorThread";
+
+import { setCoordinatorDraft } from "./coordinator-drafts";
 import type { QueuedThreadMessage } from "./thread-outbox-model";
 import { scopedThreadKey } from "../lib/scopedEntities";
 import { restoredNewTaskDraftKey } from "./new-task-draft-key";
@@ -28,6 +31,8 @@ export async function recoverFailedThreadDraft(message: QueuedThreadMessage): Pr
     source.attachments.filter((attachment) => !existingIds.has(attachment.id)),
     { restore: true },
   );
+  if (message.creation?.tags?.includes(COORDINATOR_THREAD_TAG))
+    setCoordinatorDraft(targetKey, true);
   // Recovery may exceed caps; preserve every file and leave trimming to the editor.
   await flushComposerDrafts();
   clearComposerDraftContent(sourceKey);

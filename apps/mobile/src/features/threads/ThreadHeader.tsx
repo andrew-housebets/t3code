@@ -44,7 +44,7 @@ export function ThreadHeader(props: {
   const thread = useThreadShell(threadRef);
   const coordinator = thread !== null && isCoordinatorThread(thread.source);
   useMountedThreadFamily(coordinator ? threadRef : null);
-  const overviewState = useThreadOverviewEntryState(threadRef);
+  const overviewState = useThreadOverviewEntryState(props.draft ? null : threadRef);
   const overviewVisible = props.inspectorMode === "overview" && panes.auxiliaryPaneVisible;
   const overviewAction: AppBarAction | null =
     overviewState === "hidden" || thread === null || props.onOpenOverviewInspector === undefined
@@ -92,7 +92,13 @@ export function ThreadHeader(props: {
   return (
     <AppBar
       title={props.title}
-      subtitle={coordinator ? `Coordinator · ${props.subtitle}` : props.subtitle}
+      subtitle={
+        coordinator
+          ? props.subtitle
+            ? `Coordinator · ${props.subtitle}`
+            : "Coordinator"
+          : props.subtitle
+      }
       onBackToList={goBack}
       onCompose={props.draft ? undefined : startNewTask}
       backInSplitView={
