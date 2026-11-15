@@ -27,6 +27,7 @@ import {
 } from "react";
 import {
   Platform,
+  Pressable,
   ScrollView,
   useWindowDimensions,
   View,
@@ -45,6 +46,8 @@ import {
   ANDROID_READING_MAX_WIDTH,
   deriveCenteredContentHorizontalPadding,
 } from "../../lib/layout";
+import { SymbolView } from "../../components/ui/AppSymbol";
+import { AppText as Text } from "../../components/ui/AppText";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { FloatingActionButton } from "../../components/ui/FloatingActionButton";
 import type { WorkspaceEnvironment, WorkspaceState } from "../../state/workspaceModel";
@@ -202,6 +205,41 @@ function HomeScrollView(props: ComponentProps<typeof ScrollView>) {
   );
 }
 
+const NEW_SESSION_PILL_GAP = 12;
+
+/** Claude iOS's New session pill; Android's extended New thread FAB already fills this role. */
+function NewSessionPill(props: {
+  readonly bottom: number;
+  readonly onPress: () => void;
+  readonly onHeight: (height: number) => void;
+}) {
+  return (
+    <View
+      pointerEvents="box-none"
+      className="absolute inset-x-0 items-center"
+      style={{ bottom: props.bottom }}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="New session"
+        onPress={props.onPress}
+        onLayout={(event) => props.onHeight(event.nativeEvent.layout.height)}
+        className="min-h-12 flex-row items-center gap-2 rounded-full bg-prominent-action px-5 py-3 shadow-[0_6px_20px] shadow-adaptive-black-a15-a35 active:opacity-80"
+      >
+        <SymbolView
+          name="plus"
+          size={17}
+          weight="semibold"
+          tintColorClassName="accent-prominent-action-foreground"
+        />
+        <Text className="text-base font-t3-semibold text-prominent-action-foreground">
+          New session
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
 function renderHomeScrollView(props: ScrollViewProps) {
   // The list passes its content and ref in these props; keep the marker inside the real ScrollView.
   return <HomeScrollView {...props} />;
@@ -248,6 +286,8 @@ export function HomeScreen(props: HomeScreenProps) {
     24,
     workspace?.bottomClearance ?? 0,
   );
+  const showsNewSessionPill = Platform.OS === "ios" && !sidebarSurface;
+  const [newSessionPillHeight, setNewSessionPillHeight] = useState(48);
   const searchEnvironmentIds =
     props.selectedEnvironmentId === null
       ? props.environments
@@ -860,7 +900,8 @@ export function HomeScreen(props: HomeScreenProps) {
                     (contentSideInsets?.right ?? 0) + (sidebarSurface ? 8 : 0) + androidListGutter,
                   paddingBottom:
                     Platform.OS === "ios"
-                      ? iosBottomClearance
+                      ? iosBottomClearance +
+                        (showsNewSessionPill ? newSessionPillHeight + NEW_SESSION_PILL_GAP : 0)
                       : (workspace?.bottomClearance ??
                         Math.max(insets.bottom, 16) +
                           (Platform.OS === "android" ? fabClearance : 88)),
@@ -870,6 +911,13 @@ export function HomeScreen(props: HomeScreenProps) {
           </SwipeableScrollGateProvider>
         </View>
       </ScreenContent>
+      {showsNewSessionPill ? (
+        <NewSessionPill
+          bottom={iosBottomClearance}
+          onPress={props.onStartNewTask}
+          onHeight={setNewSessionPillHeight}
+        />
+      ) : null}
     </View>
   );
 }
