@@ -114,6 +114,7 @@ describe("threadOverviewGroupOf", () => {
       "ready_for_review",
     ],
     ["nothing pending", child(), "idle"],
+    ["never ran", child({ latestRunId: null, status: "idle" }), "idle"],
     [
       "settled beats a running approval with an approved PR",
       child({
