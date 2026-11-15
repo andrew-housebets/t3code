@@ -495,7 +495,7 @@ export function getMobileThemeVariables(
     groupedCard,
     themeId === "t3-chat" && appearance === "dark"
       ? [colors.messageActionForeground, colors.messageAction]
-      : themeId !== DEFAULT_MOBILE_THEME_ID && themeId !== "t3-chat"
+      : themeId !== DEFAULT_MOBILE_THEME_ID && themeId !== "t3-chat" && themeId !== "claude"
         ? [colors.messageAction, colors.messageActionForeground]
         : undefined,
   );

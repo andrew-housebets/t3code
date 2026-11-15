@@ -1988,8 +1988,8 @@
       --color-inline-skill-border: rgba(35, 118, 212, 0.42);
       --color-inline-skill-foreground: #141413;
       --color-primary: #2376d4;
-      --color-prominent-action: #2376d4;
-      --color-prominent-action-foreground: #ffffff;
+      --color-prominent-action: #141413;
+      --color-prominent-action-foreground: #faf9f5;
       --color-primary-foreground: #ffffff;
       --color-primary-text: #206cc3;
       --color-primary-shadow: #000000;
@@ -2151,8 +2151,8 @@
       --color-inline-skill-border: rgba(37, 125, 224, 0.42);
       --color-inline-skill-foreground: #e4e4e4;
       --color-primary: #2376d4;
-      --color-prominent-action: #2376d4;
-      --color-prominent-action-foreground: #ffffff;
+      --color-prominent-action: #e4e4e4;
+      --color-prominent-action-foreground: #191919;
       --color-primary-foreground: #ffffff;
       --color-primary-text: #5e9adf;
       --color-primary-shadow: #000000;
