@@ -125,6 +125,8 @@ COMPOSER = """
 [data-chat-composer-actions=right]>span:last-child{position:absolute;right:6px;top:6px}
 [data-chat-composer-actions=right]>button[aria-label$="voice input"]{order:-1;margin-left:-6px}
 [data-chat-composer-form] :is(button[type=submit],button.isolate.rounded-full){width:30px!important;height:30px!important}
+[data-chat-composer-surface][data-chat-composer-mobile-collapsed]{padding:6px 8px;border-radius:8px!important;background:var(--app-theme-input)!important;border:1px solid #363636}
+:root:not(.dark) [data-chat-composer-surface][data-chat-composer-mobile-collapsed]{border-color:var(--app-theme-border)}
 """
 
 EXTRA = """
