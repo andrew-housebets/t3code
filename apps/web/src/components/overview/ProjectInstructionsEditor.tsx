@@ -78,7 +78,6 @@ export function ProjectInstructionsEditor(props: {
     const result = await write({ environmentId, input: { projectId, ...draft } });
     setSaving(false);
     if (result._tag === "Success") {
-      setDraft(null);
       saved.refresh();
       return;
     }
@@ -145,7 +144,11 @@ export function ProjectInstructionsPanel({ threadRef }: { readonly threadRef: Sc
   if (projectId === null) return null;
   return (
     <div className="h-full min-h-0 overflow-y-auto overscroll-contain p-3">
-      <ProjectInstructionsEditor environmentId={threadRef.environmentId} projectId={projectId} />
+      <ProjectInstructionsEditor
+        key={`${threadRef.environmentId}:${projectId}`}
+        environmentId={threadRef.environmentId}
+        projectId={projectId}
+      />
     </div>
   );
 }

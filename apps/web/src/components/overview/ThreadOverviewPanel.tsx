@@ -1,6 +1,9 @@
 import { useAtomValue } from "@effect/atom-react";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
+import {
+  threadRuntimeIsActive,
+  type EnvironmentThreadShell,
+} from "@t3tools/client-runtime/state/models";
 import {
   type AtomCommandResult,
   isAtomCommandInterrupted,
@@ -77,9 +80,13 @@ const ROW_ACTIONS = {
   { readonly label: string; readonly Icon: LucideIcon; readonly failure: string }
 >;
 
-/** Settling refuses an active run, so a working thread offers Stop instead. */
-const rowActionsOf = (group: ThreadOverviewGroup): ReadonlyArray<RowAction> =>
-  group === "resolved" ? ["reopen"] : group === "working" ? ["stop"] : ["resolve"];
+/** Settling refuses an active or blocked run, so a thread with a live run offers Stop instead. */
+const rowActionsOf = (thread: EnvironmentThreadShell): ReadonlyArray<RowAction> =>
+  thread.settledOverride === "settled"
+    ? ["reopen"]
+    : threadRuntimeIsActive(thread.runtime)
+      ? ["stop"]
+      : ["resolve"];
 
 function PullRequestBadge({ thread }: { readonly thread: EnvironmentThreadShell }) {
   const badge = resolveThreadPullRequestBadge(thread.pullRequests);
@@ -149,7 +156,7 @@ function OverviewRow(props: {
         </span>
       </button>
       <span className="invisible absolute top-1 right-2 flex items-center gap-0.5 group-hover/row:visible group-focus-within/row:visible">
-        {rowActionsOf(group).map((action) => {
+        {rowActionsOf(thread).map((action) => {
           const { label, Icon: ActionIcon } = ROW_ACTIONS[action];
           return (
             <Tooltip key={action}>
@@ -251,6 +258,14 @@ export function ThreadOverviewPanel({ threadRef }: { readonly threadRef: ScopedT
     void navigate({ to: "/$environmentId/$threadId", params: buildThreadRouteParams(routeRef) });
   };
 
+  // A delegated child stops through its parent's task node, as the relationships control does.
+  const stopTarget = (thread: EnvironmentThreadShell) => {
+    const agent = subagentByChild.get(thread.id);
+    return agent === undefined
+      ? { threadId: thread.id }
+      : { threadId: agent.threadId, subagentId: agent.id };
+  };
+
   const runAction = async (thread: EnvironmentThreadShell, action: RowAction) => {
     const ref = scopeThreadRef(environmentId, thread.id);
     const result: AtomCommandResult<unknown, unknown> =
@@ -258,7 +273,7 @@ export function ThreadOverviewPanel({ threadRef }: { readonly threadRef: ScopedT
         ? await settleThread(ref)
         : action === "reopen"
           ? await unsettleThread(ref)
-          : await interruptTurn({ environmentId, input: { threadId: thread.id } });
+          : await interruptTurn({ environmentId, input: stopTarget(thread) });
     if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
       const error = squashAtomCommandFailure(result);
       toastManager.add(

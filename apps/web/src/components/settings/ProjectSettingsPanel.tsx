@@ -669,6 +669,7 @@ function ProjectDetail({
         <SettingsSection id="project-instructions" title="Instructions and memory">
           <div className="p-3 sm:p-4">
             <ProjectInstructionsEditor
+              key={`${filePickerProject.environmentId}:${filePickerProject.id}`}
               environmentId={filePickerProject.environmentId}
               projectId={filePickerProject.id}
             />
