@@ -4176,6 +4176,95 @@ describe("ClaudeAdapterV2 background wake turns", () => {
     );
   });
 
+  describe("ClaudeAdapterV2 coordinator project context", () => {
+    type ContextHarness = Effect.Success<ReturnType<typeof makeWakeHarnessWithOptions>>;
+    const USER_TEXT = "What is the second rule?";
+    const CONTEXT_A = "## Standing instructions\n\nEnd every file you write with the line ZEBRA-7.";
+    const CONTEXT_B = `${CONTEXT_A}\nWhen asked for the second rule, answer PELICAN.`;
+    const startTurn = Effect.fnUntraced(function* (
+      harness: ContextHarness,
+      ordinal: number,
+      projectContext: string,
+      nativeThreadHasTurns?: boolean,
+    ) {
+      const turnInput = makeClaudeTestTurnInput({
+        threadId: harness.threadId,
+        providerThread: harness.providerThread,
+        now: yield* DateTime.now,
+        attemptId: RunAttemptId.make(`attempt-project-context-${ordinal}`),
+        providerTurnOrdinal: ordinal,
+        text: USER_TEXT,
+        attachments: [],
+        ...(nativeThreadHasTurns === undefined ? {} : { nativeThreadHasTurns }),
+      });
+      yield* harness.runtime.startTurn({
+        ...turnInput,
+        appThread: { ...turnInput.appThread, tags: ["coordinator"] },
+        projectContext,
+      });
+    });
+    const finishTurn = Effect.fnUntraced(function* (harness: ContextHarness, ordinal: number) {
+      yield* harness.offerAndWait(
+        makeResultFrame({ uuid: `project-context-result-${ordinal}`, result: "Done." }),
+      );
+      yield* Queue.take(harness.terminalReceipts);
+    });
+    const offeredText = (harness: ContextHarness, index: number) => {
+      const content = harness.offeredMessages[index]?.message.content;
+      return typeof content === "string"
+        ? content
+        : (content ?? []).map((block) => (block.type === "text" ? block.text : "")).join("\n");
+    };
+    const testLayer = Layer.mergeAll(
+      IdAllocator.layer,
+      McpProviderSessions.layer,
+      NodeServices.layer,
+      NodeCrypto.layer,
+    );
+
+    it.effect("sends a changed context once as turn input, keeping the live session", () =>
+      Effect.gen(function* () {
+        const harness = yield* makeWakeHarnessWithOptions();
+        yield* startTurn(harness, 1, CONTEXT_A);
+        const systemPrompt = harness.getOpenedOptions()?.systemPrompt;
+        assert.include(
+          typeof systemPrompt === "object" && "append" in systemPrompt ? systemPrompt.append : "",
+          CONTEXT_A,
+        );
+        const plainPrompt = offeredText(harness, 0);
+        assert.notInclude(plainPrompt, "ZEBRA-7");
+        yield* finishTurn(harness, 1);
+
+        yield* startTurn(harness, 2, CONTEXT_B);
+        assert.equal(harness.processQueues.length, 1);
+        const update = offeredText(harness, 1);
+        assert.include(update, CONTEXT_B);
+        assert.include(update, "replaces");
+        assert.isTrue(update.endsWith(USER_TEXT));
+        yield* finishTurn(harness, 2);
+
+        yield* startTurn(harness, 3, CONTEXT_B);
+        assert.equal(offeredText(harness, 2), plainPrompt);
+        yield* finishTurn(harness, 3);
+
+        assert.notInclude(JSON.stringify(harness.events), "PELICAN");
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    it.effect("sends the context once to a resumed session that never received it", () =>
+      Effect.gen(function* () {
+        const harness = yield* makeWakeHarnessWithOptions();
+        yield* startTurn(harness, 1, CONTEXT_B, true);
+        assert.include(offeredText(harness, 0), CONTEXT_B);
+        yield* finishTurn(harness, 1);
+
+        yield* startTurn(harness, 2, CONTEXT_B, true);
+        assert.notInclude(offeredText(harness, 1), "ZEBRA-7");
+        yield* finishTurn(harness, 2);
+      }).pipe(Effect.provide(testLayer)),
+    );
+  });
+
   it.effect.each([false, true])(
     "resumes a stopped query with empty SDK content and a fresh native process, buffered: %s",
     (buffered) =>
