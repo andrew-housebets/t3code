@@ -76,9 +76,14 @@ import {
 } from "./threadListV2";
 import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
 import { NativeScrollView } from "../../native/NativeScrollViewMarker";
+import { useNavigation } from "@react-navigation/native";
+import { openSettings } from "../settings/settings-navigation";
+import { DrawerNavigationRows, DrawerSectionLabel } from "./DrawerNavigationRows";
+import { drawerPinnedProjects, drawerRecentsIndex } from "./drawerSections";
 
 type SidebarListItem =
   | ThreadListV2ListItem
+  | { readonly type: "section-label"; readonly key: string; readonly label: string }
   | {
       readonly type: "v2-show-more";
       readonly key: string;
@@ -309,6 +314,69 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
         ]
       : threadListV2Items;
 
+  const navigation = useNavigation();
+  const pinnedProjects = useMemo(
+    () => drawerPinnedProjects(projects, threads),
+    [projects, threads],
+  );
+  const recentsIndex = drawerRecentsIndex(listItems);
+  const displayItems: readonly SidebarListItem[] =
+    recentsIndex === null
+      ? listItems
+      : [
+          ...listItems.slice(0, recentsIndex),
+          { type: "section-label", key: "recents-label", label: "Recents" },
+          ...listItems.slice(recentsIndex),
+        ];
+  const selectedThread =
+    props.selectedThreadKey === null
+      ? undefined
+      : threads.find(
+          (thread) => scopedThreadKey(thread.environmentId, thread.id) === props.selectedThreadKey,
+        );
+  const filteredProjectRef =
+    selectedProjectScope?.projectRefs.length === 1
+      ? selectedProjectScope.projectRefs[0]
+      : undefined;
+  const artifactsProject =
+    filteredProjectRef ??
+    (selectedThread === undefined
+      ? undefined
+      : { environmentId: selectedThread.environmentId, projectId: selectedThread.projectId });
+  const drawerHeader = (
+    <DrawerNavigationRows
+      onOpenProjects={() => openSettings(navigation, "SettingsProjectOverview")}
+      onOpenArtifacts={
+        artifactsProject === undefined
+          ? null
+          : () =>
+              navigation.navigate("ThreadOverview", {
+                environmentId: String(artifactsProject.environmentId),
+                projectId: String(artifactsProject.projectId),
+                tab: "library",
+              })
+      }
+      onOpenScheduled={() => openSettings(navigation, "SettingsScheduledTasks")}
+      pinnedProjects={pinnedProjects}
+      hasPinnedThreads={recentsIndex !== 0 && listItems.length > 0}
+      onSelectPinnedProject={({ project, coordinatorThreadId }) => {
+        if (coordinatorThreadId !== null) {
+          selectDetail({
+            name: "Thread",
+            params: { environmentId: String(project.environmentId), threadId: coordinatorThreadId },
+          });
+          return;
+        }
+        const scope = projectScopes.find((candidate) =>
+          candidate.projectRefs.some(
+            (ref) => ref.environmentId === project.environmentId && ref.projectId === project.id,
+          ),
+        );
+        if (scope !== undefined) setSelectedProjectKey(scope.key);
+      }}
+    />
+  );
+
   const handleSwipeableWillOpen = (methods: SwipeableMethods) => {
     if (openSwipeableRef.current !== methods) {
       openSwipeableRef.current?.close();
@@ -361,10 +429,13 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
     threadSearchMatchByKey,
     workingShelfEnabled,
   };
-  useThreadJumpShortcuts(listItems, handleSelectThread);
+  useThreadJumpShortcuts(threadListV2Items, handleSelectThread);
   const sidebarItemsAreEqual = (previous: SidebarListItem, item: SidebarListItem): boolean => {
     if (isThreadListV2ListItem(previous) && isThreadListV2ListItem(item)) {
       return threadListV2ListItemsAreEqual(previous, item);
+    }
+    if (previous.type === "section-label" && item.type === "section-label") {
+      return previous.label === item.label;
     }
     if (previous.type === "v2-show-more" && item.type === "v2-show-more") {
       return previous.hiddenCount === item.hiddenCount && previous.state === item.state;
@@ -373,6 +444,8 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
   };
   const renderListItem = ({ item }: { readonly item: SidebarListItem }) => {
     switch (item.type) {
+      case "section-label":
+        return <DrawerSectionLabel label={item.label} />;
       case "v2-pending": {
         const pendingScopeKey = scopedProjectKey(
           item.pendingTask.environmentId,
@@ -606,7 +679,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
               <AnimatedLegendList
                 renderScrollComponent={NativeScrollView}
                 itemLayoutAnimation={THREAD_SIDEBAR_ROW_LAYOUT}
-                data={listItems}
+                data={displayItems}
                 drawDistance={500}
                 estimatedItemSize={64}
                 extraData={listExtraData}
@@ -631,6 +704,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
                 scrollEventThrottle={16}
                 showsVerticalScrollIndicator={false}
                 style={styles.threadList}
+                ListHeaderComponent={drawerHeader}
                 ListEmptyComponent={listEmpty}
               />
             </GestureDetector>
@@ -656,14 +730,17 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
         }}
       >
         {listItems.length === 0 ? (
-          <View className="flex-1 items-center justify-center">{listEmpty}</View>
+          <View className="flex-1 px-2 pt-2">
+            {drawerHeader}
+            <View className="flex-1 items-center justify-center">{listEmpty}</View>
+          </View>
         ) : (
           <SwipeableScrollGateProvider enabled={swipeEnabled}>
             <GestureDetector gesture={sidebarScrollGesture}>
               {/* oxlint-disable-next-line t3code/require-registered-list-scroll -- The Android sidebar has no native header to register with. */}
               <AnimatedLegendList
                 itemLayoutAnimation={THREAD_SIDEBAR_ROW_LAYOUT}
-                data={listItems}
+                data={displayItems}
                 drawDistance={500}
                 estimatedItemSize={64}
                 extraData={listExtraData}
@@ -684,6 +761,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
                 scrollEventThrottle={16}
                 showsVerticalScrollIndicator={false}
                 style={styles.threadList}
+                ListHeaderComponent={drawerHeader}
                 ListEmptyComponent={listEmpty}
               />
             </GestureDetector>
