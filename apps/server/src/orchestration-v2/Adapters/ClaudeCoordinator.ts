@@ -1,3 +1,4 @@
+import type { SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { OrchestrationV2AppThread } from "@t3tools/contracts";
 import { T3_CODE_COORDINATOR_INSTRUCTIONS } from "@t3tools/provider-core/server/coordinatorInstructions";
 import { isCoordinatorThread } from "@t3tools/shared/coordinatorThread";
@@ -27,25 +28,49 @@ export function withClaudeCoordinatorOptions(
   projectContext?: string,
 ): ClaudeAgentSdkQueryOptions {
   if (!isCoordinatorThread(appThread)) return options;
-  const locked = {
+  const systemPrompt = options.systemPrompt;
+  const preset =
+    typeof systemPrompt === "object" &&
+    !Array.isArray(systemPrompt) &&
+    systemPrompt.type === "preset"
+      ? systemPrompt
+      : undefined;
+  const delegates = options.mcpServers !== undefined && preset !== undefined;
+  const append = [
+    ...(delegates ? [T3_CODE_COORDINATOR_INSTRUCTIONS] : []),
+    ...(projectContext === undefined ? [] : [projectContext]),
+  ];
+  return {
     ...options,
     disallowedTools: union(options.disallowedTools, CLAUDE_COORDINATOR_DISALLOWED_TOOLS),
+    ...(delegates
+      ? { allowedTools: union(options.allowedTools, CLAUDE_COORDINATOR_T3_MCP_ALLOWED_TOOLS) }
+      : {}),
+    ...(preset === undefined || append.length === 0
+      ? {}
+      : {
+          systemPrompt: { ...preset, append: `${preset.append ?? ""}\n\n${append.join("\n\n")}\n` },
+        }),
   };
-  const systemPrompt = options.systemPrompt;
-  if (
-    options.mcpServers === undefined ||
-    typeof systemPrompt !== "object" ||
-    Array.isArray(systemPrompt) ||
-    systemPrompt.type !== "preset"
-  ) {
-    return locked;
-  }
+}
+
+// A resumed Claude session keeps the system prompt it was created with, so later changes go in the turn.
+export function withClaudeProjectContextUpdate(
+  message: SDKUserMessage,
+  projectContext: string,
+): SDKUserMessage {
+  const content = message.message.content;
   return {
-    ...locked,
-    allowedTools: union(options.allowedTools, CLAUDE_COORDINATOR_T3_MCP_ALLOWED_TOOLS),
-    systemPrompt: {
-      ...systemPrompt,
-      append: `${systemPrompt.append ?? ""}\n\n${T3_CODE_COORDINATOR_INSTRUCTIONS}\n${projectContext === undefined ? "" : `\n${projectContext}\n`}`,
+    ...message,
+    message: {
+      ...message.message,
+      content: [
+        {
+          type: "text",
+          text: `<project_context_update>\nThe project's current standing context. It replaces all earlier project context, including any in your system prompt.\n\n${projectContext}\n</project_context_update>`,
+        },
+        ...(typeof content === "string" ? [{ type: "text" as const, text: content }] : content),
+      ],
     },
   };
 }

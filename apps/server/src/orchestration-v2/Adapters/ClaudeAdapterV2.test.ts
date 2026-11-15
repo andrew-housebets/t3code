@@ -4245,7 +4245,39 @@ describe("ClaudeAdapterV2 background wake turns", () => {
 
         yield* startTurn(harness, 3, CONTEXT_B);
         assert.equal(offeredText(harness, 2), plainPrompt);
+        yield* harness.offerAndWait(
+          claudeSdkFrame({
+            type: "system",
+            subtype: "compact_boundary",
+            compact_metadata: { trigger: "auto", pre_tokens: 1500, post_tokens: 400 },
+            uuid: "00000000-0000-4000-8000-000000000a01",
+            session_id: WAKE_NATIVE_SESSION,
+          }),
+        );
         yield* finishTurn(harness, 3);
+
+        yield* startTurn(harness, 4, CONTEXT_B);
+        assert.include(offeredText(harness, 3), CONTEXT_B);
+        const clearedInit = (uuid: string) =>
+          harness.offerAndWait(
+            claudeSdkFrame({
+              type: "system",
+              subtype: "init",
+              session_id: "cleared-native-session",
+              uuid,
+            }),
+          );
+        yield* clearedInit("00000000-0000-4000-8000-000000000a02");
+        yield* finishTurn(harness, 4);
+
+        yield* startTurn(harness, 5, CONTEXT_B);
+        assert.include(offeredText(harness, 4), CONTEXT_B);
+        yield* clearedInit("00000000-0000-4000-8000-000000000a03");
+        yield* finishTurn(harness, 5);
+
+        yield* startTurn(harness, 6, CONTEXT_B);
+        assert.equal(offeredText(harness, 5), plainPrompt);
+        yield* finishTurn(harness, 6);
 
         assert.notInclude(JSON.stringify(harness.events), "PELICAN");
       }).pipe(Effect.provide(testLayer)),

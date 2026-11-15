@@ -6,7 +6,10 @@ import {
 } from "@t3tools/shared/toolOutput";
 import { makeProviderTextDeltaCoalescer } from "./ProviderTextDeltaCoalescer.ts";
 import { claudeTaskOutputRoot, tailClaudeTaskOutput } from "./ClaudeTaskOutputTail.ts";
-import { withClaudeCoordinatorOptions } from "./ClaudeCoordinator.ts";
+import {
+  withClaudeCoordinatorOptions,
+  withClaudeProjectContextUpdate,
+} from "./ClaudeCoordinator.ts";
 import {
   dynamicToolTitle,
   formatReadToolLabel,
@@ -5872,6 +5875,8 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
         // The title T3 last applied to each native session, so a turn renames it only when the
         // thread title changed. A native `/rename` T3 never applied survives later turns.
         const appliedSessionTitles = new Map<string, string>();
+        // The project context each native session can still see, from its system prompt or a turn.
+        const deliveredProjectContexts = new Map<string, string>();
         const goalCheckedTurns = new Set<string>();
         // Background subagents can finish after root settlement; retain their registry for wake evidence and hydration.
         const sessionSubagentsByTaskId = yield* Ref.make(new Map<string, ActiveClaudeSubagent>());
@@ -10777,6 +10782,9 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               (message.subtype === "status" && message.status === "compacting"))
           ) {
             if (message.subtype === "status" && context.compaction?.status === "running") return;
+            if (message.subtype === "compact_boundary") {
+              deliveredProjectContexts.delete(context.nativeThreadId);
+            }
             const now = yield* DateTime.now;
             const nativeItemId = message.uuid;
             const compaction =
@@ -12551,8 +12559,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               ? {}
               : { allowedTools: queryPolicy.allowedTools }),
           });
-          // A changed project context reopens a coordinator's query, as a policy change does.
-          const queryPolicyKey = `${claudeEffectiveQueryPolicyKey(queryPolicy, mcpOverrides)}${turnInput.projectContext ?? ""}`;
+          const queryPolicyKey = claudeEffectiveQueryPolicyKey(queryPolicy, mcpOverrides);
           const resumeSessionAt = yield* getNativeConversationHeadId(turnInput.providerThread);
           const existing = yield* Ref.get(queryContext);
           // Continuations drain existing output without prompting; retain the live process regardless of selection.
@@ -12767,6 +12774,11 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
           if (!shouldResume) {
             appliedSessionTitles.set(nativeThreadId, turnInput.appThread.title);
           }
+          if (!shouldResume && turnInput.projectContext !== undefined) {
+            deliveredProjectContexts.set(nativeThreadId, turnInput.projectContext);
+          } else if (!shouldResume || resumeSessionAt !== undefined) {
+            deliveredProjectContexts.delete(nativeThreadId);
+          }
           yield* resetBackgroundTaskStateForNativeThreadProcess(nativeThreadId, {
             status: "active",
           });
@@ -12835,6 +12847,9 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                     message.session_id.length > 0 &&
                     message.session_id !== context.nativeThreadId
                   ) {
+                    if (clearedNativeSessions.get(context.nativeThreadId) !== message.session_id) {
+                      deliveredProjectContexts.delete(context.nativeThreadId);
+                    }
                     clearedNativeSessions.set(context.nativeThreadId, message.session_id);
                   }
                   if (
@@ -13023,6 +13038,19 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                       Effect.provideService(Path.Path, path),
                     );
             const querySession = yield* openQuery(turnInput, nativeThreadId, queryPolicy);
+            // A slash command must open the prompt, so its context waits for the next turn.
+            const projectContextUpdate =
+              userMessage !== null &&
+              !turnInput.resume &&
+              turnInput.projectContext !== undefined &&
+              !turnInput.message.text.trimStart().startsWith("/") &&
+              deliveredProjectContexts.get(nativeThreadId) !== turnInput.projectContext
+                ? turnInput.projectContext
+                : undefined;
+            const promptMessage =
+              userMessage === null || projectContextUpdate === undefined
+                ? userMessage
+                : withClaudeProjectContextUpdate(userMessage, projectContextUpdate);
             // `claude --resume` shows the native title. A failed or timed-out rename forgets the
             // applied title so the next turn, even after a restart, sends it again.
             if (appliedSessionTitles.get(nativeThreadId) !== turnInput.appThread.title) {
@@ -13184,16 +13212,25 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               });
             });
             const offerUserMessage =
-              userMessage === null
+              promptMessage === null
                 ? Effect.void
                 : startUserTurnForWakeReports(nativeThreadId).pipe(
                     Effect.andThen(
                       Effect.uninterruptibleMask((restore) =>
                         restore(
-                          querySession.query.offer(userMessage, () => {
+                          querySession.query.offer(promptMessage, () => {
                             pdfReservation.commit();
                           }),
-                        ).pipe(Effect.tap(() => Effect.sync(() => pdfReservation.commit()))),
+                        ).pipe(
+                          Effect.tap(() =>
+                            Effect.sync(() => {
+                              pdfReservation.commit();
+                              if (projectContextUpdate !== undefined) {
+                                deliveredProjectContexts.set(nativeThreadId, projectContextUpdate);
+                              }
+                            }),
+                          ),
+                        ),
                       ),
                     ),
                   );
