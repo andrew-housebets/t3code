@@ -8,12 +8,17 @@ import type * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
 import {
   PROJECT_CONTEXT_MAX_CHARS,
+  type ProjectArtifact,
+  type ProjectArtifactListing,
   type ProjectLibraryEntry,
   type ProjectLibraryListing,
+  ThreadId,
 } from "@t3tools/contracts";
 import { formatProjectContextBlock } from "@t3tools/shared/projectContextBlock";
 
+import { resolveAttachmentPathById } from "../attachmentStore.ts";
 import * as ServerConfig from "../config.ts";
+import * as ProjectSidecar from "../projectSidecar/ProjectSidecar.ts";
 
 // ponytail: a flat listing capped here; page it if Libraries grow past a few thousand files.
 const LIBRARY_LISTING_LIMIT = 2_000;
@@ -89,6 +94,16 @@ export class ProjectContext extends Context.Service<
     readonly listLibrary: (
       projectId: string,
     ) => Effect.Effect<ProjectLibraryListing, ProjectContextPathError | ProjectContextLibraryError>;
+    /**
+     * The Library and the HTML renders of the project's threads, with each one's thread when
+     * known. Reconciles the sidecar index with the disk in the same pass.
+     */
+    readonly listArtifacts: (
+      projectId: string,
+    ) => Effect.Effect<
+      ProjectArtifactListing,
+      ProjectContextPathError | ProjectContextLibraryError
+    >;
     /** The task unchanged when the project has no instructions or memory. */
     readonly taskWithContext: (
       projectId: string,
@@ -143,6 +158,7 @@ function formatCoordinatorContext(
 
 const make = Effect.gen(function* () {
   const config = yield* ServerConfig.ServerConfig;
+  const sidecar = yield* ProjectSidecar.ProjectSidecar;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
 
@@ -281,6 +297,69 @@ const make = Effect.gen(function* () {
     return { path: root, entries, truncated };
   });
 
+  const listArtifacts = Effect.fn("ProjectContext.listArtifacts")(function* (projectId: string) {
+    const library = yield* listLibrary(projectId);
+    const files = library.entries.filter((entry) => entry.kind === "file");
+    const rows = yield* sidecar
+      .syncLibraryFiles(
+        projectId,
+        files.map((file) => ({ path: file.path, sizeBytes: file.sizeBytes })),
+        { complete: !library.truncated },
+      )
+      .pipe(
+        Effect.andThen(sidecar.listArtifacts(projectId)),
+        Effect.catchTags({
+          ProjectSidecarError: (cause) =>
+            Effect.logWarning("Project artifacts are listed without owners.", { cause }).pipe(
+              Effect.as([]),
+            ),
+        }),
+      );
+    const rowsById = new Map(rows.map((row) => [row.id, row]));
+    const goneRenders = rows.filter(
+      (row) =>
+        row.source === "html_render" &&
+        resolveAttachmentPathById({
+          attachmentsDir: config.attachmentsDir,
+          attachmentId: row.path,
+        }) === null,
+    );
+    yield* sidecar
+      .removeArtifacts(
+        projectId,
+        goneRenders.map((row) => row.id),
+      )
+      .pipe(Effect.ignore);
+    const owner = (threadId: string | null) => (threadId === null ? null : ThreadId.make(threadId));
+    const artifacts: Array<ProjectArtifact> = [
+      ...files.map((file) => {
+        const row = rowsById.get(`file:${file.path}`);
+        return {
+          id: `file:${file.path}`,
+          source: row?.source ?? "library",
+          path: file.path,
+          title: path.basename(file.path),
+          threadId: owner(row?.threadId ?? null),
+          sizeBytes: file.sizeBytes,
+          updatedAt: file.modifiedAt ?? row?.updatedAt ?? null,
+        };
+      }),
+      ...rows
+        .filter((row) => row.source === "html_render" && !goneRenders.includes(row))
+        .map((row) => ({
+          id: row.id,
+          source: row.source,
+          path: row.path,
+          title: row.title,
+          threadId: owner(row.threadId),
+          sizeBytes: row.sizeBytes,
+          updatedAt: row.updatedAt,
+        })),
+    ];
+    artifacts.sort((left, right) => (right.updatedAt ?? "").localeCompare(left.updatedAt ?? ""));
+    return { library, artifacts };
+  });
+
   const taskWithContext = Effect.fn("ProjectContext.taskWithContext")(function* (
     projectId: string,
     task: string,
@@ -307,6 +386,7 @@ const make = Effect.gen(function* () {
     writeFiles,
     ensureLibrary,
     listLibrary,
+    listArtifacts,
     taskWithContext,
     coordinatorContext,
   });

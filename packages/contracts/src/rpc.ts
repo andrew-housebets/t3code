@@ -418,7 +418,7 @@ import {
   ProjectContextFiles,
   ProjectContextInput,
   ProjectContextWriteInput,
-  ProjectLibraryListing,
+  ProjectArtifactListing,
 } from "./projectContext.ts";
 
 export const WS_METHODS = {
@@ -428,7 +428,7 @@ export const WS_METHODS = {
   projectsSearchContents: "projects.searchContents",
   projectsSearchEntries: "projects.searchEntries",
   projectsWriteFile: "projects.writeFile",
-  projectContextListLibrary: "projectContext.listLibrary",
+  projectContextListArtifacts: "projectContext.listArtifacts",
   projectContextRead: "projectContext.read",
   projectContextWrite: "projectContext.write",
   projectsMutate: "projects.mutate",
@@ -1412,9 +1412,9 @@ const WsProjectsReadFileRpc = Rpc.make(WS_METHODS.projectsReadFile, {
   error: Schema.Union([ProjectReadFileError, EnvironmentAuthorizationError]),
 });
 
-const WsProjectContextListLibraryRpc = Rpc.make(WS_METHODS.projectContextListLibrary, {
+const WsProjectContextListArtifactsRpc = Rpc.make(WS_METHODS.projectContextListArtifacts, {
   payload: ProjectContextInput,
-  success: ProjectLibraryListing,
+  success: ProjectArtifactListing,
   error: Schema.Union([ProjectContextError, EnvironmentAuthorizationError]),
 });
 
@@ -2269,7 +2269,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsCreateNewRpc,
   WsProjectsCreateFromThreadRpc,
   WsProjectsWriteFileRpc,
-  WsProjectContextListLibraryRpc,
+  WsProjectContextListArtifactsRpc,
   WsProjectContextReadRpc,
   WsProjectContextWriteRpc,
   WsProjectsMutateRpc,

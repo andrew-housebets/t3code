@@ -12,6 +12,7 @@ import {
 import { threadFamilyRead } from "@t3tools/client-runtime/state/threads";
 import {
   groupThreadOverview,
+  threadOverviewArtifacts,
   threadOverviewStatusLine,
   type ThreadOverviewGroup,
 } from "@t3tools/client-runtime/state/thread-overview";
@@ -28,7 +29,7 @@ import {
   SquareIcon,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 import { useThreadActions } from "../../hooks/useThreadActions";
 import { useNowMinute } from "../../hooks/useNowMinute";
@@ -47,6 +48,8 @@ import { Spinner } from "../ui/spinner";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { isGroupCollapsed, useCoordinatorStore } from "./coordinatorStore";
+import { ProjectArtifactsStrip } from "./ProjectArtifactsStrip";
+import { openProjectArtifact, openProjectLibrary, useProjectArtifacts } from "./projectArtifacts";
 import { useThreadOverviewChildren } from "./threadOverviewState";
 
 const GROUPS = {
@@ -109,7 +112,9 @@ function OverviewRow(props: {
   readonly group: ThreadOverviewGroup;
   readonly subagent: OrchestrationV2Subagent | undefined;
   readonly nowMs: number;
+  readonly artifactCount: number;
   readonly onOpen: () => void;
+  readonly onOpenArtifacts: () => void;
   readonly onAction: (action: RowAction) => void;
 }) {
   const { thread, group } = props;
@@ -155,6 +160,17 @@ function OverviewRow(props: {
           </span>
         </span>
       </button>
+      {props.artifactCount > 0 ? (
+        <Button
+          size="xs"
+          variant="ghost-muted"
+          data-thread-overview-row-artifacts
+          className="mb-1 ml-8"
+          onClick={props.onOpenArtifacts}
+        >
+          {props.artifactCount} {props.artifactCount === 1 ? "artifact" : "artifacts"}
+        </Button>
+      ) : null}
       <span className="invisible absolute top-1 right-2 flex items-center gap-0.5 group-hover/row:visible group-focus-within/row:visible">
         {rowActionsOf(thread).map((action) => {
           const { label, Icon: ActionIcon } = ROW_ACTIONS[action];
@@ -210,6 +226,16 @@ export function ThreadOverviewPanel({ threadRef }: { readonly threadRef: ScopedT
   });
   const navigate = useNavigate();
   const groups = groupThreadOverview(children);
+  const listing = useProjectArtifacts(threadRef);
+  const refreshArtifacts = listing.refresh;
+  const runningChildren = children.filter((child) => threadRuntimeIsActive(child.runtime)).length;
+  const previousRunningChildren = useRef(runningChildren);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- re-reads the server's artifact listing when a delegated thread stops running, the moment its files and renders are recorded
+  useEffect(() => {
+    if (runningChildren < previousRunningChildren.current) refreshArtifacts();
+    previousRunningChildren.current = runningChildren;
+  }, [runningChildren, refreshArtifacts]);
+  const artifacts = threadOverviewArtifacts(listing.data?.artifacts ?? []);
 
   if (groups.length === 0) {
     if (read === "pending") {
@@ -288,6 +314,16 @@ export function ThreadOverviewPanel({ threadRef }: { readonly threadRef: ScopedT
 
   return (
     <div data-thread-overview className="h-full min-h-0 overflow-y-auto overscroll-contain py-1">
+      {listing.data !== null && artifacts.strip.length > 0 ? (
+        <ProjectArtifactsStrip
+          artifacts={artifacts.strip}
+          nowMs={nowMs}
+          onOpen={(artifact) =>
+            listing.data && openProjectArtifact(threadRef, listing.data.library.path, artifact)
+          }
+          onViewAll={() => openProjectLibrary(threadRef, null)}
+        />
+      ) : null}
       {groups.map(({ group, threads }) => {
         const folded = isGroupCollapsed(collapsed, group);
         const headingId = `thread-overview-${threadKey}-${group}`;
@@ -318,7 +354,9 @@ export function ThreadOverviewPanel({ threadRef }: { readonly threadRef: ScopedT
                     group={group}
                     subagent={subagentByChild.get(thread.id)}
                     nowMs={nowMs}
+                    artifactCount={artifacts.countByThread.get(thread.id) ?? 0}
                     onOpen={() => openThread(thread)}
+                    onOpenArtifacts={() => openProjectLibrary(threadRef, thread.id)}
                     onAction={(action) => void runAction(thread, action)}
                   />
                 ))}

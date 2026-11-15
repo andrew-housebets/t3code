@@ -3,6 +3,7 @@ import {
   type OrchestrationV2PendingRuntimeRequestSummary,
   type OrchestrationV2Subagent,
   type OrchestrationV2ThreadShell,
+  type ProjectArtifact,
   type ThreadId,
   type ThreadPullRequestSnapshot,
 } from "@t3tools/contracts";
@@ -167,4 +168,18 @@ export function threadOverviewStatusLine(
     firstLine(subagent?.progress) ??
     (latest?.role === "assistant" ? firstLine(latest.text) : null)
   );
+}
+
+const ARTIFACT_STRIP_TILES = 3;
+
+/** The strip's newest artifacts and each thread's artifact count, from one listing (newest first). */
+export function threadOverviewArtifacts(artifacts: ReadonlyArray<ProjectArtifact>): {
+  readonly strip: ReadonlyArray<ProjectArtifact>;
+  readonly countByThread: ReadonlyMap<ThreadId, number>;
+} {
+  const countByThread = new Map<ThreadId, number>();
+  for (const { threadId } of artifacts) {
+    if (threadId !== null) countByThread.set(threadId, (countByThread.get(threadId) ?? 0) + 1);
+  }
+  return { strip: artifacts.slice(0, ARTIFACT_STRIP_TILES), countByThread };
 }

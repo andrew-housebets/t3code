@@ -3,6 +3,7 @@ import {
   MessageId,
   RunId,
   RuntimeRequestId,
+  type ProjectArtifact,
   ThreadId,
   type OrchestrationV2ThreadShell,
   type ThreadPullRequestLink,
@@ -17,6 +18,7 @@ import {
   groupThreadOverview,
   isThreadOverviewChild,
   threadOverviewGroupOf,
+  threadOverviewArtifacts,
   threadOverviewStatusLine,
   type ThreadOverviewGroup,
 } from "./threadOverview.ts";
@@ -316,5 +318,37 @@ describe("threadOverviewStatusLine", () => {
 
   it.each(rows)("%s", (_label, thread, subagent, line) => {
     expect(threadOverviewStatusLine(thread, subagent)).toBe(line);
+  });
+});
+
+describe("threadOverviewArtifacts", () => {
+  const artifact = (id: string, threadId: string | null): ProjectArtifact => ({
+    id,
+    source: "library",
+    path: id,
+    title: id,
+    threadId: threadId === null ? null : ThreadId.make(threadId),
+    sizeBytes: null,
+    updatedAt: null,
+  });
+
+  it.each<[string, ReadonlyArray<ProjectArtifact>, ReadonlyArray<string>, Record<string, number>]>([
+    ["nothing produced yet", [], [], {}],
+    [
+      "the newest three on the strip, every owned one counted",
+      [
+        artifact("e", "a"),
+        artifact("d", null),
+        artifact("c", "b"),
+        artifact("b", "a"),
+        artifact("a", "a"),
+      ],
+      ["e", "d", "c"],
+      { a: 3, b: 1 },
+    ],
+  ])("%s", (_label, artifacts, strip, counts) => {
+    const overview = threadOverviewArtifacts(artifacts);
+    expect(overview.strip.map((entry) => entry.id)).toEqual(strip);
+    expect(Object.fromEntries(overview.countByThread)).toEqual(counts);
   });
 });

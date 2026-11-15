@@ -2955,9 +2955,9 @@ export const layerWsRpc = (
                 }),
             ),
           ),
-        [WS_METHODS.projectContextListLibrary]: (input) =>
+        [WS_METHODS.projectContextListArtifacts]: (input) =>
           projectContext
-            .listLibrary(input.projectId)
+            .listArtifacts(input.projectId)
             .pipe(Effect.mapError(projectContextError(input.projectId))),
         [WS_METHODS.projectContextRead]: (input) =>
           projectContext

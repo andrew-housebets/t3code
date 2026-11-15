@@ -8,6 +8,7 @@ import * as Path from "effect/Path";
 import { PROJECT_CONTEXT_MAX_CHARS } from "@t3tools/contracts";
 import { splitProjectContextBlock } from "@t3tools/shared/projectContextBlock";
 import * as ServerConfig from "../config.ts";
+import * as ProjectSidecar from "../projectSidecar/ProjectSidecar.ts";
 import * as ProjectContext from "./ProjectContext.ts";
 
 const TASK = "Fix the flaky login test.";
@@ -34,6 +35,7 @@ const withContext = (files: { readonly instructions?: string; readonly memory?: 
   });
 
 const layerTest = ProjectContext.layer.pipe(
+  Layer.provideMerge(ProjectSidecar.layer),
   Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "t3-project-context-" })),
   Layer.provideMerge(NodeServices.layer),
 );
@@ -184,6 +186,42 @@ it.layer(layerTest, { excludeTestServices: true })("ProjectContext", (it) => {
       );
       assert.isString(listed.entries[1]?.modifiedAt);
       assert.isFalse(listed.truncated);
+    }),
+  );
+
+  it.effect("lists Library files with their writer, and drops a render whose file is gone", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const context = yield* ProjectContext.ProjectContext;
+      const sidecar = yield* ProjectSidecar.ProjectSidecar;
+      const library = yield* context.ensureLibrary("project:artifacts");
+      yield* fileSystem.writeFileString(path.join(library, "by-thread.md"), "a");
+      yield* fileSystem.writeFileString(path.join(library, "by-shell.md"), "b");
+      yield* sidecar.recordArtifacts(
+        [
+          { source: "library" as const, path: "by-thread.md", title: "by-thread.md" },
+          { source: "library" as const, path: "deleted.md", title: "deleted.md" },
+          { source: "html_render" as const, path: "thread-1-gone", title: "Chart" },
+        ].map((artifact) => ({
+          ...artifact,
+          projectId: "project:artifacts",
+          threadId: "thread-1",
+          sizeBytes: 1,
+        })),
+      );
+
+      const { artifacts } = yield* context.listArtifacts("project:artifacts");
+      assert.deepEqual(
+        Object.fromEntries(
+          artifacts.map((artifact): [string, string | null] => [artifact.id, artifact.threadId]),
+        ),
+        { "file:by-thread.md": "thread-1", "file:by-shell.md": null },
+      );
+      assert.deepEqual(
+        (yield* sidecar.listArtifacts("project:artifacts")).map((row) => row.id).toSorted(),
+        ["file:by-shell.md", "file:by-thread.md"],
+      );
     }),
   );
 });

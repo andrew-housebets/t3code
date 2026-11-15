@@ -6,6 +6,8 @@ import * as AssetSigner from "./assets/AssetSigner.ts";
 import * as DatabaseStorage from "./persistence/DatabaseStorage.ts";
 import * as StorageCleanup from "./storageCleanup.ts";
 import * as ProjectSidecar from "./projectSidecar/ProjectSidecar.ts";
+import * as ProjectContext from "./projectContext/ProjectContext.ts";
+import * as ProjectArtifactRecorder from "./projectSidecar/ProjectArtifactRecorder.ts";
 import * as PullRequestSyncReactor from "./orchestration-v2/PullRequestSyncReactor.ts";
 import * as PullRequestWatchReactor from "./orchestration-v2/PullRequestWatchReactor.ts";
 import * as DelegatedTaskQuestionReactor from "./orchestration-v2/DelegatedTaskQuestionReactor.ts";
@@ -608,6 +610,12 @@ const layerOrchestrationV2Runtime = RuntimeLayer.layerProduction.pipe(
       Layer.provide(ProjectionStoreV2.layer),
       Layer.provide(layerPullRequestService),
       Layer.provide(RuntimeLayer.layerProjectService),
+    ),
+  ),
+  Layer.provide(
+    ProjectArtifactRecorder.layer.pipe(
+      Layer.provide(ProjectionStoreV2.layer),
+      Layer.provide(ProjectContext.layer),
     ),
   ),
 );

@@ -1,6 +1,12 @@
 import * as Schema from "effect/Schema";
 
-import { IsoDateTime, NonNegativeInt, ProjectId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import {
+  IsoDateTime,
+  NonNegativeInt,
+  ProjectId,
+  ThreadId,
+  TrimmedNonEmptyString,
+} from "./baseSchemas.ts";
 
 /** Each standing context file is capped here; the server refuses a longer write. */
 export const PROJECT_CONTEXT_MAX_CHARS = 16_000;
@@ -40,6 +46,27 @@ export const ProjectLibraryListing = Schema.Struct({
   truncated: Schema.Boolean,
 });
 export type ProjectLibraryListing = typeof ProjectLibraryListing.Type;
+
+/** A Library file or an HTML render, with the thread that produced it when that is certain. */
+export const ProjectArtifact = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  /** `upload` is a file the user added to the Library. */
+  source: Schema.Literals(["library", "html_render", "upload"]),
+  /** Library-relative for files, the attachment id for an HTML render. */
+  path: TrimmedNonEmptyString,
+  title: Schema.String,
+  threadId: Schema.NullOr(ThreadId),
+  sizeBytes: Schema.NullOr(NonNegativeInt),
+  updatedAt: Schema.NullOr(IsoDateTime),
+});
+export type ProjectArtifact = typeof ProjectArtifact.Type;
+
+export const ProjectArtifactListing = Schema.Struct({
+  library: ProjectLibraryListing,
+  /** Newest first. */
+  artifacts: Schema.Array(ProjectArtifact),
+});
+export type ProjectArtifactListing = typeof ProjectArtifactListing.Type;
 
 export class ProjectContextError extends Schema.TaggedError<ProjectContextError>()(
   "ProjectContextError",

@@ -1,4 +1,5 @@
 import type { ThreadOverviewGroup } from "@t3tools/client-runtime/state/thread-overview";
+import type { ThreadId } from "@t3tools/contracts";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
@@ -28,6 +29,9 @@ interface CoordinatorStoreState {
   /** Coordinator threads whose Overview this browser already opened once. */
   readonly overviewShownThreadKeys: KeySet;
   readonly collapsedGroups: Readonly<Record<string, GroupCollapse>>;
+  /** The thread whose artifacts a coordinator's Library shows; not persisted. */
+  readonly libraryFilters: Readonly<Record<string, ThreadId>>;
+  readonly setLibraryFilter: (threadKey: string, threadId: ThreadId | null) => void;
   readonly toggleGroup: (threadKey: string, group: ThreadOverviewGroup) => void;
   readonly markDraft: (draftId: string, coordinator: boolean) => void;
   /** True the first time it is asked for a thread, false after. */
@@ -41,6 +45,12 @@ export const useCoordinatorStore = create<CoordinatorStoreState>()(
       draftIds: {},
       overviewShownThreadKeys: {},
       collapsedGroups: {},
+      libraryFilters: {},
+      setLibraryFilter: (threadKey, threadId) =>
+        set((state) => {
+          const { [threadKey]: _previous, ...rest } = state.libraryFilters;
+          return { libraryFilters: threadId === null ? rest : { ...rest, [threadKey]: threadId } };
+        }),
       toggleGroup: (threadKey, group) =>
         set((state) => {
           const stored = state.collapsedGroups[threadKey];

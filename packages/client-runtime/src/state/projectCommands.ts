@@ -157,10 +157,10 @@ export function createProjectEnvironmentAtoms<R, E>(
           (result, isCurrent) => fileMetadata.rememberEntries(input.cwd, result.entries, isCurrent),
         ),
     }),
-    listLibrary: createEnvironmentRpcQueryAtomFamily(runtime, {
-      label: "environment-data:projects:list-library",
-      tag: WS_METHODS.projectContextListLibrary,
-      staleTimeMs: 15_000,
+    listArtifacts: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:projects:list-artifacts",
+      tag: WS_METHODS.projectContextListArtifacts,
+      staleTimeMs: 0,
     }),
     readContext: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:projects:read-context",
