@@ -24,6 +24,7 @@ import * as GitVcsDriver from "../../../vcs/GitVcsDriver.ts";
 import * as ServerSettings from "../../../serverSettings.ts";
 import * as ProviderRegistry from "../../../provider/ProviderRegistry.ts";
 import * as DateTime from "effect/DateTime";
+import { isCoordinatorThread } from "@t3tools/shared/coordinatorThread";
 import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { resolveRuntimeMode } from "../../delegatedTaskModes.ts";
@@ -114,6 +115,17 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
         const scope = yield* McpInvocationContext.McpInvocationContext;
         const context = yield* readCaller();
         const { caller } = context;
+        if (
+          caller !== undefined &&
+          isCoordinatorThread(caller) &&
+          input.scratch !== true &&
+          input.workspaceStrategy?.type !== "worktree"
+        )
+          return yield* new OrchestratorMcpFailure({
+            code: "invalid_request",
+            message:
+              'A coordinator starts threads in their own worktree: pass workspaceStrategy {type: "worktree"}, or use delegate_task.',
+          });
         // A retry with the same key replays the first launch: the ids derive
         // from the caller and the key, and the launch service replays a
         // command it already accepted.

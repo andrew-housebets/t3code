@@ -61,6 +61,11 @@ const clientLaunchHarness = (input: {
   readonly hostedAppUrl?: string;
   /** The orchestrator refuses the new thread's mode, as under a managed ceiling. */
   readonly refusedByCeiling?: true;
+  /** The launch comes from inside this thread instead of an outside client. */
+  readonly callerThread?: Pick<
+    OrchestrationV2ThreadShell,
+    "id" | "projectId" | "modelSelection" | "runtimeMode" | "interactionMode" | "tags"
+  >;
 }) => {
   const projectId = ProjectId.make("project:client-target");
   const modelSelection = {
@@ -95,19 +100,38 @@ const clientLaunchHarness = (input: {
     Layer.succeed(McpInvocationContext.McpInvocationContext, {
       environmentId: EnvironmentId.make("environment"),
       requestNamespace: "client:session-1",
-      thread: undefined,
-      client: {
-        sessionId: "session-1",
-        label: "Claude Code",
-        access: input.runtimeModeCeiling,
-        hostedAppUrl: input.hostedAppUrl,
-      },
+      thread:
+        input.callerThread === undefined
+          ? undefined
+          : {
+              threadId: input.callerThread.id,
+              providerSessionId: "provider-session-1",
+              providerInstanceId: input.callerThread.modelSelection.instanceId,
+            },
+      client:
+        input.callerThread === undefined
+          ? {
+              sessionId: "session-1",
+              label: "Claude Code",
+              access: input.runtimeModeCeiling,
+              hostedAppUrl: input.hostedAppUrl,
+            }
+          : undefined,
       issuedAt: 0,
       capabilities: new Set(["orchestration" as const]),
     }),
     Layer.mock(ThreadManagement.ThreadManagementService)({
       // A thread exists once a launch started it.
       getThreadShell: (threadId) => {
+        if (threadId === input.callerThread?.id) {
+          return Effect.succeed({
+            ...input.callerThread,
+            providerInstanceId: input.callerThread.modelSelection.instanceId,
+            activeRunId: "run:coordinator",
+            archivedAt: null,
+            deletedAt: null,
+          } as unknown as OrchestrationV2ThreadShell);
+        }
         const launch = input.launched.find((candidate) => candidate.threadId === threadId);
         return Effect.succeed(
           launch === undefined
@@ -567,6 +591,51 @@ it.effect("a launch binds only an existing checkout that is one of the project's
       code: "invalid_request",
     });
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+it.effect("a coordinator launches a thread only into a new worktree", () =>
+  Effect.gen(function* () {
+    const launched: Array<ThreadLaunch.ThreadLaunchInput> = [];
+    const harness = clientLaunchHarness({ runtimeModeCeiling: "full-access", launched });
+    const { projectId, modelSelection } = harness;
+    const { dependencies } = clientLaunchHarness({
+      runtimeModeCeiling: "full-access",
+      launched,
+      callerThread: {
+        id: ThreadId.make("thread:coordinator"),
+        projectId,
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        tags: ["coordinator"],
+      },
+    });
+    const toolkit = yield* ProjectToolkit.pipe(
+      Effect.provide(
+        McpToolAccess.HandlersLayer.layer(ProjectHandlers.layer).pipe(Layer.provide(dependencies)),
+      ),
+    );
+    const launch = (workspaceStrategy?: { readonly [key: string]: string | boolean }) =>
+      toolkit
+        .handle("t3_thread_launch", {
+          title: "Fix",
+          projectId,
+          ...(workspaceStrategy === undefined ? {} : { workspaceStrategy }),
+        })
+        .pipe(Stream.unwrap, Stream.runCollect, Effect.provide(dependencies));
+
+    for (const strategy of [
+      undefined,
+      { type: "root" as const },
+      { type: "existing_worktree" as const, worktreePath: "/projects/client-target" },
+    ]) {
+      expect((yield* launch(strategy)).at(-1)?.result).toMatchObject({ code: "invalid_request" });
+    }
+    expect(launched).toEqual([]);
+    const worktree = { type: "worktree" as const, baseRef: "main", startFromOrigin: false };
+    expect((yield* launch(worktree)).at(-1)?.result).toMatchObject({ projectId });
+    expect(launched.map((started) => started.workspaceStrategy)).toEqual([worktree]);
+  }),
 );
 
 it.effect("a launch into a new worktree creates nothing when its base ref has no commit", () =>
