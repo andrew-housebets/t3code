@@ -18,6 +18,7 @@ import type {
   ThreadId,
   TurnItemId,
 } from "@t3tools/contracts";
+import { COORDINATOR_THREAD_TAG } from "@t3tools/shared/coordinatorThread";
 import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 import { runRanAfter } from "@t3tools/shared/orchestrationV2ThreadError";
 import * as DateTime from "effect/DateTime";
@@ -70,6 +71,10 @@ export function makeSubagentChildThread(input: {
     id: input.childThreadId,
     title: input.title,
     titleRegeneration: null,
+    // A coordinator's children are its writers.
+    ...(inherited.tags === undefined
+      ? {}
+      : { tags: inherited.tags.filter((tag) => tag !== COORDINATOR_THREAD_TAG) }),
     linkedPullRequest: null,
     pullRequests: [],
     historyOrigin: undefined,

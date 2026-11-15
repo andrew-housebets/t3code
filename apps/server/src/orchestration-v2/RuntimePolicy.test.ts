@@ -157,6 +157,30 @@ it.layer(layerTest)("RuntimePolicyV2", (it) => {
       assert.equal(yield* modeFor(providerInstanceId, "auto-accept-edits"), "auto-accept-edits");
     }),
   );
+  it.effect(
+    "locks a coordinator's own session to read-only without changing its stored modes",
+    () =>
+      Effect.gen(function* () {
+        const policy = yield* RuntimePolicy.RuntimePolicyV2;
+        const now = yield* DateTime.now;
+        const untagged = makeThread({ now, worktreePath: null });
+        const coordinator = { ...untagged, tags: ["coordinator"] };
+
+        const plain = yield* policy.resolve({ thread: untagged, modelSelection });
+        assert.isUndefined(plain.approvalPolicy);
+        assert.isUndefined(plain.sandboxPolicy);
+        const locked = yield* policy.resolve({ thread: coordinator, modelSelection });
+        assert.equal(locked.runtimeMode, "full-access");
+        assert.equal(locked.interactionMode, "default");
+        assert.equal(locked.approvalPolicy, "never");
+        assert.deepEqual(locked.sandboxPolicy, {
+          type: "readOnly",
+          access: { type: "fullAccess" },
+          networkAccess: false,
+        });
+        assert.equal(coordinator.runtimeMode, "full-access");
+      }),
+  );
 });
 
 it.layer(

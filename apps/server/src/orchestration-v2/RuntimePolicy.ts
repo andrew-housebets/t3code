@@ -8,6 +8,7 @@ import {
   RuntimeMode,
   ThreadId,
 } from "@t3tools/contracts";
+import { isCoordinatorThread } from "@t3tools/shared/coordinatorThread";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -87,6 +88,12 @@ export const layer: Layer.Layer<RuntimePolicyV2> = Layer.succeed(RuntimePolicyV2
     });
   }),
 });
+
+// The thread's stored modes stay as set: they are the ceiling its delegated children inherit.
+const COORDINATOR_RUNTIME_POLICY = {
+  approvalPolicy: "never",
+  sandboxPolicy: { type: "readOnly", access: { type: "fullAccess" }, networkAccess: false },
+} as const;
 
 function providerRuntimeMode(
   runtimeMode: RuntimeMode,
@@ -189,6 +196,7 @@ export const layerFromProjectStore: Layer.Layer<
           interactionMode: input.thread.interactionMode,
           cwd,
           ...(maxRuntimeMode === undefined ? {} : { maxRuntimeMode }),
+          ...(isCoordinatorThread(input.thread) ? COORDINATOR_RUNTIME_POLICY : {}),
         });
       }),
     });

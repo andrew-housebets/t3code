@@ -271,6 +271,10 @@
       "types": "./src/paletteSearch.ts",
       "import": "./src/paletteSearch.ts"
     },
+    "./coordinatorThread": {
+      "types": "./src/coordinatorThread.ts",
+      "import": "./src/coordinatorThread.ts"
+    },
     "./threadPullRequests": {
       "types": "./src/threadPullRequests.ts",
       "import": "./src/threadPullRequests.ts"
