@@ -79,6 +79,7 @@ import {
   TrimmedNonEmptyString,
   managedRuntimeModeCeilingMessage,
 } from "@t3tools/contracts";
+import { isCoordinatorThread } from "@t3tools/shared/coordinatorThread";
 import * as KeyedLock from "@t3tools/shared/KeyedLock";
 import { modelSelectionsEqual } from "@t3tools/shared/model";
 import { modelSwitchSince } from "./modelSwitch.ts";
@@ -13724,6 +13725,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     // Queued after the interrupt, since a thread's effects run in order.
     const stopDelegatedTasks =
       command.stopDelegatedTasks === false ||
+      isCoordinatorThread(projection.thread) ||
       !projection.subagents.some(
         (task) => task.origin === "app_owned" && task.childThreadId !== null,
       )
@@ -15167,10 +15169,14 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               threadId: command.threadId,
               cause: repaired.cause,
             });
-          yield* Ref.update(effects, (existing) => [
-            ...existing,
-            delegatedTasksStopEffect(command),
-          ]);
+          const { thread } = yield* projectionStore
+            .getThreadRecords(command.threadId, [])
+            .pipe(mapDispatchError(command));
+          if (!isCoordinatorThread(thread))
+            yield* Ref.update(effects, (existing) => [
+              ...existing,
+              delegatedTasksStopEffect(command),
+            ]);
         }
         break;
       case "thread.stop":
