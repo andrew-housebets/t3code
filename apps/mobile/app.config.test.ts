@@ -9,8 +9,8 @@ vi.mock("../../scripts/lib/public-config.ts", () => ({
   // app.config.ts copies this into process.env, where an undefined value becomes "undefined".
   loadRepoEnv: () =>
     Object.fromEntries(
-      ["APP_VARIANT", "T3CODE_IOS_TEAM_ID", "T3CODE_IOS_BUNDLE_ID"].flatMap((key) =>
-        process.env[key] === undefined ? [] : [[key, process.env[key]]],
+      ["APP_VARIANT", "T3CODE_IOS_TEAM_ID", "T3CODE_IOS_BUNDLE_ID", "T3CODE_APP_ICON"].flatMap(
+        (key) => (process.env[key] === undefined ? [] : [[key, process.env[key]]]),
       ),
     ),
 }));
@@ -55,9 +55,11 @@ it.each([
 it("signs fork builds with their own identity and no upstream Expo project", async () => {
   vi.stubEnv("T3CODE_IOS_TEAM_ID", "TEAM123456");
   vi.stubEnv("T3CODE_IOS_BUNDLE_ID", "com.example.fork");
+  vi.stubEnv("T3CODE_APP_ICON", "./assets/fork/icon.png");
   const config = await loadConfig("production");
   expect(config.ios?.appleTeamId).toBe("TEAM123456");
   expect(config.ios?.bundleIdentifier).toBe("com.example.fork");
+  expect(config.ios?.icon).toBe("./assets/fork/icon.png");
   expect(config.ios?.entitlements?.["keychain-access-groups"]).toEqual([
     "$(AppIdentifierPrefix)com.example.fork",
   ]);

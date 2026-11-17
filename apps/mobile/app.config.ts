@@ -54,6 +54,8 @@ if (
 }
 const easProjectId = isForkBuild ? forkEasProjectId : "d763fcb8-d37c-41ea-a773-b54a0ab4a454";
 const expoOwner = isForkBuild ? repoEnv.T3CODE_EXPO_OWNER?.trim() || undefined : "pingdotgg";
+// A 1024px opaque PNG, relative to apps/mobile; replaces the Icon Composer bundle for fork builds.
+const forkAppIcon = isForkBuild ? repoEnv.T3CODE_APP_ICON?.trim() || undefined : undefined;
 
 const DEVELOPMENT_ASSETS = {
   appIcon: fromRepoRoot(BRAND_ASSET_PATHS.developmentIosIconPng),
@@ -262,7 +264,7 @@ const config: ExpoConfig = {
     policy: runtimeVersionPolicy,
   },
   orientation: "portrait",
-  icon: variant.assets.appIcon,
+  icon: forkAppIcon ?? variant.assets.appIcon,
   userInterfaceStyle: "automatic",
   updates: {
     enabled: easProjectId !== undefined && repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0",
@@ -271,7 +273,10 @@ const config: ExpoConfig = {
     fallbackToCacheTimeout: 0,
   },
   ios: {
-    icon: variant.assets.iosIcon,
+    icon: forkAppIcon ?? variant.assets.iosIcon,
+    ...(repoEnv.T3CODE_IOS_BUILD_NUMBER?.trim()
+      ? { buildNumber: repoEnv.T3CODE_IOS_BUILD_NUMBER.trim() }
+      : {}),
     supportsTablet: true,
     requireFullScreen: process.env.T3_SHOWCASE_CAPTURE_BUILD === "1",
     bundleIdentifier: iosBundleIdentifier,
