@@ -17,6 +17,7 @@ import {
 
 export const DEFAULT_MOBILE_THEME_ID = MOBILE_DEFAULT_THEME_ID;
 export const MOBILE_THEME_IDS = [...SHARED_MOBILE_THEME_IDS, "material-you"] as const;
+const UNSET_MOBILE_THEME_ID = "claude" satisfies SharedMobileThemeId;
 export type MobileThemeId = SharedMobileThemeId | "material-you";
 export type MobileThemeAppearance = ThemeAppearance;
 export type MobileThemeMode = MobileThemeAppearance | "system";
@@ -37,7 +38,7 @@ export type MobileThemeVariables = Readonly<Record<MobileThemeVariable, string>>
 function normalizeMobileThemeId(value: unknown): MobileThemeId {
   return typeof value === "string" && (MOBILE_THEME_IDS as readonly string[]).includes(value)
     ? (value as MobileThemeId)
-    : DEFAULT_MOBILE_THEME_ID;
+    : UNSET_MOBILE_THEME_ID;
 }
 
 export function normalizeMobileThemeMode(value: unknown): MobileThemeMode {
