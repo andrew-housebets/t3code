@@ -15,7 +15,7 @@ import {
 } from "../composerDraftStore";
 import { newDraftId, newThreadId } from "../lib/utils";
 import { useCoordinatorStore } from "../components/overview/coordinatorStore";
-import { readCoordinatorModelDefault } from "../components/overview/projectModelDefaults";
+import { readCoordinatorModelDefault } from "../components/overview/projectModelDefaults.logic";
 import { orderItemsByPreferredIds } from "../components/Sidebar.logic";
 import {
   deriveLogicalProjectKeyFromSettings,

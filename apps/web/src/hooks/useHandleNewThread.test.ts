@@ -234,7 +234,7 @@ vi.mock("../state/entities", () => {
   };
 });
 vi.mock("../state/projects", () => ({ defaultProjectFallbackReadyAtom: () => true }));
-vi.mock("../components/overview/projectModelDefaults", () => ({
+vi.mock("../components/overview/projectModelDefaults.logic", () => ({
   readCoordinatorModelDefault: async () => ({ instanceId: "claudeAgent", model: "opus" }),
 }));
 vi.mock("../state/olderSettledShelf", () => ({ readUnloadedThreadCount: () => 0 }));
