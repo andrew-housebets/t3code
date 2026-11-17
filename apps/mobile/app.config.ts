@@ -56,6 +56,11 @@ const easProjectId = isForkBuild ? forkEasProjectId : "d763fcb8-d37c-41ea-a773-b
 const expoOwner = isForkBuild ? repoEnv.T3CODE_EXPO_OWNER?.trim() || undefined : "pingdotgg";
 // A 1024px opaque PNG, relative to apps/mobile; replaces the Icon Composer bundle for fork builds.
 const forkAppIcon = isForkBuild ? repoEnv.T3CODE_APP_ICON?.trim() || undefined : undefined;
+const forkSplashLogo = isForkBuild ? repoEnv.T3CODE_SPLASH_LOGO?.trim() || undefined : undefined;
+// The widgets tint this SVG as a template image and stretch it into a 1.5:1 frame.
+const forkWidgetLogoSvg = isForkBuild
+  ? repoEnv.T3CODE_WIDGET_LOGO_SVG?.trim() || undefined
+  : undefined;
 
 const DEVELOPMENT_ASSETS = {
   appIcon: fromRepoRoot(BRAND_ASSET_PATHS.developmentIosIconPng),
@@ -433,12 +438,12 @@ const config: ExpoConfig = {
     [
       "expo-splash-screen",
       {
-        image: variant.assets.splashIcon,
+        image: forkSplashLogo ?? variant.assets.splashIcon,
         resizeMode: "contain",
         backgroundColor: "#ffffff",
         imageWidth: 220,
         dark: {
-          image: variant.assets.splashIcon,
+          image: forkSplashLogo ?? variant.assets.splashIcon,
           backgroundColor: "#0a0a0a",
         },
         android: {
@@ -474,7 +479,14 @@ const config: ExpoConfig = {
     // Compile out the unused pedometer to avoid an iOS motion purpose string.
     ["expo-sensors", { motionPermission: false }],
     // Mods run in reverse order; expo-widgets must create and wipe the target before assets are added.
-    ...(!isIosPersonalTeamBuild ? ["./plugins/withWidgetLogoAsset.cjs", widgetsPlugin] : []),
+    ...(!isIosPersonalTeamBuild
+      ? [
+          forkWidgetLogoSvg
+            ? ["./plugins/withWidgetLogoAsset.cjs", { svg: forkWidgetLogoSvg }]
+            : "./plugins/withWidgetLogoAsset.cjs",
+          widgetsPlugin,
+        ]
+      : []),
     "./plugins/withAndroidNetworkSecurityConfig.cjs",
     "./plugins/withAndroidGradleHeap.cjs",
     "./plugins/withAndroidInputBackground.cjs",
