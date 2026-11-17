@@ -28,16 +28,26 @@ const FIELDS = [
   {
     key: "instructions",
     label: "Instructions",
+    rows: 8,
     placeholder: "How work in this project should be done: conventions, commands, review rules.",
   },
   {
     key: "memory",
     label: "Memory",
+    rows: 8,
     placeholder: "What threads should know going in: decisions, links, where things live.",
+  },
+  {
+    key: "folders",
+    label: "Supplementary folders",
+    rows: 3,
+    placeholder:
+      "Other folders or repositories threads may read, one absolute path per line.\n/home/me/code/api # the backend this app calls",
   },
 ] as const satisfies ReadonlyArray<{
   readonly key: keyof ProjectContextFiles;
   readonly label: string;
+  readonly rows: number;
   readonly placeholder: string;
 }>;
 
@@ -68,9 +78,8 @@ export function ProjectInstructionsEditor(props: {
     );
   }
   const shown = draft ?? saved.data;
-  const dirty =
-    draft !== null &&
-    (draft.instructions !== saved.data.instructions || draft.memory !== saved.data.memory);
+  const stored = saved.data;
+  const dirty = draft !== null && FIELDS.some(({ key }) => draft[key] !== stored[key]);
   const overLimit = FIELDS.some(({ key }) => shown[key].length > PROJECT_CONTEXT_MAX_CHARS);
 
   const save = async () => {
@@ -96,7 +105,7 @@ export function ProjectInstructionsEditor(props: {
   return (
     <div data-project-instructions className="flex flex-col gap-4">
       <ProjectModelDefaultsFields environmentId={environmentId} projectId={projectId} />
-      {FIELDS.map(({ key, label, placeholder }) => {
+      {FIELDS.map(({ key, label, rows, placeholder }) => {
         const length = shown[key].length;
         return (
           <div key={key} className="flex flex-col gap-1.5">
@@ -113,7 +122,7 @@ export function ProjectInstructionsEditor(props: {
             </div>
             <Textarea
               id={`${idPrefix}-${key}`}
-              rows={8}
+              rows={rows}
               value={shown[key]}
               placeholder={placeholder}
               disabled={!canWrite || saving}

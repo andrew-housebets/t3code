@@ -118,14 +118,60 @@ it.layer(layerTest, { excludeTestServices: true })("ProjectContext", (it) => {
   it.effect("saves instructions and memory that the next delegated task starts with", () =>
     Effect.gen(function* () {
       const context = yield* ProjectContext.ProjectContext;
-      assert.deepEqual(yield* context.readFiles("project:edit"), { instructions: "", memory: "" });
-      const files = { instructions: "Use pnpm.", memory: "- [auth](auth.md)" };
+      assert.deepEqual(yield* context.readFiles("project:edit"), {
+        instructions: "",
+        memory: "",
+        folders: "",
+      });
+      const files = { instructions: "Use pnpm.", memory: "- [auth](auth.md)", folders: "" };
       assert.deepEqual(yield* context.writeFiles("project:edit", files), files);
       assert.deepEqual(yield* context.readFiles("project:edit"), files);
       const split = splitProjectContextBlock(yield* context.taskWithContext("project:edit", TASK));
       assert.include(split.context, "Use pnpm.");
       assert.strictEqual(split.task, TASK);
     }),
+  );
+
+  it.effect(
+    "gives threads the project's supplementary folders and refuses ones that are not there",
+    () =>
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const context = yield* ProjectContext.ProjectContext;
+        const docs = yield* fileSystem.makeTempDirectoryScoped();
+        const gone = path.join(docs, "gone");
+        yield* fileSystem.makeDirectory(gone);
+        const folders = `${docs} # design docs\n\n${gone}\n`;
+        yield* context.writeFiles("project:folders", { instructions: "", memory: "", folders });
+
+        const split = splitProjectContextBlock(
+          yield* context.taskWithContext("project:folders", TASK),
+        );
+        assert.include(split.context, `- ${docs}: design docs`);
+        assert.include(yield* context.coordinatorContext("project:folders"), `- ${gone}`);
+
+        yield* context.writeFiles("project:folders", { instructions: "", memory: "" });
+        assert.strictEqual((yield* context.readFiles("project:folders")).folders, folders);
+
+        yield* fileSystem.remove(gone, { recursive: true });
+        assert.deepEqual(yield* context.folders("project:folders"), [
+          { path: docs, note: "design docs" },
+        ]);
+
+        for (const [text, reason] of [
+          [gone, "missing"],
+          ["relative/docs", "relative"],
+          [Array.from({ length: 21 }, () => docs).join("\n"), "too_many"],
+        ] as const) {
+          const error = yield* context
+            .writeFiles("project:folders", { instructions: "", memory: "", folders: text })
+            .pipe(Effect.flip);
+          assert.equal(error._tag, "ProjectContextFolderError");
+          if (error._tag === "ProjectContextFolderError") assert.equal(error.reason, reason);
+        }
+        assert.strictEqual((yield* context.readFiles("project:folders")).folders, folders);
+      }),
   );
 
   it.effect("refuses a save over the cap and keeps what was stored", () =>
@@ -142,6 +188,7 @@ it.layer(layerTest, { excludeTestServices: true })("ProjectContext", (it) => {
       assert.deepEqual(yield* context.readFiles("project:cap"), {
         instructions: "Keep me.",
         memory: "",
+        folders: "",
       });
     }),
   );
@@ -155,7 +202,11 @@ it.layer(layerTest, { excludeTestServices: true })("ProjectContext", (it) => {
       yield* fileSystem.makeDirectory(path.join(directory, "instructions.md"), {
         recursive: true,
       });
-      assert.deepEqual(yield* context.read("project:unreadable"), { instructions: "", memory: "" });
+      assert.deepEqual(yield* context.read("project:unreadable"), {
+        instructions: "",
+        memory: "",
+        folders: [],
+      });
       const error = yield* context.readFiles("project:unreadable").pipe(Effect.flip);
       assert.equal(error._tag, "ProjectContextFileError");
     }),

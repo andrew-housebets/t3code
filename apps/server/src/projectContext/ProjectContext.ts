@@ -1,3 +1,5 @@
+import * as NodeOS from "node:os";
+
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -8,6 +10,7 @@ import type * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
 import {
   PROJECT_CONTEXT_MAX_CHARS,
+  PROJECT_FOLDERS_MAX,
   PROJECT_LIBRARY_UPLOAD_MAX_BYTES,
   ProjectLibraryFileExistsError,
   type ProjectArtifact,
@@ -26,6 +29,7 @@ import {
 import * as ServerConfig from "../config.ts";
 import * as ProjectSidecar from "../projectSidecar/ProjectSidecar.ts";
 import { isWithinRoot } from "../workspace/KnownWorkspaces.ts";
+import { parseProjectFolders, type ProjectFolder } from "./projectFolders.ts";
 import { copyIntoLibrary, libraryRelativePath, safeLibraryFileName } from "./libraryFiles.ts";
 
 // ponytail: a flat listing capped here; page it if Libraries grow past a few thousand files.
@@ -69,6 +73,21 @@ export class ProjectContextTooLongError extends Schema.TaggedError<ProjectContex
   }
 }
 
+const FOLDER_REFUSALS = {
+  relative: "is not an absolute path",
+  missing: "is not a folder on this machine",
+  too_many: `is past the limit of ${PROJECT_FOLDERS_MAX} folders`,
+} as const;
+
+export class ProjectContextFolderError extends Schema.TaggedError<ProjectContextFolderError>()(
+  "ProjectContextFolderError",
+  { folder: Schema.String, reason: Schema.Literals(["relative", "missing", "too_many"]) },
+) {
+  override get message(): string {
+    return `Supplementary folder ${this.folder} ${FOLDER_REFUSALS[this.reason]}.`;
+  }
+}
+
 const LIBRARY_REQUEST_REFUSALS = {
   name: "That file name has nothing usable left once made safe.",
   path: "That is not a file in the Library.",
@@ -88,6 +107,7 @@ export class ProjectLibraryRequestError extends Schema.TaggedError<ProjectLibrar
 export interface ProjectContextFiles {
   readonly instructions: string;
   readonly memory: string;
+  readonly folders: string;
 }
 
 export class ProjectContext extends Context.Service<
@@ -96,21 +116,30 @@ export class ProjectContext extends Context.Service<
     /** `<stateDir>/projects/<projectId>`, the id URI-encoded. */
     readonly directory: (projectId: string) => Effect.Effect<string, ProjectContextPathError>;
     /** A missing or unreadable file reads as empty; each is capped at `PROJECT_CONTEXT_MAX_CHARS`. */
-    readonly read: (
-      projectId: string,
-    ) => Effect.Effect<ProjectContextFiles, ProjectContextPathError>;
+    readonly read: (projectId: string) => Effect.Effect<StandingContext, ProjectContextPathError>;
     /** The files as stored, for editing: uncapped, and a read failure fails rather than reading as empty. */
     readonly readFiles: (
       projectId: string,
     ) => Effect.Effect<ProjectContextFiles, ProjectContextPathError | ProjectContextFileError>;
-    /** Replaces both files, each through a rename; refuses text over `PROJECT_CONTEXT_MAX_CHARS`. */
+    /**
+     * Replaces the files, each through a rename; refuses text over `PROJECT_CONTEXT_MAX_CHARS`
+     * and a folder that is not an existing absolute directory. Without `folders` the stored
+     * list is kept.
+     */
     readonly writeFiles: (
       projectId: string,
-      files: ProjectContextFiles,
+      files: Omit<ProjectContextFiles, "folders"> & { readonly folders?: string | undefined },
     ) => Effect.Effect<
       ProjectContextFiles,
-      ProjectContextPathError | ProjectContextFileError | ProjectContextTooLongError
+      | ProjectContextPathError
+      | ProjectContextFileError
+      | ProjectContextTooLongError
+      | ProjectContextFolderError
     >;
+    /** The project's supplementary folders that still exist, as absolute paths. */
+    readonly folders: (
+      projectId: string,
+    ) => Effect.Effect<ReadonlyArray<ProjectFolder>, ProjectContextPathError>;
     readonly ensureLibrary: (
       projectId: string,
     ) => Effect.Effect<string, ProjectContextPathError | ProjectContextLibraryError>;
@@ -152,7 +181,7 @@ export class ProjectContext extends Context.Service<
       void,
       ProjectContextPathError | ProjectContextLibraryError | ProjectLibraryRequestError
     >;
-    /** The task unchanged when the project has no instructions or memory. */
+    /** The task unchanged when the project has no instructions, memory or folders. */
     readonly taskWithContext: (
       projectId: string,
       task: string,
@@ -172,17 +201,30 @@ const capped = (text: string) => {
   return `${text.slice(0, end)}\n[Cut at ${PROJECT_CONTEXT_MAX_CHARS} characters.]`;
 };
 
-const fileSections = (files: ProjectContextFiles) =>
+export interface StandingContext {
+  readonly instructions: string;
+  readonly memory: string;
+  readonly folders: ReadonlyArray<ProjectFolder>;
+}
+
+const fileSections = (context: StandingContext) =>
   [
-    files.instructions.trim() === ""
+    context.instructions.trim() === ""
       ? undefined
-      : `## Standing instructions\n\n${files.instructions.trimEnd()}`,
-    files.memory.trim() === "" ? undefined : `## Memory index\n\n${files.memory.trimEnd()}`,
+      : `## Standing instructions\n\n${context.instructions.trimEnd()}`,
+    context.memory.trim() === "" ? undefined : `## Memory index\n\n${context.memory.trimEnd()}`,
+    context.folders.length === 0
+      ? undefined
+      : `## Supplementary folders\n\nOther folders and repositories this project draws on. They sit outside your worktree: read them for reference, and change files there only when the task says to.\n\n${context.folders
+          .map((folder) =>
+            folder.note === "" ? `- ${folder.path}` : `- ${folder.path}: ${folder.note}`,
+          )
+          .join("\n")}`,
   ].filter((section) => section !== undefined);
 
 function formatTaskWithContext(
   task: string,
-  context: ProjectContextFiles & { readonly libraryDir: string },
+  context: StandingContext & { readonly libraryDir: string },
 ): string {
   const sections = [
     ...fileSections(context),
@@ -195,7 +237,7 @@ function formatTaskWithContext(
 }
 
 function formatCoordinatorContext(
-  context: ProjectContextFiles & { readonly libraryDir: string },
+  context: StandingContext & { readonly libraryDir: string },
 ): string {
   return [
     "## Project standing context\n\nEvery thread you delegate starts with these instructions and this memory. Hold delegated work to them, and answer questions about them from this text.",
@@ -223,6 +265,23 @@ const make = Effect.gen(function* () {
     return path.join(config.stateDir, "projects", encodeURIComponent(projectId));
   });
 
+  const FILE_NAMES = {
+    instructions: "instructions.md",
+    memory: "MEMORY.md",
+    folders: "folders.txt",
+  } as const;
+
+  const expandHome = (folder: string) =>
+    folder === "~" || folder.startsWith("~/")
+      ? path.join(NodeOS.homedir(), folder.slice(1))
+      : folder;
+
+  const isDirectory = (folder: string) =>
+    fileSystem.stat(folder).pipe(
+      Effect.map((info) => info.type === "Directory"),
+      Effect.orElseSucceed(() => false),
+    );
+
   const readOrEmpty = (filePath: string) =>
     fileSystem.readFileString(filePath).pipe(
       Effect.map(capped),
@@ -239,14 +298,27 @@ const make = Effect.gen(function* () {
 
   const read = Effect.fn("ProjectContext.read")(function* (projectId: string) {
     const root = yield* directory(projectId);
-    const [instructions, memory] = yield* Effect.all(
-      [readOrEmpty(path.join(root, "instructions.md")), readOrEmpty(path.join(root, "MEMORY.md"))],
+    const [instructions, memory, folderText] = yield* Effect.all(
+      [
+        readOrEmpty(path.join(root, FILE_NAMES.instructions)),
+        readOrEmpty(path.join(root, FILE_NAMES.memory)),
+        readOrEmpty(path.join(root, FILE_NAMES.folders)),
+      ],
       { concurrency: "unbounded" },
     );
-    return { instructions, memory };
+    const listed = parseProjectFolders(folderText)
+      .slice(0, PROJECT_FOLDERS_MAX)
+      .map((folder) => ({ ...folder, path: expandHome(folder.path) }));
+    // A folder deleted since it was saved is left out, not handed to a thread as if readable.
+    const present = yield* Effect.forEach(listed, (folder) => isDirectory(folder.path), {
+      concurrency: "unbounded",
+    });
+    return { instructions, memory, folders: listed.filter((_, index) => present[index]) };
   });
 
-  const FILE_NAMES = { instructions: "instructions.md", memory: "MEMORY.md" } as const;
+  const folders = Effect.fn("ProjectContext.folders")(function* (projectId: string) {
+    return (yield* read(projectId)).folders;
+  });
 
   const readStored = (filePath: string) =>
     fileSystem.readFileString(filePath).pipe(
@@ -260,22 +332,29 @@ const make = Effect.gen(function* () {
 
   const readFiles = Effect.fn("ProjectContext.readFiles")(function* (projectId: string) {
     const root = yield* directory(projectId);
-    const [instructions, memory] = yield* Effect.all(
+    const [instructions, memory, folders] = yield* Effect.all(
       [
         readStored(path.join(root, FILE_NAMES.instructions)),
         readStored(path.join(root, FILE_NAMES.memory)),
+        readStored(path.join(root, FILE_NAMES.folders)),
       ],
       { concurrency: "unbounded" },
     );
-    return { instructions, memory };
+    return { instructions, memory, folders };
   });
 
   const writeFiles = Effect.fn("ProjectContext.writeFiles")(function* (
     projectId: string,
-    files: ProjectContextFiles,
+    input: Omit<ProjectContextFiles, "folders"> & { readonly folders?: string | undefined },
   ) {
     const root = yield* directory(projectId);
-    for (const key of ["instructions", "memory"] as const) {
+    const files: ProjectContextFiles = {
+      instructions: input.instructions,
+      memory: input.memory,
+      folders: input.folders ?? (yield* readStored(path.join(root, FILE_NAMES.folders))),
+    };
+    const keys = ["instructions", "memory", "folders"] as const;
+    for (const key of keys) {
       if (files[key].length > PROJECT_CONTEXT_MAX_CHARS) {
         return yield* new ProjectContextTooLongError({
           file: FILE_NAMES[key],
@@ -283,7 +362,24 @@ const make = Effect.gen(function* () {
         });
       }
     }
-    for (const key of ["instructions", "memory"] as const) {
+    if (input.folders !== undefined) {
+      const listed = parseProjectFolders(input.folders);
+      for (const [index, folder] of listed.entries()) {
+        const absolute = expandHome(folder.path);
+        const reason =
+          index >= PROJECT_FOLDERS_MAX
+            ? "too_many"
+            : !path.isAbsolute(absolute)
+              ? "relative"
+              : (yield* isDirectory(absolute))
+                ? null
+                : "missing";
+        if (reason !== null) {
+          return yield* new ProjectContextFolderError({ folder: folder.path, reason });
+        }
+      }
+    }
+    for (const key of keys) {
       const target = path.join(root, FILE_NAMES[key]);
       // ponytail: one staging name per file; two saves racing on one project can interleave.
       const staged = `${target}.saving`;
@@ -498,7 +594,12 @@ const make = Effect.gen(function* () {
     task: string,
   ) {
     const files = yield* read(projectId);
-    if (files.instructions.trim() === "" && files.memory.trim() === "") return task;
+    if (
+      files.instructions.trim() === "" &&
+      files.memory.trim() === "" &&
+      files.folders.length === 0
+    )
+      return task;
     return formatTaskWithContext(task, {
       ...files,
       libraryDir: yield* ensureLibrary(projectId),
@@ -517,6 +618,7 @@ const make = Effect.gen(function* () {
     read,
     readFiles,
     writeFiles,
+    folders,
     ensureLibrary,
     listLibrary,
     listArtifacts,

@@ -21,6 +21,8 @@ export type ProjectContextInput = typeof ProjectContextInput.Type;
 export const ProjectContextFiles = Schema.Struct({
   instructions: Schema.String,
   memory: Schema.String,
+  /** One supplementary folder per line: an absolute path, then an optional ` # note`. */
+  folders: Schema.String,
 });
 export type ProjectContextFiles = typeof ProjectContextFiles.Type;
 
@@ -28,6 +30,8 @@ export const ProjectContextWriteInput = Schema.Struct({
   projectId: ProjectId,
   instructions: ProjectContextText,
   memory: ProjectContextText,
+  /** Left out by clients that predate folders; the stored list is then kept. */
+  folders: Schema.optional(ProjectContextText),
 });
 export type ProjectContextWriteInput = typeof ProjectContextWriteInput.Type;
 
@@ -68,6 +72,9 @@ export const ProjectArtifactListing = Schema.Struct({
   artifacts: Schema.Array(ProjectArtifact),
 });
 export type ProjectArtifactListing = typeof ProjectArtifactListing.Type;
+
+/** A project lists at most this many supplementary folders. */
+export const PROJECT_FOLDERS_MAX = 20;
 
 /** A file a user adds to the Library is refused above this size. */
 export const PROJECT_LIBRARY_UPLOAD_MAX_BYTES = 25 * 1024 * 1024;

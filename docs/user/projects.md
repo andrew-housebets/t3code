@@ -28,6 +28,19 @@ The sidebar's **Artifacts** row opens the Library of the thread you have open, a
 
 Each project has standing instructions and a memory file. Every coordinator and every thread it delegates starts with both, along with the Library's location. Edit them from **⋯ → Project instructions** in a coordinator, the command palette, or **Settings → Projects → Instructions and memory**. Changes reach threads started afterwards, and a running coordinator on its next turn. The same editor sets the model new coordinators start on and the model their delegated threads use.
 
+### Supplementary folders
+
+A project is rooted at one folder, but its work often draws on others: a backend repository, shared docs, a design system. List them under **Supplementary folders** in the same editor, one absolute path per line on the machine that runs the server, with an optional note after `#`:
+
+```
+/home/me/code/api # the backend this app calls
+~/docs/handbook
+```
+
+Every coordinator and delegated thread is told about these folders and what each is for. They are reference material. Delegated threads still get a worktree of the project's own repository only, so a change in a supplementary folder lands in that folder directly, not on a branch. A folder that no longer exists is refused when you save and left out for threads.
+
+Stopping a coordinator stops only the coordinator. Threads it delegated keep running; stop one from the Threads panel.
+
 ## Where work happens
 
 Each delegated thread runs in its own git worktree, so threads do not edit the same files and your main checkout stays as it was.

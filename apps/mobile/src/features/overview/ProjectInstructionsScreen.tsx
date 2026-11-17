@@ -46,6 +46,12 @@ const FIELDS = [
     label: "Memory",
     placeholder: "What threads should know going in: decisions, links, where things live.",
   },
+  {
+    key: "folders",
+    label: "Supplementary folders",
+    placeholder:
+      "Other folders or repositories threads may read, one absolute path per line.\n/home/me/code/api # the backend this app calls",
+  },
 ] as const satisfies ReadonlyArray<{
   readonly key: keyof ProjectContextFiles;
   readonly label: string;
@@ -292,9 +298,8 @@ function ProjectContextFields(props: {
     );
   }
   const shown = draft ?? saved.data;
-  const dirty =
-    draft !== null &&
-    (draft.instructions !== saved.data.instructions || draft.memory !== saved.data.memory);
+  const stored = saved.data;
+  const dirty = draft !== null && FIELDS.some(({ key }) => draft[key] !== stored[key]);
   const overLimit = FIELDS.some(({ key }) => shown[key].length > PROJECT_CONTEXT_MAX_CHARS);
 
   const save = async () => {
@@ -328,6 +333,8 @@ function ProjectContextFields(props: {
                 placeholder={placeholder}
                 placeholderTextColorClassName="accent-foreground-muted"
                 editable={canWrite && !saving}
+                autoCapitalize={key === "folders" ? "none" : undefined}
+                autoCorrect={key !== "folders"}
                 multiline
                 scrollEnabled
                 textAlignVertical="top"

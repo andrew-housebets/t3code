@@ -2999,9 +2999,9 @@ export const layerWsRpc = (
           projectContext
             .readFiles(input.projectId)
             .pipe(Effect.mapError(projectContextError(input.projectId))),
-        [WS_METHODS.projectContextWrite]: ({ projectId, instructions, memory }) =>
+        [WS_METHODS.projectContextWrite]: ({ projectId, instructions, memory, folders }) =>
           projectContext
-            .writeFiles(projectId, { instructions, memory })
+            .writeFiles(projectId, { instructions, memory, folders })
             .pipe(Effect.mapError(projectContextError(projectId))),
         [WS_METHODS.projectsListIgnoredFiles]: (input) =>
           workspaceEntries.listIgnoredFiles(input).pipe(
