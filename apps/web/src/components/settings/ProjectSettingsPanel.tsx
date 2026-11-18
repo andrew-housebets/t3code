@@ -52,6 +52,7 @@ import {
 import { ProjectActionsSettings } from "./ProjectActionsSettings";
 import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
 import { ProjectInstructionsEditor } from "../overview/ProjectInstructionsEditor";
+import { CoordinatorModelSettingsRow } from "../overview/ProjectModelDefaults";
 import {
   defaultProjectIcon,
   hasDefaultProjectIcon,
@@ -617,6 +618,11 @@ function ProjectDetail({
                 </Button>
               </div>
             }
+          />
+          <CoordinatorModelSettingsRow
+            key={`${filePickerProject.environmentId}:${filePickerProject.id}`}
+            environmentId={filePickerProject.environmentId}
+            projectId={filePickerProject.id}
           />
           {canOrganize ? (
             <>

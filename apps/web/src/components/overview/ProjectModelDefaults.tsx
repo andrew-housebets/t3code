@@ -17,24 +17,11 @@ import { EMPTY_SERVER_PROVIDERS, serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { ProviderModelPicker } from "../chat/ProviderModelPicker";
 import { TraitsPicker } from "../chat/TraitsPicker";
-import { SETTINGS_PICKER_TRIGGER_CLASSNAME } from "../settings/settingsLayout";
+import { SETTINGS_PICKER_TRIGGER_CLASSNAME, SettingsRow } from "../settings/settingsLayout";
 import { Button } from "../ui/button";
-import { Label } from "../ui/label";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 
-const ROWS = [
-  {
-    key: "coordinatorModelSelection",
-    label: "Coordinator model",
-    unset: "New coordinators start on the usual default model.",
-  },
-] as const satisfies ReadonlyArray<{
-  readonly key: keyof ProjectModelDefaults;
-  readonly label: string;
-  readonly unset: string;
-}>;
-
-export function ProjectModelDefaultsFields(props: {
+export function CoordinatorModelSettingsRow(props: {
   readonly environmentId: EnvironmentId;
   readonly projectId: ProjectId;
 }) {
@@ -68,72 +55,65 @@ export function ProjectModelDefaultsFields(props: {
     saved.refresh();
   };
 
+  const selection = defaults.coordinatorModelSelection;
+  const shown = selection ?? (entries[0] ? { instanceId: entries[0].instanceId, model: "" } : null);
+  const activeEntry = entries.find((entry) => entry.instanceId === selection?.instanceId);
+  const setSelection = (value: ModelSelection | null) =>
+    void save({ coordinatorModelSelection: value });
   return (
-    <div data-project-model-defaults className="flex flex-col gap-3">
-      {ROWS.map(({ key, label, unset }) => {
-        const selection = defaults[key];
-        const shown =
-          selection ?? (entries[0] ? { instanceId: entries[0].instanceId, model: "" } : null);
-        const activeEntry = entries.find((entry) => entry.instanceId === selection?.instanceId);
-        const setSelection = (value: ModelSelection | null) =>
-          void save({ ...defaults, [key]: value });
-        return (
-          <div key={key} className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between gap-2">
-              <Label>{label}</Label>
-              {selection !== null && canWrite ? (
-                <Button size="xs" variant="ghost-muted" onClick={() => setSelection(null)}>
-                  Reset
-                </Button>
-              ) : null}
-            </div>
-            {shown === null ? (
-              <p className="m-0 text-xs text-muted-foreground">No providers available.</p>
-            ) : (
-              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                <ProviderModelPicker
-                  environmentId={environmentId}
-                  disabled={!canWrite}
-                  activeInstanceId={shown.instanceId}
-                  model={shown.model}
-                  lockedProvider={null}
-                  instanceEntries={entries}
-                  modelOptionsByInstance={getCustomModelOptionsByInstance(
-                    settings,
-                    providers,
-                    shown.instanceId,
-                    shown.model,
-                  )}
-                  isComposerOwned={false}
-                  triggerClassName={SETTINGS_PICKER_TRIGGER_CLASSNAME}
-                  {...(selection === null ? { triggerLabel: "Default" } : {})}
-                  onInstanceModelChange={(instanceId, model) =>
-                    setSelection(pickModelSelection(selection, instanceId, model))
-                  }
-                />
-                {selection !== null && activeEntry ? (
-                  <TraitsPicker
-                    provider={activeEntry.driverKind}
-                    models={activeEntry.models}
-                    model={selection.model}
-                    modelOptions={selection.options ?? []}
-                    allowPromptInjectedEffort={false}
-                    triggerClassName={SETTINGS_PICKER_TRIGGER_CLASSNAME}
-                    onModelOptionsChange={(options) =>
-                      setSelection(
-                        createModelSelection(selection.instanceId, selection.model, options),
-                      )
-                    }
-                  />
-                ) : null}
-              </div>
-            )}
-            {selection === null ? (
-              <p className="m-0 text-xs text-muted-foreground">{unset}</p>
+    <SettingsRow
+      title="Coordinator model"
+      description={
+        shown === null
+          ? "No providers available."
+          : selection === null
+            ? "New coordinators start on the usual default model."
+            : "Model this project's coordinator starts on."
+      }
+      control={
+        shown === null ? null : (
+          <div data-project-model-defaults className="flex min-w-0 flex-wrap items-center gap-1.5">
+            {selection !== null && canWrite ? (
+              <Button size="xs" variant="ghost-muted" onClick={() => setSelection(null)}>
+                Reset
+              </Button>
+            ) : null}
+            <ProviderModelPicker
+              environmentId={environmentId}
+              disabled={!canWrite}
+              activeInstanceId={shown.instanceId}
+              model={shown.model}
+              lockedProvider={null}
+              instanceEntries={entries}
+              modelOptionsByInstance={getCustomModelOptionsByInstance(
+                settings,
+                providers,
+                shown.instanceId,
+                shown.model,
+              )}
+              isComposerOwned={false}
+              triggerClassName={SETTINGS_PICKER_TRIGGER_CLASSNAME}
+              {...(selection === null ? { triggerLabel: "Default" } : {})}
+              onInstanceModelChange={(instanceId, model) =>
+                setSelection(pickModelSelection(selection, instanceId, model))
+              }
+            />
+            {selection !== null && activeEntry ? (
+              <TraitsPicker
+                provider={activeEntry.driverKind}
+                models={activeEntry.models}
+                model={selection.model}
+                modelOptions={selection.options ?? []}
+                allowPromptInjectedEffort={false}
+                triggerClassName={SETTINGS_PICKER_TRIGGER_CLASSNAME}
+                onModelOptionsChange={(options) =>
+                  setSelection(createModelSelection(selection.instanceId, selection.model, options))
+                }
+              />
             ) : null}
           </div>
-        );
-      })}
-    </div>
+        )
+      }
+    />
   );
 }
