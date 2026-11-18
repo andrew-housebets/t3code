@@ -65,6 +65,13 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
 const DESKTOP_APP_ID = "com.t3tools.t3code";
 const DESKTOP_DATA_NAME_PATTERN = /^[a-z0-9][a-z0-9-]*$/u;
+const FORK_WEB_ICON_SIZES = [
+  ["favicon-16x16.png", "16"],
+  ["favicon-32x32.png", "32"],
+  ["apple-touch-icon.png", "180"],
+  ["icon-192x192.png", "192"],
+  ["icon-512x512.png", "512"],
+] as const;
 const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
 const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
@@ -968,7 +975,11 @@ interface StagePackageJson {
   readonly version: string;
   readonly buildVersion: string;
   readonly t3codeCommitHash: string;
-  readonly t3codeDesktopIdentity?: { readonly appName: string; readonly dataName: string };
+  readonly t3codeDesktopIdentity?: {
+    readonly appName: string;
+    readonly dataName: string;
+    readonly defaultTheme?: DesktopForkDefaultTheme;
+  };
   readonly t3codeWebAuthn?: MacWebAuthnEntitlements;
   readonly private: true;
   readonly packageManager: string;
@@ -1159,6 +1170,66 @@ export interface DesktopForkIdentity {
   readonly appId: string;
   readonly appName: string;
   readonly dataName: string;
+  readonly iconPng: string | undefined;
+  readonly defaultThemePath: string | undefined;
+}
+
+export interface DesktopForkDefaultTheme {
+  readonly id: string;
+  readonly label: string;
+  readonly appearance: "light" | "dark";
+  readonly colors: Record<string, unknown>;
+  readonly variants?: Record<string, unknown>;
+  readonly css?: string;
+}
+
+export class InvalidDesktopForkThemeError extends Schema.TaggedError<InvalidDesktopForkThemeError>()(
+  "InvalidDesktopForkThemeError",
+  {
+    themePath: Schema.String,
+  },
+) {
+  override get message(): string {
+    return `T3CODE_DESKTOP_DEFAULT_THEME '${this.themePath}' must be a version 1 theme file with a name, an appearance and colors.`;
+  }
+}
+
+const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+export function resolveDesktopForkDefaultTheme(
+  value: unknown,
+  themePath: string,
+): DesktopForkDefaultTheme {
+  if (
+    !isPlainRecord(value) ||
+    value.version !== 1 ||
+    typeof value.name !== "string" ||
+    value.name.trim().length === 0 ||
+    (value.appearance !== "light" && value.appearance !== "dark") ||
+    !isPlainRecord(value.colors) ||
+    (value.variants !== undefined && !isPlainRecord(value.variants)) ||
+    (value.css !== undefined && typeof value.css !== "string")
+  ) {
+    throw new InvalidDesktopForkThemeError({ themePath });
+  }
+  const label = value.name.trim();
+  const id =
+    typeof value.id === "string"
+      ? value.id
+      : label
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "")
+          .slice(0, 48);
+  return {
+    id,
+    label,
+    appearance: value.appearance,
+    colors: value.colors,
+    ...(value.variants ? { variants: value.variants } : {}),
+    ...(typeof value.css === "string" && value.css.length > 0 ? { css: value.css } : {}),
+  };
 }
 
 export class InvalidDesktopForkIdentityError extends Schema.TaggedError<InvalidDesktopForkIdentityError>()(
@@ -1178,6 +1249,8 @@ export const resolveDesktopForkIdentity = Effect.fn("resolveDesktopForkIdentity"
     appId: Config.String("T3CODE_DESKTOP_APP_ID").pipe(Config.option),
     appName: Config.String("T3CODE_APP_NAME").pipe(Config.option),
     dataName: Config.String("T3CODE_DESKTOP_DATA_NAME").pipe(Config.option),
+    iconPng: Config.String("T3CODE_DESKTOP_ICON").pipe(Config.option),
+    defaultThemePath: Config.String("T3CODE_DESKTOP_DEFAULT_THEME").pipe(Config.option),
   });
   const appId = Option.getOrUndefined(env.appId)?.trim();
   if (!appId) return undefined;
@@ -1186,7 +1259,13 @@ export const resolveDesktopForkIdentity = Effect.fn("resolveDesktopForkIdentity"
   if (appId === DESKTOP_APP_ID || !appName || !DESKTOP_DATA_NAME_PATTERN.test(dataName)) {
     return yield* new InvalidDesktopForkIdentityError({ appId });
   }
-  return { appId, appName, dataName } satisfies DesktopForkIdentity;
+  return {
+    appId,
+    appName,
+    dataName,
+    iconPng: Option.getOrUndefined(env.iconPng)?.trim() || undefined,
+    defaultThemePath: Option.getOrUndefined(env.defaultThemePath)?.trim() || undefined,
+  } satisfies DesktopForkIdentity;
 });
 
 export class InvalidAppleTeamIdError extends Schema.TaggedError<InvalidAppleTeamIdError>()(
@@ -3738,7 +3817,24 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
 
   const appVersion =
     options.version ?? resolveTaggedSourceVersion(repoRoot, serverPackageJson.version);
-  const iconAssets = resolveDesktopBuildIconAssets(appVersion);
+  const fork = yield* resolveDesktopForkIdentity();
+  const baseIconAssets = resolveDesktopBuildIconAssets(appVersion);
+  const iconAssets = fork?.iconPng
+    ? { ...baseIconAssets, macIconPng: fork.iconPng, linuxIconPng: fork.iconPng }
+    : baseIconAssets;
+  const forkThemePath = fork?.defaultThemePath;
+  const forkDefaultTheme = forkThemePath
+    ? yield* fs.readFileString(path.resolve(repoRoot, forkThemePath)).pipe(
+        Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown))),
+        Effect.flatMap((value) =>
+          Effect.try({
+            try: () => resolveDesktopForkDefaultTheme(value, forkThemePath),
+            catch: () => new InvalidDesktopForkThemeError({ themePath: forkThemePath }),
+          }),
+        ),
+        Effect.mapError(() => new InvalidDesktopForkThemeError({ themePath: forkThemePath })),
+      )
+    : undefined;
   const commitHash = yield* resolveGitCommitHash(repoRoot);
   const mkdir = options.keepStage ? fs.makeTempDirectory : fs.makeTempDirectoryScoped;
   const stageRoot = yield* mkdir({
@@ -3827,6 +3923,19 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
 
   const webAssetBrand = resolveDesktopWebAssetBrand(appVersion);
   yield* applyWebBrandAssets(webAssetBrand, "apps/server/dist/client");
+  if (fork?.iconPng) {
+    const forkIconPng = path.resolve(repoRoot, fork.iconPng);
+    for (const [fileName, size] of FORK_WEB_ICON_SIZES) {
+      const target = path.join(repoRoot, "apps/server/dist/client", fileName);
+      yield* runCommand(
+        ChildProcess.make({})`sips -z ${size} ${size} ${forkIconPng} --out ${target}`,
+        {
+          label: `sips fork web icon ${fileName}`,
+          verbose: options.verbose,
+        },
+      );
+    }
+  }
   yield* Effect.log(`[desktop-artifact] Applied ${webAssetBrand} web client branding.`);
   yield* validateBundledClientAssets(path.dirname(bundledClientEntry));
 
@@ -3887,8 +3996,8 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
     options.platform,
     stageResourcesDir,
     {
-      macIconPng: path.join(repoRoot, iconAssets.macIconPng),
-      linuxIconPng: path.join(repoRoot, iconAssets.linuxIconPng),
+      macIconPng: path.resolve(repoRoot, iconAssets.macIconPng),
+      linuxIconPng: path.resolve(repoRoot, iconAssets.linuxIconPng),
       windowsIconIco: path.join(repoRoot, iconAssets.windowsIconIco),
     },
     options.verbose,
@@ -3955,14 +4064,21 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
     options.platform === "win"
       ? path.join(stageAppDir, WINDOWS_SERVER_RESOURCE_SOURCE_DIR, WINDOWS_SERVER_ASAR_RESOURCE)
       : undefined;
-  const fork = yield* resolveDesktopForkIdentity();
   const stagePackageJson: StagePackageJson = {
     // Electron names the macOS keychain item "<name> Safe Storage".
     name: fork?.dataName ?? "t3code",
     version: appVersion,
     buildVersion: appVersion,
     t3codeCommitHash: commitHash,
-    ...(fork ? { t3codeDesktopIdentity: { appName: fork.appName, dataName: fork.dataName } } : {}),
+    ...(fork
+      ? {
+          t3codeDesktopIdentity: {
+            appName: fork.appName,
+            dataName: fork.dataName,
+            ...(forkDefaultTheme ? { defaultTheme: forkDefaultTheme } : {}),
+          },
+        }
+      : {}),
     // Read by apps/desktop/src/preview/Passkeys.ts; must match the signed entitlements.
     ...(macWebAuthn ? { t3codeWebAuthn: macWebAuthn } : {}),
     private: true,

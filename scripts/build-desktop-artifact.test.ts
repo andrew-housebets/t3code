@@ -30,6 +30,7 @@ import {
   parseWslRuntimeArchiveMembers,
   readWorkspaceConfig,
   createBuildConfig,
+  resolveDesktopForkDefaultTheme,
   DESKTOP_FILE_EXCLUSIONS,
   InvalidMacPasskeyRpDomainError,
   InvalidMacPasskeyPublishableKeyError,
@@ -588,6 +589,22 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         ),
       ),
     ),
+  );
+
+  it.effect("turns a theme file into the stored custom theme fork builds select first", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const themePath = "themes/claude-desktop/t3-code-claude-desktop.json";
+      const file = JSON.parse(
+        yield* fs.readFileString(NodePath.join(import.meta.dirname, "..", themePath)),
+      );
+      const theme = resolveDesktopForkDefaultTheme(file, themePath);
+
+      assert.equal(theme.id, "t3-code-claude");
+      assert.equal(theme.appearance, "dark");
+      assert.deepStrictEqual(Object.keys(theme.variants ?? {}), ["light"]);
+      assert.throws(() => resolveDesktopForkDefaultTheme({ ...file, version: 2 }, themePath));
+    }).pipe(Effect.provide(NodeServices.layer)),
   );
 
   it.effect("names the Electron window class in the Linux desktop entry", () =>

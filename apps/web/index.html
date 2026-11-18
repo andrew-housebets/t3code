@@ -690,6 +690,16 @@
           <img id="boot-shell-logo" src="/apple-touch-icon.png" alt="T3 Code" />
         </div>
       </div>
+      <script>
+        (() => {
+          const name = window.desktopBridge?.getAppBranding?.()?.baseName;
+          if (!name) return;
+          document
+            .getElementById("boot-shell-card")
+            ?.setAttribute("aria-label", `${name} splash screen`);
+          document.getElementById("boot-shell-logo")?.setAttribute("alt", name);
+        })();
+      </script>
     </div>
     <script type="module" src="/src/bootstrap.ts"></script>
   </body>

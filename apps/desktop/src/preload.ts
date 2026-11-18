@@ -13,6 +13,7 @@ import { contextBridge, ipcRenderer, webFrame, webUtils } from "electron";
 
 import * as IpcChannels from "./ipc/channels.ts";
 import { mergeLegacyLocalStorage } from "./legacyLocalStorageMerge.ts";
+import { seedForkDefaultTheme } from "./forkDefaultTheme.ts";
 
 const SNAP_SHOT_EVENT_TYPES = new Set([
   "requested",
@@ -41,6 +42,13 @@ try {
       void ipcRenderer.invoke(IpcChannels.COMPLETE_LEGACY_LOCAL_STORAGE_CHANNEL);
     }
   }
+} catch {}
+
+try {
+  seedForkDefaultTheme(
+    window.localStorage,
+    ipcRenderer.sendSync(IpcChannels.GET_FORK_DEFAULT_THEME_CHANNEL),
+  );
 } catch {}
 
 // oxlint-disable-next-line t3code/no-global-process-runtime -- Electron exposes the client platform in its sandboxed preload process.

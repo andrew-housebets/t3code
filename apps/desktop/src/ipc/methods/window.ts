@@ -80,6 +80,18 @@ export const getAppBranding = DesktopIpc.makeSyncIpcMethod({
   }),
 });
 
+export const getForkDefaultTheme = DesktopIpc.makeSyncIpcMethod({
+  channel: IpcChannels.GET_FORK_DEFAULT_THEME_CHANNEL,
+  result: Schema.NullOr(Schema.Unknown),
+  handler: Effect.fn("desktop.ipc.window.getForkDefaultTheme")(function* () {
+    const environment = yield* DesktopEnvironment.DesktopEnvironment;
+    return Option.match(environment.forkIdentity, {
+      onNone: () => null,
+      onSome: (identity) => identity.defaultTheme ?? null,
+    });
+  }),
+});
+
 /**
  * Relay traces leave the machine, so a policy with `telemetry: false`, or one that cannot be read,
  * stops them. Read once here: a sync IPC handler cannot wait on the filesystem.

@@ -23,6 +23,7 @@ import type { OtlpProtocol } from "@t3tools/shared/observability";
 export const DesktopForkIdentity = Schema.Struct({
   appName: Schema.String,
   dataName: Schema.String,
+  defaultTheme: Schema.optional(Schema.Unknown),
 });
 export type DesktopForkIdentity = typeof DesktopForkIdentity.Type;
 

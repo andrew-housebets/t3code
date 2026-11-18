@@ -145,6 +145,7 @@ it.effect.each([
             }),
             Layer.succeed(DesktopEnvironment.DesktopEnvironment, {
               appVersion: "0.1.3",
+              branding: { baseName: "T3 Code", stageLabel: "Beta", displayName: "T3 Code (Beta)" },
               stateDir: "/task/state",
               logDir: "/task/logs",
               path: { join: (...parts: string[]) => parts.join("/") },
