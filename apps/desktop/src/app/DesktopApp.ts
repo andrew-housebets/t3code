@@ -43,6 +43,8 @@ import * as DesktopRendererHistory from "../telemetry/DesktopRendererHistory.ts"
 import * as HostProcess from "@t3tools/shared/HostProcess";
 
 const DEFAULT_DESKTOP_BACKEND_PORT = 3773;
+// Fork builds scan elsewhere so they never take the port an upstream install expects.
+const FORK_DESKTOP_BACKEND_PORT = 4773;
 const MAX_TCP_PORT = 65_535;
 const DESKTOP_BACKEND_PORT_PROBE_HOSTS = ["127.0.0.1", "0.0.0.0", "::"] as const;
 
@@ -86,6 +88,7 @@ const { logInfo: logStartupInfo, logError: logStartupError } =
 
 const resolveDesktopBackendPort = Effect.fn("resolveDesktopBackendPort")(function* (
   configuredPort: Option.Option<number>,
+  startPort: number,
 ) {
   if (Option.isSome(configuredPort)) {
     return {
@@ -95,7 +98,7 @@ const resolveDesktopBackendPort = Effect.fn("resolveDesktopBackendPort")(functio
   }
 
   const net = yield* NetService.NetService;
-  for (let port = DEFAULT_DESKTOP_BACKEND_PORT; port <= MAX_TCP_PORT; port += 1) {
+  for (let port = startPort; port <= MAX_TCP_PORT; port += 1) {
     let availableOnEveryHost = true;
 
     for (const host of DESKTOP_BACKEND_PORT_PROBE_HOSTS) {
@@ -114,7 +117,7 @@ const resolveDesktopBackendPort = Effect.fn("resolveDesktopBackendPort")(functio
   }
 
   return yield* new DesktopBackendPortUnavailableError({
-    startPort: DEFAULT_DESKTOP_BACKEND_PORT,
+    startPort,
     maxPort: MAX_TCP_PORT,
     hosts: DESKTOP_BACKEND_PORT_PROBE_HOSTS,
   });
@@ -222,7 +225,13 @@ const startLocalBackend = Effect.gen(function* () {
     return false;
   }
 
-  const backendPortSelection = yield* resolveDesktopBackendPort(environment.configuredBackendPort);
+  const backendStartPort = Option.isSome(environment.forkIdentity)
+    ? FORK_DESKTOP_BACKEND_PORT
+    : DEFAULT_DESKTOP_BACKEND_PORT;
+  const backendPortSelection = yield* resolveDesktopBackendPort(
+    environment.configuredBackendPort,
+    backendStartPort,
+  );
   const backendPort = backendPortSelection.port;
   yield* logBootstrapInfo(
     backendPortSelection.selectedByScan
@@ -230,7 +239,7 @@ const startLocalBackend = Effect.gen(function* () {
       : "using configured backend port",
     {
       port: backendPort,
-      ...(backendPortSelection.selectedByScan ? { startPort: DEFAULT_DESKTOP_BACKEND_PORT } : {}),
+      ...(backendPortSelection.selectedByScan ? { startPort: backendStartPort } : {}),
     },
   );
 

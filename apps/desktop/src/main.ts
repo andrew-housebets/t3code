@@ -99,12 +99,16 @@ const layerDesktopEnvironment = Layer.unwrap(
     );
     const platform = yield* HostProcess.Platform;
     const processArch = yield* HostProcess.Architecture;
+    const forkIdentity = metadata.isPackaged
+      ? yield* DesktopEnvironment.readDesktopForkIdentity(metadata.appPath)
+      : Option.none();
     return DesktopEnvironment.layer({
       dirname: __dirname,
       homeDirectory: NodeOS.homedir(),
       platform,
       processArch,
       ...metadata,
+      forkIdentity,
     });
   }),
 );

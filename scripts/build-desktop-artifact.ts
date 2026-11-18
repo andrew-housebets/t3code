@@ -64,6 +64,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
 const DESKTOP_APP_ID = "com.t3tools.t3code";
+const DESKTOP_DATA_NAME_PATTERN = /^[a-z0-9][a-z0-9-]*$/u;
 const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
 const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
@@ -967,6 +968,7 @@ interface StagePackageJson {
   readonly version: string;
   readonly buildVersion: string;
   readonly t3codeCommitHash: string;
+  readonly t3codeDesktopIdentity?: { readonly appName: string; readonly dataName: string };
   readonly t3codeWebAuthn?: MacWebAuthnEntitlements;
   readonly private: true;
   readonly packageManager: string;
@@ -1153,6 +1155,40 @@ export class InvalidMacPasskeyRpDomainError extends Schema.TaggedError<InvalidMa
   }
 }
 
+export interface DesktopForkIdentity {
+  readonly appId: string;
+  readonly appName: string;
+  readonly dataName: string;
+}
+
+export class InvalidDesktopForkIdentityError extends Schema.TaggedError<InvalidDesktopForkIdentityError>()(
+  "InvalidDesktopForkIdentityError",
+  {
+    appId: Schema.String,
+  },
+) {
+  override get message(): string {
+    return `T3CODE_DESKTOP_APP_ID '${this.appId}' needs T3CODE_APP_NAME and a lowercase T3CODE_DESKTOP_DATA_NAME, and must differ from ${DESKTOP_APP_ID}.`;
+  }
+}
+
+// Fork builds get their own bundle id, T3 home, Electron profile and keychain item, and no update feed.
+export const resolveDesktopForkIdentity = Effect.fn("resolveDesktopForkIdentity")(function* () {
+  const env = yield* Config.all({
+    appId: Config.String("T3CODE_DESKTOP_APP_ID").pipe(Config.option),
+    appName: Config.String("T3CODE_APP_NAME").pipe(Config.option),
+    dataName: Config.String("T3CODE_DESKTOP_DATA_NAME").pipe(Config.option),
+  });
+  const appId = Option.getOrUndefined(env.appId)?.trim();
+  if (!appId) return undefined;
+  const appName = Option.getOrUndefined(env.appName)?.trim() ?? "";
+  const dataName = Option.getOrUndefined(env.dataName)?.trim() ?? "";
+  if (appId === DESKTOP_APP_ID || !appName || !DESKTOP_DATA_NAME_PATTERN.test(dataName)) {
+    return yield* new InvalidDesktopForkIdentityError({ appId });
+  }
+  return { appId, appName, dataName } satisfies DesktopForkIdentity;
+});
+
 export class InvalidAppleTeamIdError extends Schema.TaggedError<InvalidAppleTeamIdError>()(
   "InvalidAppleTeamIdError",
   {
@@ -1291,7 +1327,7 @@ export function resolveMacPasskeySigningConfiguration(
   }
 
   return {
-    appId: DESKTOP_APP_ID,
+    appId: env.T3CODE_DESKTOP_APP_ID?.trim() || DESKTOP_APP_ID,
     teamId,
     rpDomains: uniqueRpDomains,
     provisioningProfilePath,
@@ -2765,7 +2801,11 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
   return `${trimmed.slice(0, versionSeparator)}/${trimmed.slice(versionSeparator + 1)}`;
 }
 
-export function resolveDesktopProductName(version: string): string {
+export function resolveDesktopProductName(
+  version: string,
+  fork?: DesktopForkIdentity | undefined,
+): string {
+  if (fork) return fork.appName;
   return resolveDesktopUpdateChannel(version) === "nightly"
     ? "T3 Code (Nightly)"
     : (desktopPackageJson.productName ?? "T3 Code");
@@ -2787,11 +2827,16 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   wslRuntimeBundled = false,
   arch?: typeof BuildArch.Type,
 ) {
+  const fork = yield* resolveDesktopForkIdentity();
+  const productName = resolveDesktopProductName(version, fork);
+  const appLabel = fork?.appName ?? "T3 Code";
   const buildConfig: Record<string, unknown> = {
     afterPack: (yield* Path.Path).join(yield* RepoRoot, "scripts/prepare-server-compile-cache.cjs"),
-    appId: DESKTOP_APP_ID,
-    productName: resolveDesktopProductName(version),
-    artifactName: "T3-Code-${version}-${arch}.${ext}",
+    appId: fork?.appId ?? DESKTOP_APP_ID,
+    productName,
+    artifactName: fork
+      ? `${fork.appName.replaceAll(" ", "-")}-\${version}-\${arch}.\${ext}`
+      : "T3-Code-${version}-${arch}.${ext}",
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
     files: [
       ...DESKTOP_FILE_EXCLUSIONS,
@@ -2819,7 +2864,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   const updateChannel = resolveDesktopUpdateChannel(version);
   // Missing publish config infers a GitHub feed from tokens; staging has no repository, so manifest generation would crash.
   buildConfig.publish = null;
-  if (!isDesktopPreviewVersion(version)) {
+  if (!fork && !isDesktopPreviewVersion(version)) {
     const publishConfig = yield* resolveGitHubPublishConfig(updateChannel);
     if (publishConfig) {
       buildConfig.publish = [publishConfig];
@@ -2843,20 +2888,13 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       extendInfo: {
         // macOS 26 offers Messages/Mail codes in every text field unless opted out.
         NSAutoFillRequiresTextContentTypeForOneTimeCodeOnMac: true,
-        NSLocalNetworkUsageDescription:
-          "T3 Code connects to devices on your local network for remote environments and commands run by terminals and coding agents.",
-        NSCalendarsUsageDescription:
-          "Commands you run in T3 Code may need access to your calendars.",
-        NSCalendarsFullAccessUsageDescription:
-          "Commands you run in T3 Code may need to read and write your calendar events.",
-        NSCalendarsWriteOnlyAccessUsageDescription:
-          "Commands you run in T3 Code may need to add events to your calendars.",
-        NSScreenCaptureUsageDescription:
-          "T3 Code captures the active window when you use the window capture shortcut.",
-        NSCameraUsageDescription:
-          "T3 Code lets commands run by terminals and coding agents use the camera.",
-        NSMicrophoneUsageDescription:
-          "T3 Code lets commands run by terminals and coding agents use the microphone.",
+        NSLocalNetworkUsageDescription: `${appLabel} connects to devices on your local network for remote environments and commands run by terminals and coding agents.`,
+        NSCalendarsUsageDescription: `Commands you run in ${appLabel} may need access to your calendars.`,
+        NSCalendarsFullAccessUsageDescription: `Commands you run in ${appLabel} may need to read and write your calendar events.`,
+        NSCalendarsWriteOnlyAccessUsageDescription: `Commands you run in ${appLabel} may need to add events to your calendars.`,
+        NSScreenCaptureUsageDescription: `${appLabel} captures the active window when you use the window capture shortcut.`,
+        NSCameraUsageDescription: `${appLabel} lets commands run by terminals and coding agents use the camera.`,
+        NSMicrophoneUsageDescription: `${appLabel} lets commands run by terminals and coding agents use the microphone.`,
         // macOS lists an app under Default web browser only when it opens web
         // pages as documents as well as http and https links (see protocols).
         CFBundleDocumentTypes: [
@@ -2869,10 +2907,14 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
         ],
       },
       protocols: [
-        {
-          name: "T3 Code",
-          schemes: ["t3code", "t3code-dev"],
-        },
+        ...(fork
+          ? []
+          : [
+              {
+                name: "T3 Code",
+                schemes: ["t3code", "t3code-dev"],
+              },
+            ]),
         {
           name: "Web site URL",
           schemes: ["http", "https"],
@@ -2892,7 +2934,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   if (platform === "mac" && target === "dmg") {
     buildConfig.dmg = {
       // Finder caches DMG backgrounds by volume name; give each installer its own.
-      title: `${resolveDesktopProductName(version)} ${version} Installer`,
+      title: `${productName} ${version} Installer`,
       background: `dmg/dmg-background-${updateChannel}.png`,
       window: {
         width: 640,
@@ -3913,11 +3955,14 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
     options.platform === "win"
       ? path.join(stageAppDir, WINDOWS_SERVER_RESOURCE_SOURCE_DIR, WINDOWS_SERVER_ASAR_RESOURCE)
       : undefined;
+  const fork = yield* resolveDesktopForkIdentity();
   const stagePackageJson: StagePackageJson = {
-    name: "t3code",
+    // Electron names the macOS keychain item "<name> Safe Storage".
+    name: fork?.dataName ?? "t3code",
     version: appVersion,
     buildVersion: appVersion,
     t3codeCommitHash: commitHash,
+    ...(fork ? { t3codeDesktopIdentity: { appName: fork.appName, dataName: fork.dataName } } : {}),
     // Read by apps/desktop/src/preview/Passkeys.ts; must match the signed entitlements.
     ...(macWebAuthn ? { t3codeWebAuthn: macWebAuthn } : {}),
     private: true,
@@ -4104,7 +4149,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   if (options.platform === "win") {
     yield* validateWindowsPackagedPayload({
       stageDistDir,
-      appExecutableName: `${resolveDesktopProductName(appVersion)}.exe`,
+      appExecutableName: `${resolveDesktopProductName(appVersion, fork)}.exe`,
       targetArch: options.arch,
       appVersion,
       expectWslRuntime: bundlesWslRuntime({

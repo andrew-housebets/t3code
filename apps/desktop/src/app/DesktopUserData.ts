@@ -1,5 +1,6 @@
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
@@ -36,9 +37,14 @@ export const resolveUserDataPath = Effect.fn("desktop.userData.resolveUserDataPa
     readonly appDataDirectory: string;
     readonly isDevelopment: boolean;
     readonly platform: NodeJS.Platform;
+    readonly forkIdentity?: Option.Option<{ readonly dataName: string }>;
   }) {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
+    const fork = input.forkIdentity ?? Option.none();
+    if (!input.isDevelopment && Option.isSome(fork)) {
+      return path.join(input.appDataDirectory, fork.value.dataName);
+    }
     const names = input.isDevelopment
       ? { current: "t3code-dev", legacy: "T3 Code (Dev)" }
       : { current: "t3code-v2", legacy: "T3 Code (Alpha)" };

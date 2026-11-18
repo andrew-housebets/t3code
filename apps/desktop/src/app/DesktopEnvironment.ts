@@ -7,9 +7,11 @@ import type {
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import * as Schema from "effect/Schema";
 
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopConfig from "./DesktopConfig.ts";
@@ -17,6 +19,30 @@ import { resolveLinuxDesktopEntryName } from "./DesktopEarlyElectronStartup.ts";
 import { resolveDesktopBaseDir, resolveDesktopStateDir } from "./DesktopStatePaths.ts";
 import { isNightlyDesktopVersion } from "../updates/updateChannels.ts";
 import type { OtlpProtocol } from "@t3tools/shared/observability";
+
+export const DesktopForkIdentity = Schema.Struct({
+  appName: Schema.String,
+  dataName: Schema.String,
+});
+export type DesktopForkIdentity = typeof DesktopForkIdentity.Type;
+
+const decodeAppPackageForkIdentity = Schema.decodeEffect(
+  Schema.fromJsonString(
+    Schema.Struct({ t3codeDesktopIdentity: Schema.optional(DesktopForkIdentity) }),
+  ),
+);
+
+/** Fork builds bake their identity into the packaged package.json; upstream builds have none. */
+export const readDesktopForkIdentity = Effect.fn("desktop.environment.readForkIdentity")(
+  function* (appPath: string) {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const raw = yield* fs.readFileString(path.join(appPath, "package.json"));
+    const parsed = yield* decodeAppPackageForkIdentity(raw);
+    return Option.fromNullishOr(parsed.t3codeDesktopIdentity);
+  },
+  (effect) => effect.pipe(Effect.orElseSucceed(() => Option.none<DesktopForkIdentity>())),
+);
 
 export interface MakeDesktopEnvironmentInput {
   readonly dirname: string;
@@ -28,6 +54,7 @@ export interface MakeDesktopEnvironmentInput {
   readonly isPackaged: boolean;
   readonly resourcesPath: string;
   readonly runningUnderArm64Translation: boolean;
+  readonly forkIdentity?: Option.Option<DesktopForkIdentity>;
 }
 
 export class DesktopEnvironment extends Context.Service<
@@ -71,6 +98,7 @@ export class DesktopEnvironment extends Context.Service<
     readonly otlpExportIntervalMs: number;
     readonly otlpHeaders: Option.Option<Record<string, string>>;
     readonly otlpProtocol: OtlpProtocol;
+    readonly forkIdentity: Option.Option<DesktopForkIdentity>;
     readonly branding: DesktopAppBranding;
     readonly displayName: string;
     readonly appUserModelId: string;
@@ -101,12 +129,14 @@ function resolveDesktopAppStageLabel(input: {
 export function resolveDesktopAppBranding(input: {
   readonly isDevelopment: boolean;
   readonly appVersion: string;
+  readonly baseName?: string;
 }): DesktopAppBranding {
   const stageLabel = resolveDesktopAppStageLabel(input);
+  const baseName = input.baseName ?? APP_BASE_NAME;
   return {
-    baseName: APP_BASE_NAME,
+    baseName,
     stageLabel,
-    displayName: `${APP_BASE_NAME} (${stageLabel})`,
+    displayName: `${baseName} (${stageLabel})`,
   };
 }
 
@@ -148,6 +178,9 @@ const make = Effect.fn("desktop.environment.make")(function* (
   const homeDirectory = input.homeDirectory;
   const devServerUrl = config.devServerUrl;
   const isDevelopment = Option.isSome(devServerUrl);
+  const forkIdentity = isDevelopment
+    ? Option.none<DesktopForkIdentity>()
+    : (input.forkIdentity ?? Option.none());
   const appDataDirectory =
     input.platform === "win32"
       ? Option.getOrElse(config.appDataDirectory, () =>
@@ -160,6 +193,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
     homeDirectory,
     joinPath: path.join,
     t3Home: config.t3Home,
+    ...(Option.isSome(forkIdentity) ? { defaultDirName: `.${forkIdentity.value.dataName}` } : {}),
   });
   const rootDir = path.resolve(input.dirname, "../../..");
   const appRoot = input.isPackaged ? input.appPath : rootDir;
@@ -170,6 +204,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
   const branding = resolveDesktopAppBranding({
     isDevelopment,
     appVersion: input.appVersion,
+    ...(Option.isSome(forkIdentity) ? { baseName: forkIdentity.value.appName } : {}),
   });
   const displayName = branding.displayName;
   const stateDir = resolveDesktopStateDir({
@@ -225,6 +260,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
     otlpExportIntervalMs: config.otlpExportIntervalMs,
     otlpHeaders: config.otlpHeaders,
     otlpProtocol: config.otlpProtocol,
+    forkIdentity,
     branding,
     displayName,
     appUserModelId: Option.getOrElse(config.appUserModelIdOverride, () =>

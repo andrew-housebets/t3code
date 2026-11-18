@@ -554,6 +554,42 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     ),
   );
 
+  it.effect("gives fork builds their own identity, no t3code scheme and no update feed", () =>
+    Effect.gen(function* () {
+      const config = yield* createBuildConfig(
+        "mac",
+        "dmg",
+        "0.0.33",
+        false,
+        false,
+        undefined,
+        undefined,
+      );
+      const mac = config.mac as { protocols: Array<{ schemes: string[] }> };
+
+      assert.equal(config.appId, "com.b4sed.code");
+      assert.equal(config.productName, "B4SED Code");
+      assert.isNull(config.publish);
+      assert.notInclude(
+        mac.protocols.flatMap((protocol) => protocol.schemes),
+        "t3code",
+      );
+    }).pipe(
+      Effect.provide(
+        ConfigProvider.layer(
+          ConfigProvider.fromEnv({
+            env: {
+              GITHUB_REPOSITORY: "pingdotgg/t3code",
+              T3CODE_DESKTOP_APP_ID: "com.b4sed.code",
+              T3CODE_APP_NAME: "B4SED Code",
+              T3CODE_DESKTOP_DATA_NAME: "b4sed",
+            },
+          }),
+        ),
+      ),
+    ),
+  );
+
   it.effect("names the Electron window class in the Linux desktop entry", () =>
     Effect.gen(function* () {
       const linux = yield* createBuildConfig(
