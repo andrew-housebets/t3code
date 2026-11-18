@@ -23,6 +23,7 @@ import { environmentThreadShells } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useAtomValueWhileVisible } from "../home/home-route-visibility";
 import type { HomeProjectScope } from "../home/homeThreadList";
+import { startProjectCoordinator } from "../overview/coordinator";
 import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
 import { openSettings } from "../settings/settings-navigation";
 
@@ -161,17 +162,20 @@ export function DrawerNavigationHeader(props: {
       pinnedProjects={pinned}
       hasPinnedThreads={props.hasPinnedThreads}
       onSelectPinnedProject={({ group, coordinator }) => {
-        if (coordinator === null) {
-          props.onSelectProjectKey(group.key);
-          return;
-        }
-        selectDetail({
-          name: "Thread",
-          params: {
-            environmentId: String(coordinator.environmentId),
-            threadId: coordinator.threadId,
-          },
-        });
+        void (async () => {
+          const threadRef = coordinator ?? (await startProjectCoordinator(group.representative));
+          if (threadRef === null) {
+            props.onSelectProjectKey(group.key);
+            return;
+          }
+          selectDetail({
+            name: "Thread",
+            params: {
+              environmentId: String(threadRef.environmentId),
+              threadId: threadRef.threadId,
+            },
+          });
+        })();
       }}
       onUnpinProject={(entry) => void unpinProject(entry.group)}
     />

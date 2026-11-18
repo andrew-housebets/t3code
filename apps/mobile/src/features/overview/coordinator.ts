@@ -1,4 +1,7 @@
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
+import type {
+  EnvironmentProject,
+  EnvironmentThreadShell,
+} from "@t3tools/client-runtime/state/models";
 import {
   isAtomCommandInterrupted,
   runAtomCommand,
@@ -10,11 +13,20 @@ import {
   coordinatorToggleOf,
 } from "@t3tools/shared/coordinatorThread";
 
-import type { EnvironmentId, ModelSelection, ProjectId } from "@t3tools/contracts";
+import {
+  DEFAULT_PROVIDER_INTERACTION_MODE,
+  ThreadId,
+  type EnvironmentId,
+  type ModelSelection,
+  type ProjectId,
+  type ScopedThreadRef,
+} from "@t3tools/contracts";
+import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import * as Effect from "effect/Effect";
 import { AtomRegistry } from "effect/reactivity";
 
 import * as Dialog from "../../components/ui/Dialog";
+import { uuidv4 } from "../../lib/uuid";
 import { appAtomRegistry } from "../../state/atom-registry";
 import { isCoordinatorDraft, setCoordinatorDraft } from "../../state/coordinator-drafts";
 import { projectEnvironment } from "../../state/projects";
@@ -121,4 +133,69 @@ export async function startCoordinatorDraft(input: {
         input.driver);
   const warning = coordinatorProviderWarning(driver);
   if (warning !== null) Dialog.alert("Not read-only", warning);
+}
+
+const coordinatorsStarting = new Map<string, Promise<ScopedThreadRef | null>>();
+
+async function createProjectCoordinator(
+  project: EnvironmentProject,
+): Promise<ScopedThreadRef | null> {
+  const { environmentId, id: projectId } = project;
+  const serverSettings = appAtomRegistry
+    .get(environmentServerConfigsAtom)
+    .get(environmentId)?.settings;
+  if (serverSettings === undefined) return null;
+  const { settings } = resolveProjectSettings(serverSettings, projectId, project);
+  const modelSelection =
+    (await readCoordinatorModelDefault(environmentId, projectId)) ?? settings.defaultModelSelection;
+  if (modelSelection === null) return null;
+  const threadId = ThreadId.make(uuidv4());
+  const created = await runAtomCommand(
+    appAtomRegistry,
+    threadEnvironment.create,
+    {
+      environmentId,
+      input: {
+        creationSource: "mobile",
+        threadId,
+        projectId,
+        title: "Coordinator",
+        modelSelection,
+        runtimeMode: settings.defaultRuntimeMode,
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        branch: null,
+        worktreePath: null,
+      },
+    },
+    { reportFailure: false },
+  );
+  if (created._tag === "Failure") return null;
+  const tagged = await runAtomCommand(
+    appAtomRegistry,
+    threadEnvironment.setTag,
+    { environmentId, input: { threadId, tag: COORDINATOR_THREAD_TAG, tagged: true } },
+    { reportFailure: false },
+  );
+  if (tagged._tag === "Failure" && !isAtomCommandInterrupted(tagged)) {
+    Dialog.alert(
+      "Thread started without the coordinator role",
+      "Choose Make coordinator from the thread menu to try again.",
+    );
+  }
+  return { environmentId, threadId };
+}
+
+/**
+ * Starts a project's coordinator as an empty thread, once per project at a time. Resolves
+ * null when no thread was made, so the caller can fall back.
+ */
+export function startProjectCoordinator(
+  project: EnvironmentProject,
+): Promise<ScopedThreadRef | null> {
+  const key = `${project.environmentId}:${project.id}`;
+  const pending = coordinatorsStarting.get(key);
+  if (pending !== undefined) return pending;
+  const started = createProjectCoordinator(project).finally(() => coordinatorsStarting.delete(key));
+  coordinatorsStarting.set(key, started);
+  return started;
 }

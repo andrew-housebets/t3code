@@ -36,6 +36,7 @@ import {
 import { useAtomCommand } from "../../state/use-atom-command";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { SettingsSection } from "./components/SettingsSection";
+import { ProjectModelDefaultRows } from "../overview/ProjectInstructionsScreen";
 import { ListActionRow as SettingsActionRow } from "../../components/ui/ListActionRow";
 import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
 import { useSettingsEnvironmentMenu } from "./components/SettingsEnvironmentFilterHeader";
@@ -353,11 +354,18 @@ function ProjectOverviewContent(props: {
       </SettingsSection>
 
       {contextMember === undefined ? null : (
-        <SettingsSection title="Coordinators">
+        <ProjectModelDefaultRows
+          environmentId={contextMember.environmentId}
+          projectId={contextMember.id}
+        />
+      )}
+
+      {contextMember === undefined ? null : (
+        <SettingsSection title="Instructions">
           <SettingsActionRow
             icon="doc.text"
             label="Instructions and memory"
-            description="What every coordinator and its threads in this project start with, and their models."
+            description="What every coordinator and its threads in this project start with."
             onPress={() =>
               navigation.navigate("ProjectInstructions", {
                 environmentId: String(contextMember.environmentId),

@@ -83,7 +83,6 @@ export function ProjectInstructionsRouteScreen({
   const projectId = ProjectId.make(route.params.projectId);
   return (
     <SettingsScreen title="Project instructions">
-      <ProjectModelDefaultRows environmentId={environmentId} projectId={projectId} />
       <ProjectContextFields
         key={`${environmentId}:${projectId}`}
         environmentId={environmentId}
@@ -93,7 +92,7 @@ export function ProjectInstructionsRouteScreen({
   );
 }
 
-function ProjectModelDefaultRows(props: {
+export function ProjectModelDefaultRows(props: {
   readonly environmentId: EnvironmentId;
   readonly projectId: ProjectId;
 }) {
@@ -129,7 +128,7 @@ function ProjectModelDefaultRows(props: {
   };
 
   return (
-    <SettingsSection title="Models">
+    <SettingsSection title="Coordinator">
       {MODEL_ROWS.flatMap(({ key, label, unset }, index) => {
         const selection = defaults[key];
         const modelRow = (
