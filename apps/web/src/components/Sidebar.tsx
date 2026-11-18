@@ -228,6 +228,9 @@ import {
   type SnoozePreset,
 } from "./Sidebar.snooze";
 import { ProjectFavicon } from "./ProjectFavicon";
+import { useCreateProjectCoordinator } from "./overview/useCreateProjectCoordinator";
+import { useRightPanelStore } from "../rightPanelStore";
+import type { PinnedProject } from "@t3tools/client-runtime/state/pinned-projects";
 import { deriveProviderEntriesByEnvironment } from "../providerInstances";
 import { useStableCallback } from "../hooks/useStableCallback";
 import {
@@ -1488,6 +1491,22 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       params: buildThreadRouteParams(threadRef),
     });
   };
+  const createProjectCoordinator = useCreateProjectCoordinator();
+  const openPinnedProject = useStableCallback(
+    ({ group, coordinator }: PinnedProject<SidebarProjectSnapshot>) => {
+      void (async () => {
+        const threadRef =
+          coordinator ??
+          (await createProjectCoordinator(scopeProjectRef(group.environmentId, group.id)));
+        if (threadRef === null) {
+          startThreadInProjectFolder(group, { coordinator: true });
+          return;
+        }
+        useRightPanelStore.getState().open(threadRef, "overview");
+        await navigateToThread(threadRef);
+      })();
+    },
+  );
 
   const handleThreadFileDrop = async (threadRef: ScopedThreadRef, files: File[]) => {
     const dropId = queuePendingFileDrop({ threadRef, files });
@@ -3267,11 +3286,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             <SidebarPinnedProjects
               entries={pinnedProjectEntries}
               activeThreadKey={routeThreadKey}
-              onOpen={({ group, coordinator }) =>
-                coordinator === null
-                  ? startThreadInProjectFolder(group, { coordinator: true })
-                  : void navigateToThread(coordinator)
-              }
+              onOpen={openPinnedProject}
               onContextMenu={handleProjectFolderContextMenu}
             />
           )}
