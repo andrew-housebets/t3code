@@ -53,7 +53,6 @@ export interface ProjectLibraryFile {
 
 const NO_MODEL_DEFAULTS: ProjectModelDefaults = {
   coordinatorModelSelection: null,
-  threadModelSelection: null,
 };
 
 const ModelSelectionJson = Schema.fromJsonString(ModelSelection);
@@ -321,17 +320,15 @@ const make = Effect.gen(function* () {
     projectId: string,
   ) {
     const [row] = yield* sql<{
-      readonly thread_model_selection_json: string | null;
       readonly coordinator_model_selection_json: string | null;
     }>`
-      SELECT thread_model_selection_json, coordinator_model_selection_json
+      SELECT coordinator_model_selection_json
       FROM project_settings WHERE project_id = ${projectId}
     `.pipe(failed("read model defaults"));
     const decoded = (json: string | null | undefined) =>
       json == null ? null : Option.getOrNull(decodeModelSelection(json));
     return {
       coordinatorModelSelection: decoded(row?.coordinator_model_selection_json),
-      threadModelSelection: decoded(row?.thread_model_selection_json),
     };
   });
 
@@ -343,14 +340,12 @@ const make = Effect.gen(function* () {
     const encoded = (selection: ModelSelection | null) =>
       selection === null ? Effect.succeed(null) : encodeModelSelection(selection);
     yield* Effect.gen(function* () {
-      const thread = yield* encoded(defaults.threadModelSelection);
       const coordinator = yield* encoded(defaults.coordinatorModelSelection);
       yield* sql`
         INSERT INTO project_settings
-          (project_id, thread_model_selection_json, coordinator_model_selection_json, updated_at)
-        VALUES (${projectId}, ${thread}, ${coordinator}, ${now})
+          (project_id, coordinator_model_selection_json, updated_at)
+        VALUES (${projectId}, ${coordinator}, ${now})
         ON CONFLICT (project_id) DO UPDATE SET
-          thread_model_selection_json = excluded.thread_model_selection_json,
           coordinator_model_selection_json = excluded.coordinator_model_selection_json,
           updated_at = excluded.updated_at
       `;

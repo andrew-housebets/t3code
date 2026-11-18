@@ -75,7 +75,6 @@ import type { McpInvocationScope } from "./McpInvocationContext.ts";
 import { idleThreadProjection, liveThreadShell } from "./McpToolAccess.testkit.ts";
 import * as OrchestratorMcpService from "./OrchestratorMcpService.ts";
 import * as ProjectContext from "../projectContext/ProjectContext.ts";
-import * as ProjectSidecar from "../projectSidecar/ProjectSidecar.ts";
 import { resolveRuntimeMode } from "./delegatedTaskModes.ts";
 import type { ProjectionRecordFilter } from "../orchestration-v2/ProjectionStore.ts";
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
@@ -2772,23 +2771,15 @@ describe("OrchestratorMcpService provider resolution", () => {
           Layer.mock(SecretRequests.SecretRequests)({}),
           Layer.mock(RemoteDelegation.RemoteDelegation)({}),
           Layer.mock(ScheduledTaskService.ScheduledTaskService)({}),
-          ServerSettings.layerTest(),
+          ServerSettings.layerTest({
+            defaultModelSelection: { instanceId: codexInstanceId, model: "gpt-5.4-mini" },
+          }),
         );
         const layerService = OrchestratorMcpService.layer.pipe(
           Layer.provide(
             Layer.mock(ProjectContext.ProjectContext)({
               taskWithContext: (_projectId, prompt) =>
                 Effect.succeed(`<project_context>rules</project_context>\n\n---\n\n${prompt}`),
-            }),
-          ),
-          Layer.provide(
-            Layer.succeed(ProjectSidecar.ProjectSidecar, {
-              ...ProjectSidecar.ProjectSidecar.defaultValue(),
-              getModelDefaults: () =>
-                Effect.succeed({
-                  coordinatorModelSelection: null,
-                  threadModelSelection: { instanceId: codexInstanceId, model: "gpt-5.4-mini" },
-                }),
             }),
           ),
           Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),

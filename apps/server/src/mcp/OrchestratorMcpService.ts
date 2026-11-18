@@ -118,7 +118,6 @@ import { isSnoozed } from "../orchestration-v2/ThreadSettlementService.ts";
 import { userFacingDispatchErrorMessage } from "../orchestration-v2/UserFacingErrors.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProjectContext from "../projectContext/ProjectContext.ts";
-import * as ProjectSidecar from "../projectSidecar/ProjectSidecar.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as ServerSettings from "../serverSettings.ts";
@@ -1272,7 +1271,6 @@ const make = Effect.gen(function* () {
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const remoteDelegation = yield* RemoteDelegation.RemoteDelegation;
   const projectContext = yield* ProjectContext.ProjectContext;
-  const projectSidecar = yield* ProjectSidecar.ProjectSidecar;
 
   const requireProject = (projectId: ProjectId) =>
     projects.getById(projectId).pipe(
@@ -1519,13 +1517,13 @@ const make = Effect.gen(function* () {
       })
       .pipe(Effect.mapError(threadManagementFailure));
 
-  // A coordinator's children start on the project's thread model unless the task names one;
+  // A coordinator's children start on the project's new-thread model unless the task names one;
   // a default whose provider is gone falls back to the coordinator's own model.
   const withProjectThreadModel = (input: Parameters<typeof resolveTarget>[0]) =>
     isCoordinatorThread(input.parent.thread)
-      ? projectSidecar.getModelDefaults(input.parent.thread.projectId).pipe(
-          Effect.map(({ threadModelSelection: selection }) =>
-            selection === null ||
+      ? requireProject(input.parent.thread.projectId).pipe(
+          Effect.flatMap(projectDefaultModelSelection),
+          Effect.map((selection) =>
             !input.providers.some((provider) => provider.instanceId === selection.instanceId)
               ? input.parent
               : { ...input.parent, thread: { ...input.parent.thread, modelSelection: selection } },

@@ -28,11 +28,6 @@ const ROWS = [
     label: "Coordinator model",
     unset: "New coordinators start on the usual default model.",
   },
-  {
-    key: "threadModelSelection",
-    label: "Thread model",
-    unset: "Delegated threads start on their coordinator's model.",
-  },
 ] as const satisfies ReadonlyArray<{
   readonly key: keyof ProjectModelDefaults;
   readonly label: string;

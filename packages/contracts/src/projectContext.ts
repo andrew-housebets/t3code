@@ -106,8 +106,6 @@ export type ProjectLibraryRemoveInput = typeof ProjectLibraryRemoveInput.Type;
 export const ProjectModelDefaults = Schema.Struct({
   /** A new coordinator draft in the project starts on this model. */
   coordinatorModelSelection: Schema.NullOr(ModelSelection),
-  /** A coordinator's `delegate_task` uses this model when the task names none. */
-  threadModelSelection: Schema.NullOr(ModelSelection),
 });
 export type ProjectModelDefaults = typeof ProjectModelDefaults.Type;
 

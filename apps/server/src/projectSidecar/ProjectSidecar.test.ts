@@ -124,11 +124,9 @@ it.layer(layerTest, { excludeTestServices: true })("ProjectSidecar", (it) => {
           model: "claude-opus-5-5",
           options: [{ id: "effort", value: "high" }],
         },
-        threadModelSelection: null,
       };
       assert.deepEqual(yield* sidecar.getModelDefaults("project-models"), {
         coordinatorModelSelection: null,
-        threadModelSelection: null,
       });
       yield* sidecar.setModelDefaults("project-models", defaults);
       assert.deepEqual(yield* sidecar.getModelDefaults("project-models"), defaults);
