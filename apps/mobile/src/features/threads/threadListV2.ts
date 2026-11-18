@@ -455,8 +455,27 @@ export interface ThreadListV2SettledShelfListItem {
   readonly disabled: boolean;
 }
 
+export interface ThreadListV2ProjectGroup {
+  readonly key: string;
+  readonly title: string;
+  readonly environmentId: EnvironmentId;
+  readonly projectId: ProjectId;
+}
+
+export type ThreadListV2ProjectGroupSection = "active" | "settled";
+
+export interface ThreadListV2ProjectLabelListItem {
+  readonly type: "v2-project-label";
+  readonly key: string;
+  readonly section: ThreadListV2ProjectGroupSection;
+  readonly title: string;
+  readonly environmentId: EnvironmentId | null;
+  readonly projectId: ProjectId | null;
+}
+
 export type ThreadListV2ListItem =
   | ThreadListV2ThreadListItem
+  | ThreadListV2ProjectLabelListItem
   | ThreadListV2PendingListItem
   | ThreadListV2WorkingShelfListItem
   | ThreadListV2SnoozedShelfListItem
@@ -467,6 +486,7 @@ export function isThreadListV2ListItem(value: {
 }): value is ThreadListV2ListItem {
   return (
     value.type === "v2-thread" ||
+    value.type === "v2-project-label" ||
     value.type === "v2-pending" ||
     value.type === "v2-working-shelf" ||
     value.type === "v2-snoozed-shelf" ||
@@ -496,6 +516,14 @@ export function threadListV2ListItemsAreEqual(
         previous.hasQueuedMessages === item.hasQueuedMessages &&
         previous.canMoveUp === item.canMoveUp &&
         previous.canMoveDown === item.canMoveDown
+      );
+    case "v2-project-label":
+      return (
+        previous.type === "v2-project-label" &&
+        previous.key === item.key &&
+        previous.title === item.title &&
+        previous.environmentId === item.environmentId &&
+        previous.projectId === item.projectId
       );
     case "v2-pending":
       return (
@@ -549,6 +577,62 @@ function resolveThreadListV2ItemTimeLabel(
   );
 }
 
+function threadListV2ProjectGroupRecencyMs(
+  thread: EnvironmentThreadShell,
+  section: ThreadListV2ProjectGroupSection,
+): number {
+  return parseTimestampMs(
+    (section === "settled" ? resolveSettledThreadTimestamp(thread) : null) ??
+      resolveThreadActivityTimestamp(thread) ??
+      thread.createdAt,
+  );
+}
+
+/** Groups a section's rows by project, most recently active project first; rows keep their order within a group. */
+export function groupThreadListV2ItemsByProject(
+  entries: ReadonlyArray<ThreadListV2ThreadListItem>,
+  section: ThreadListV2ProjectGroupSection,
+  groupOf: (thread: EnvironmentThreadShell) => ThreadListV2ProjectGroup | null,
+): ThreadListV2ListItem[] {
+  const groups = new Map<
+    string | null,
+    {
+      readonly group: ThreadListV2ProjectGroup | null;
+      readonly entries: ThreadListV2ThreadListItem[];
+      recencyMs: number;
+    }
+  >();
+  for (const entry of entries) {
+    const group = groupOf(entry.item.thread);
+    const key = group?.key ?? null;
+    const recencyMs = threadListV2ProjectGroupRecencyMs(entry.item.thread, section);
+    const existing = groups.get(key);
+    if (existing) {
+      existing.entries.push(entry);
+      existing.recencyMs = Math.max(existing.recencyMs, recencyMs);
+    } else {
+      groups.set(key, { group, entries: [entry], recencyMs });
+    }
+  }
+  const ordered = [...groups.values()].sort((left, right) => {
+    if (left.group === null || right.group === null) {
+      return (left.group === null ? 1 : 0) - (right.group === null ? 1 : 0);
+    }
+    return right.recencyMs - left.recencyMs;
+  });
+  return ordered.flatMap(({ group, entries: groupEntries }): ThreadListV2ListItem[] => [
+    {
+      type: "v2-project-label",
+      key: `v2-project-label:${section}:${group?.key ?? "other"}`,
+      section,
+      title: group?.title ?? "Other",
+      environmentId: group?.environmentId ?? null,
+      projectId: group?.projectId ?? null,
+    },
+    ...groupEntries,
+  ]);
+}
+
 export function buildThreadListV2ListItems(input: {
   readonly items: ReadonlyArray<ThreadListV2Item>;
   readonly pendingTasks: ReadonlyArray<PendingNewTask>;
@@ -566,9 +650,13 @@ export function buildThreadListV2ListItems(input: {
   readonly queuedThreadKeys?: ReadonlySet<string>;
   readonly moveAvailability?: ReadonlyMap<string, ThreadMoveAvailability>;
   readonly shelfPreferencesLoading?: boolean;
+  /** Groups the Active and Settled rows by project when set. */
+  readonly projectGroupOf?:
+    | ((thread: EnvironmentThreadShell) => ThreadListV2ProjectGroup | null)
+    | null;
 }): ThreadListV2ListItem[] {
   const queuedThreadKeys = input.queuedThreadKeys?.size ? input.queuedThreadKeys : undefined;
-  const threadItems = input.items.map((item): ThreadListV2ListItem => {
+  const threadItems = input.items.map((item): ThreadListV2ThreadListItem => {
     const snoozeWakeLabelText =
       item.snoozed && item.thread.snoozedUntil != null && input.snoozeLabelNow !== undefined
         ? snoozeWakeLabel(item.thread.snoozedUntil, { now: input.snoozeLabelNow })
@@ -615,7 +703,22 @@ export function buildThreadListV2ListItems(input: {
   const snoozedEnd = settledShelfHeaderIndex ?? threadItems.length;
   const workingEnd = snoozedShelfHeaderIndex ?? snoozedEnd;
   const activeEnd = workingShelfHeaderIndex ?? workingEnd;
-  const result: ThreadListV2ListItem[] = [...pendingItems, ...threadItems.slice(0, activeEnd)];
+  const projectGroupOf = input.projectGroupOf ?? null;
+  const groupSection = (
+    entries: ReadonlyArray<ThreadListV2ThreadListItem>,
+    section: ThreadListV2ProjectGroupSection,
+  ): ReadonlyArray<ThreadListV2ListItem> =>
+    projectGroupOf === null
+      ? entries
+      : groupThreadListV2ItemsByProject(entries, section, projectGroupOf);
+  const activeItems = threadItems.slice(0, activeEnd);
+  const pinnedEnd = activeItems.findIndex((entry) => !entry.item.pinned);
+  const unpinnedStart = pinnedEnd < 0 ? activeItems.length : pinnedEnd;
+  const result: ThreadListV2ListItem[] = [
+    ...pendingItems,
+    ...activeItems.slice(0, unpinnedStart),
+    ...groupSection(activeItems.slice(unpinnedStart), "active"),
+  ];
   const shelfDisabled = input.shelfPreferencesLoading === true;
   if (workingShelfHeaderIndex !== null && workingCount > 0) {
     result.push({
@@ -645,7 +748,7 @@ export function buildThreadListV2ListItems(input: {
       expanded: input.settledShelfExpanded !== false,
       disabled: shelfDisabled,
     });
-    result.push(...threadItems.slice(settledShelfHeaderIndex));
+    result.push(...groupSection(threadItems.slice(settledShelfHeaderIndex), "settled"));
   }
   return result.map((entry, index) => {
     if (entry.type !== "v2-thread" && entry.type !== "v2-pending") return entry;

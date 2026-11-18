@@ -35,6 +35,8 @@ export function buildHomeListFilterMenuItems(props: {
   readonly selectedProjectKey: string | null;
   readonly onEnvironmentChange: (environmentId: EnvironmentId | null) => void;
   readonly onProjectChange: (projectKey: string | null) => void;
+  readonly groupByProject: boolean;
+  readonly onToggleGroupByProject: () => void;
 }): AppBarMenuItem[] {
   const items: AppBarMenuItem[] = [
     {
@@ -79,6 +81,19 @@ export function buildHomeListFilterMenuItems(props: {
       ],
     });
   }
+
+  items.push({
+    id: "arrangement",
+    title: "Arrangement",
+    items: [
+      {
+        id: "arrangement:group-by-project",
+        title: "Group by project",
+        selected: props.groupByProject,
+        onPress: props.onToggleGroupByProject,
+      },
+    ],
+  });
 
   return items;
 }

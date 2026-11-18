@@ -51,6 +51,7 @@ import {
 import {
   buildHomeProjectScopes,
   resolveHomeProjectFilterScope,
+  resolveHomeProjectGroupOf,
   sortHomeProjectScopes,
 } from "../home/homeThreadList";
 import { SwipeableScrollGateProvider, useSwipeableScrollGate } from "../home/thread-swipe-actions";
@@ -62,6 +63,7 @@ import { WorkspaceSidebarColumn } from "../layout/workspace/WorkspaceSidebarColu
 import {
   ThreadListV2PendingRow,
   ThreadListV2Row,
+  ThreadListV2ProjectLabel,
   ThreadListV2SettledShelfHeader,
   ThreadListV2ShowMoreRow,
   ThreadListV2SnoozedShelfHeader,
@@ -249,7 +251,13 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
     toggleSettledShelf,
     toggleSnoozedShelf,
     toggleWorkingShelf,
+    groupByProject,
+    toggleGroupByProject,
   } = useThreadListV2ShelfPreferences();
+  const projectGroupOf = useMemo(
+    () => (groupByProject ? resolveHomeProjectGroupOf(projectScopes) : null),
+    [groupByProject, projectScopes],
+  );
   const now = useThreadListNow(threads);
   const listEnvironments = useAtomValue(threadListEnvironmentsAtom);
   const {
@@ -271,6 +279,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
     items: threadListV2Items,
     contentOnlyThreadKeys,
     olderSettledShelf,
+    projectGrouped,
   } = useThreadListV2({
     threads: launchingThreads,
     pendingTasks,
@@ -292,6 +301,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
     snoozedShelfExpanded,
     settledShelfExpanded,
     selectedThreadKey: props.selectedThreadKey ?? null,
+    projectGroupOf,
   });
   const listItems: readonly SidebarListItem[] =
     settledShelfExpanded && threadListV2Layout.hiddenSettledCount > 0
@@ -496,7 +506,9 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
             reorderSupported={
               item.item.pinned
                 ? pinReorderEnvironmentIds.has(thread.environmentId)
-                : !workingShelfEnabled && activeReorderEnvironmentIds.has(thread.environmentId)
+                : !workingShelfEnabled &&
+                  !projectGrouped &&
+                  activeReorderEnvironmentIds.has(thread.environmentId)
             }
             canMoveUp={item.canMoveUp}
             canMoveDown={item.canMoveDown}
@@ -513,6 +525,18 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
           />
         );
       }
+      case "v2-project-label":
+        return (
+          <ThreadListV2ProjectLabel
+            pane="sidebar"
+            title={item.title}
+            project={
+              item.environmentId === null || item.projectId === null
+                ? null
+                : (projectByKey.get(scopedProjectKey(item.environmentId, item.projectId)) ?? null)
+            }
+          />
+        );
       case "v2-working-shelf":
         return (
           <ThreadListV2WorkingShelfHeader
@@ -577,6 +601,8 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
           selectedProjectKey,
           onEnvironmentChange: setSelectedEnvironmentId,
           onProjectChange: setSelectedProjectKey,
+          groupByProject,
+          onToggleGroupByProject: toggleGroupByProject,
         }),
       }}
       sidebar={{

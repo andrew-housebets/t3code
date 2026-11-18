@@ -332,6 +332,45 @@ export const ThreadListV2SettledShelfHeader = memo(function ThreadListV2SettledS
   return <ThreadListV2ShelfHeader {...props} kind="settled" />;
 });
 
+export const ThreadListV2ProjectLabel = memo(function ThreadListV2ProjectLabel(props: {
+  readonly pane?: "screen" | "sidebar";
+  readonly title: string;
+  readonly project: EnvironmentProject | null;
+}) {
+  const sidebarPane = props.pane === "sidebar";
+  return (
+    <View
+      accessibilityRole="header"
+      accessibilityLabel={props.title}
+      className={cn(
+        THREAD_LIST_V2_ROW_CONTENT_CLASS_NAME,
+        "flex-row items-center gap-1.5 pb-1 pt-3",
+        sidebarPane && "px-3",
+      )}
+    >
+      {props.project ? (
+        <ProjectFavicon
+          environmentId={props.project.environmentId}
+          faviconPath={props.project.faviconPath}
+          projectIcon={props.project.projectIcon}
+          size={14}
+          projectTitle={props.project.title}
+          workspaceRoot={props.project.workspaceRoot}
+        />
+      ) : null}
+      <Text
+        numberOfLines={1}
+        className={cn(
+          "min-w-0 shrink text-xs font-t3-medium",
+          sidebarPane ? "text-drawer-foreground-muted" : "text-foreground-muted",
+        )}
+      >
+        {props.title}
+      </Text>
+    </View>
+  );
+});
+
 export const ThreadListV2ShowMoreRow = memo(function ThreadListV2ShowMoreRow(props: {
   readonly pane?: "screen" | "sidebar";
   readonly hiddenCount: number;
