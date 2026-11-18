@@ -14,6 +14,7 @@ import {
   getQuestionAnswerPreview,
   hasQuestionAnswer,
 } from "@t3tools/client-runtime/work-log/user-input";
+import Constants from "expo-constants";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { type AppSymbolName, SymbolView } from "../../components/ui/AppSymbol";
@@ -116,6 +117,7 @@ export const THREAD_DISCLOSURE_TRANSITION_MS = 180;
 const WORK_LOG_LAYOUT_TRANSITION = LinearTransition.duration(THREAD_DISCLOSURE_TRANSITION_MS);
 const WORK_LOG_DETAIL_ENTER_TRANSITION = FadeIn.duration(140);
 const WORK_LOG_DETAIL_EXIT_TRANSITION = FadeOut.duration(120);
+const APP_BRAND_IS_T3 = (Constants.expoConfig?.name?.split(" ")[0] ?? "T3") === "T3";
 type WorkContentIcon =
   | AppSymbolName
   | "browser"
@@ -131,7 +133,7 @@ function WorkLogIcon(props: {
   readonly highlighted?: boolean;
 }) {
   const colorClassName = props.highlighted ? "accent-foreground" : props.colorClassName;
-  if (props.icon === "t3-code") {
+  if (props.icon === "t3-code" && APP_BRAND_IS_T3) {
     return (
       <T3Wordmark height={10} {...(colorClassName ? { colorClassName } : { color: props.color })} />
     );
@@ -147,13 +149,15 @@ function WorkLogIcon(props: {
   return (
     <SymbolView
       name={
-        props.icon === "pull-request"
-          ? PullRequestGlyph.pullRequest
-          : props.icon === "browser"
-            ? { ios: "globe", android: "public" }
-            : props.icon === "device"
-              ? { ios: "iphone", android: "smartphone" }
-              : props.icon
+        props.icon === "t3-code"
+          ? "square.grid.2x2"
+          : props.icon === "pull-request"
+            ? PullRequestGlyph.pullRequest
+            : props.icon === "browser"
+              ? { ios: "globe", android: "public" }
+              : props.icon === "device"
+                ? { ios: "iphone", android: "smartphone" }
+                : props.icon
       }
       size={14}
       weight="medium"
