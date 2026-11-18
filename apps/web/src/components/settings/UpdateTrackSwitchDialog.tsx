@@ -6,7 +6,7 @@ import { isMacPlatform } from "@t3tools/shared/keybindings";
 import { useState } from "react";
 import { AsyncResult } from "effect/reactivity";
 
-import { APP_VERSION } from "~/branding";
+import { APP_BASE_NAME, APP_VERSION } from "~/branding";
 import { isLocalEnvironmentDisabled } from "~/localEnvironment";
 import { useDesktopUpdateState } from "~/state/desktopUpdate";
 import { useEnvironments } from "~/state/environments";
@@ -177,7 +177,7 @@ function SwitchPlan({
           ? ["This app's updates are off here, so reinstall it yourself to switch."]
           : []),
         ...(switchesLocal && isMacPlatform(navigator.platform)
-          ? ["If T3 Code does not reopen after it restarts, open it again."]
+          ? [`If ${APP_BASE_NAME} does not reopen after it restarts, open it again.`]
           : []),
       ]}
       restarts={everything.restarts}

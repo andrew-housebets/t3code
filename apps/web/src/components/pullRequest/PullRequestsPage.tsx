@@ -1,3 +1,4 @@
+import { APP_BASE_NAME } from "~/branding";
 import { heldPullRequestListEntriesAtom } from "@t3tools/client-runtime/state/pull-requests";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
@@ -1244,7 +1245,7 @@ export function PullRequestsPage() {
       ) : !pullRequestsSupported ? (
         <PullRequestsUnavailableState
           title="Pull requests unavailable"
-          error="Update your T3 Code servers to browse pull requests."
+          error={`Update your ${APP_BASE_NAME} servers to browse pull requests.`}
         />
       ) : firstLoad ? (
         <PullRequestListGhost rows={7} caption="Loading pull requests…" />

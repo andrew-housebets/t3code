@@ -1,3 +1,4 @@
+import { APP_BASE_NAME } from "../../branding";
 import type { RelayClientDeviceRecord } from "@t3tools/contracts/relay";
 import { SmartphoneIcon } from "lucide-react";
 
@@ -94,8 +95,8 @@ function EmptyMobileClients() {
       <EmptyHeader>
         <EmptyTitle>No mobile clients</EmptyTitle>
         <EmptyDescription>
-          Install T3 Code on your phone and sign in to T3 Connect to get push notifications and Live
-          Activities.
+          Install {APP_BASE_NAME} on your phone and sign in to T3 Connect to get push notifications
+          and Live Activities.
         </EmptyDescription>
       </EmptyHeader>
     </Empty>

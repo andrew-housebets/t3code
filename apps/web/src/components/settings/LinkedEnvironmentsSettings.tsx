@@ -1,3 +1,4 @@
+import { APP_BASE_NAME } from "~/branding";
 import { useAtomValue } from "@effect/atom-react";
 import { ANOTHER_ADDRESS, linkRequestFailureMessage } from "@t3tools/client-runtime/link-request";
 import {
@@ -88,7 +89,7 @@ export function LinkedEnvironmentsSettings({
       ) : links.data.links.length === 0 ? (
         <SettingsRow
           title="No linked environments"
-          description="Link another machine running T3 Code, such as a VPS, so agents here can launch and drive threads there."
+          description={`Link another machine running ${APP_BASE_NAME}, such as a VPS, so agents here can launch and drive threads there.`}
         />
       ) : (
         links.data.links.map((link) => (

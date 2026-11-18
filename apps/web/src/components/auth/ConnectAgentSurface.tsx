@@ -1,3 +1,4 @@
+import { APP_BASE_NAME } from "~/branding";
 import {
   type AuthMcpApprovalDecision,
   type AuthMcpApprovalDetails,
@@ -316,7 +317,7 @@ export function McpConsent({
               value={pairingCode}
             />
             <p className="text-xs text-muted-foreground">
-              Get one from Use T3 Code in another app (MCP), Settings → Sharing & access, or{" "}
+              Get one from Use {APP_BASE_NAME} in another app (MCP), Settings → Sharing & access, or{" "}
               <code>t3 auth pairing create</code> on this machine.
             </p>
           </div>

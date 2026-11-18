@@ -1,3 +1,4 @@
+import { APP_BASE_NAME } from "~/branding";
 import { useAuth } from "@clerk/react";
 import { useAtomValue } from "@effect/atom-react";
 import { offersLinkedEnvironments } from "@t3tools/client-runtime/link-request";
@@ -76,7 +77,7 @@ export function UseInAnotherAppDialogHost() {
 
 function UseInAnotherAppDialog({ requested }: { readonly requested: EnvironmentId | null }) {
   const { environment, label } = useAccessEnvironment(requested);
-  const title = `Use T3 Code in another app (MCP) · ${label ?? "T3 Code"}`;
+  const title = `Use ${APP_BASE_NAME} in another app (MCP) · ${label ?? APP_BASE_NAME}`;
   return (
     <Dialog open onOpenChange={(open) => (open ? undefined : close())}>
       <WizardPopup>
@@ -411,7 +412,7 @@ function GateScreen({
         </GateMessage>
       );
     case "update":
-      return <GateMessage title={`Update T3 Code on ${name}`} />;
+      return <GateMessage title={`Update ${APP_BASE_NAME} on ${name}`} />;
     case "no-relay-read":
       return (
         <GateMessage
@@ -470,7 +471,9 @@ function GateScreen({
           ) : (
             <div className="space-y-2 text-sm">
               <CommandBlock command="t3 connect link" />
-              <p>Restart T3 Code on {name}.</p>
+              <p>
+                Restart {APP_BASE_NAME} on {name}.
+              </p>
               {checkAgain}
             </div>
           )}
