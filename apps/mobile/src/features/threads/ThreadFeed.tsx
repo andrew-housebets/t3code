@@ -153,7 +153,7 @@ import { PresentationSource } from "../../components/ui/NativePresentation";
 import { NativeScrollViewMarker } from "../../native/NativeScrollViewMarker";
 import Animated, { FadeIn, FadeInDown, type SharedValue } from "react-native-reanimated";
 import { useUniwindTheme } from "../../lib/useUniwindTheme";
-import { useFontFamilies } from "../../lib/useClaudeLook";
+import { useClaudeLook, useFontFamilies } from "../../lib/useClaudeLook";
 import { scopedThreadKey } from "../../lib/scopedEntities";
 import { copyTextWithHaptic } from "../../lib/copyTextWithHaptic";
 import { downloadAndShareAttachment } from "../../lib/attachmentDownload";
@@ -1514,6 +1514,7 @@ function ThreadAutomationMessageRow(props: {
   readonly expanded: boolean;
   readonly onToggle: () => void;
   readonly bubbleColor: ColorValue;
+  readonly bubbleRadius: number;
   readonly bubbleMaxWidth: number | "85%";
   readonly contentMaxWidth: number;
   readonly iconSubtleColor: ColorValue;
@@ -1535,8 +1536,9 @@ function ThreadAutomationMessageRow(props: {
   return (
     <View className="mb-5 items-end">
       <View
-        className="min-w-0 rounded-[20px]"
+        className="min-w-0"
         style={{
+          borderRadius: props.bubbleRadius,
           backgroundColor: props.bubbleColor,
           maxWidth: props.bubbleMaxWidth,
           ...(props.expanded ? { width: props.bubbleMaxWidth } : null),
@@ -1753,6 +1755,7 @@ function renderFeedEntry(
     readonly themeAppearance: "light" | "dark";
     readonly duoColumns: boolean;
     readonly userBubbleMaxWidth: number;
+    readonly userBubbleRadius: number;
     readonly markdownContentWidth: number;
     readonly contentWidth: number;
     readonly threadTitle: string;
@@ -2024,6 +2027,7 @@ function renderFeedEntry(
           expanded={props.expandedWorkRows[rowId] ?? false}
           onToggle={() => props.onToggleWorkRow(rowId, entry.id)}
           bubbleColor={userBubbleColor}
+          bubbleRadius={props.userBubbleRadius}
           bubbleMaxWidth={props.duoColumns ? "85%" : props.userBubbleMaxWidth}
           contentMaxWidth={props.userBubbleMaxWidth - USER_BUBBLE_HORIZONTAL_PADDING * 2}
           iconSubtleColor={iconSubtleColor}
@@ -2151,8 +2155,9 @@ function renderFeedEntry(
           ) : null}
           {hasBubble ? (
             <View
-              className="min-w-0 rounded-[20px]"
+              className="min-w-0"
               style={{
+                borderRadius: props.userBubbleRadius,
                 backgroundColor: userBubbleColor,
                 maxWidth: props.duoColumns ? "85%" : props.userBubbleMaxWidth,
                 ...(!bubbleBodyVisible
@@ -2969,6 +2974,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   );
   const screenColor = theme["--color-screen"];
   const userBubbleColor = theme["--color-user-bubble"];
+  const userBubbleRadius = useClaudeLook() ? 10 : 20;
   const openSkillInstructions = (path: string) => {
     void Haptics.selectionAsync();
     navigation.navigate("ThreadFile", {
@@ -3861,6 +3867,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             onEditPendingMessage: props.onEditPendingMessage,
             onUseArtifactTemplate: props.onUseArtifactTemplate,
             threadId: props.threadId,
+            userBubbleRadius,
             copiedRowId,
             expandedWorkRows,
             workRowSizing,

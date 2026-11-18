@@ -14,7 +14,9 @@ import { SymbolView, type AppSymbolName } from "../../components/ui/AppSymbol";
 import { AppText as Text } from "../../components/ui/AppText";
 import * as Dialog from "../../components/ui/Dialog";
 import { Menu } from "../../components/ui/Menu";
+import { cn } from "../../lib/cn";
 import { scopedThreadKey } from "../../lib/scopedEntities";
+import { useClaudeLook } from "../../lib/useClaudeLook";
 import { projectEnvironment } from "../../state/projects";
 import { readEnvironmentScope } from "../../state/session";
 import { environmentThreadShells } from "../../state/threads";
@@ -33,13 +35,17 @@ function DrawerRow(props: {
   readonly attention?: boolean;
   readonly accessibilityHint?: string;
 }) {
+  const claudeLook = useClaudeLook();
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={props.attention ? `${props.label}, needs you` : props.label}
       accessibilityHint={props.accessibilityHint}
       onPress={props.onPress}
-      className="min-h-12 flex-row items-center gap-3.5 rounded-xl px-3 active:bg-thread-hover"
+      className={cn(
+        "flex-row items-center gap-3.5 px-3 active:bg-thread-hover",
+        claudeLook ? "min-h-11 rounded-lg" : "min-h-12 rounded-xl",
+      )}
     >
       <View className="w-6 items-center">{props.icon}</View>
       <Text className="min-w-0 flex-1 text-base text-drawer-foreground" numberOfLines={1}>

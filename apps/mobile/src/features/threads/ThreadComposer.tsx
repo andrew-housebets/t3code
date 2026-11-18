@@ -79,6 +79,7 @@ import {
 } from "../../components/ComposerAttachmentStrip";
 import { VideoPreviewModal, type VideoPreviewSource } from "../../components/ui/VideoPreviewModal";
 import { GlassSurface } from "../../components/ui/GlassSurface";
+import { useClaudeLook } from "../../lib/useClaudeLook";
 import { ComposerEditor, type ComposerEditorHandle } from "../../components/ComposerEditor";
 import { fileRoutePathSegments } from "../files/filePath";
 import {
@@ -365,12 +366,21 @@ function SendActionButton(props: {
   );
 }
 
+const CLAUDE_COMPOSER_BORDERS = {
+  dark: { rest: "#363636", focused: "#4A4A4A" },
+  light: { rest: undefined, focused: "#C8C8C8" },
+} as const;
+
 function ComposerSurface(props: {
   readonly children: ReactNode;
   readonly style: ViewStyle;
   readonly animateLayout?: boolean;
+  readonly focused?: boolean;
 }) {
   const colors = useUniwindTheme();
+  const { themeId, themeAppearance } = useAppearancePreferences();
+  const claudeLook = themeId === "claude";
+  const claudeBorders = CLAUDE_COMPOSER_BORDERS[themeAppearance];
   const targetBorderRadius =
     typeof props.style.borderRadius === "number" ? props.style.borderRadius : 0;
   const shouldAnimate = props.animateLayout !== false && Platform.OS !== "android";
@@ -393,7 +403,11 @@ function ComposerSurface(props: {
   return (
     <Animated.View
       className={
-        Platform.OS === "android" ? undefined : "shadow-[0_6px_28px] shadow-adaptive-black-a15-a35"
+        Platform.OS === "android" || (claudeLook && themeAppearance === "dark")
+          ? undefined
+          : claudeLook
+            ? "shadow-[0_2px_8px] shadow-adaptive-black-a10-a25"
+            : "shadow-[0_6px_28px] shadow-adaptive-black-a15-a35"
       }
       layout={layoutTransition}
       style={[
@@ -403,18 +417,37 @@ function ComposerSurface(props: {
         },
       ]}
     >
-      <AnimatedGlassSurface
-        chrome="none"
-        fallbackColor={colors["--color-composer-surface"]}
-        fallbackClassName="border border-composer-border"
-        glassEffectStyle="regular"
-        pointerEvents="none"
-        tintColor="transparent"
-        layout={layoutTransition}
-        style={[{ position: "absolute", inset: 0 }, animatedShapeStyle]}
-      >
-        {null}
-      </AnimatedGlassSurface>
+      {claudeLook ? (
+        <Animated.View
+          pointerEvents="none"
+          layout={layoutTransition}
+          style={[
+            {
+              position: "absolute",
+              inset: 0,
+              borderWidth: 1,
+              backgroundColor: colors["--color-input-border"],
+              borderColor: props.focused
+                ? claudeBorders.focused
+                : (claudeBorders.rest ?? colors["--color-border"]),
+            },
+            animatedShapeStyle,
+          ]}
+        />
+      ) : (
+        <AnimatedGlassSurface
+          chrome="none"
+          fallbackColor={colors["--color-composer-surface"]}
+          fallbackClassName="border border-composer-border"
+          glassEffectStyle="regular"
+          pointerEvents="none"
+          tintColor="transparent"
+          layout={layoutTransition}
+          style={[{ position: "absolute", inset: 0 }, animatedShapeStyle]}
+        >
+          {null}
+        </AnimatedGlassSurface>
+      )}
       <Animated.View
         collapsable={false}
         layout={layoutTransition}
@@ -619,6 +652,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
   const deviceType = useDeviceType();
   const usesLargeControls = sidebarWorkspaceTabs === "picker" || deviceType === "pad";
   const surfacePaddingVertical = usesLargeControls ? 9 : floatingSidebarComposer ? 6 : 2;
+  const claudeLook = useClaudeLook();
   const [compactRowWidth, setCompactRowWidth] = useState(0);
   const compactAttachmentLimit = compactRowWidth >= 500 ? 3 : 1;
   const compactEditor = useCompactComposerEditor(bodyText, draftMessage);
@@ -933,8 +967,9 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
 
         <ComposerSurface
           animateLayout={false}
+          focused={isFocused}
           style={{
-            borderRadius: usesLargeControls ? 31 : 27,
+            borderRadius: claudeLook ? 8 : usesLargeControls ? 31 : 27,
             borderCurve: "circular",
             overflow: "hidden",
             paddingVertical: surfacePaddingVertical,

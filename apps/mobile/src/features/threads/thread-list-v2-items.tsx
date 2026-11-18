@@ -54,6 +54,7 @@ import {
 } from "../../components/ProviderIcon";
 import { useNowAfter } from "../../lib/clock";
 import { cn } from "../../lib/cn";
+import { useClaudeLook } from "../../lib/useClaudeLook";
 import { copyTextWithHaptic } from "../../lib/copyTextWithHaptic";
 import { copyThreadReference } from "../../lib/copyThreadReference";
 import { useUniwindTheme } from "../../lib/useUniwindTheme";
@@ -396,6 +397,7 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
   readonly simultaneousSwipeGesture?: ComponentProps<typeof ThreadSwipeable>["simultaneousWith"];
 }) {
   const { pendingTask, onSelectPendingTask, onDeletePendingTask } = props;
+  const claudeLook = useClaudeLook();
   const { width: windowWidth, fontScale } = useWindowDimensions();
   const titleTypography = useScaledTextRole("body");
   const metadataTypography = useScaledTextRole("label");
@@ -638,7 +640,9 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
               ) : (
                 <View>
                   <View className={THREAD_LIST_V2_ROW_CONTENT_CLASS_NAME}>{rowContent}</View>
-                  {THREAD_LIST_V2_ROW_DIVIDERS && props.showTrailingDivider !== false ? (
+                  {THREAD_LIST_V2_ROW_DIVIDERS &&
+                  !claudeLook &&
+                  props.showTrailingDivider !== false ? (
                     <View className="ml-5 h-px bg-border-subtle" />
                   ) : null}
                 </View>
@@ -1188,6 +1192,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       : `Opens the thread. Swipe left for ${primaryAction.label.toLowerCase()} and snooze actions.`;
 
   const titleTextInset = props.project ? projectIconSize + 8 : 0;
+  const claudeLook = useClaudeLook();
   const cardContent = (
     <>
       <View className="flex-row items-start gap-2">
@@ -1206,7 +1211,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         <Text
           className={cn(
             "flex-1 text-base",
-            !recede && "font-t3-medium",
+            !recede && !claudeLook && "font-t3-medium",
             selected
               ? selectedThreadRowColors.foregroundClassName
               : rowAppearance.foregroundClassName,
@@ -1491,7 +1496,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         ) : (
           <View>
             <View className={THREAD_LIST_V2_ROW_CONTENT_CLASS_NAME}>{fadedCardContent}</View>
-            {THREAD_LIST_V2_ROW_DIVIDERS && props.showTrailingDivider !== false ? (
+            {THREAD_LIST_V2_ROW_DIVIDERS && !claudeLook && props.showTrailingDivider !== false ? (
               <View className="ml-5 h-px bg-border-subtle" />
             ) : null}
           </View>
