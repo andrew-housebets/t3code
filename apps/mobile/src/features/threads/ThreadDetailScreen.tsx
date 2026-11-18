@@ -1,4 +1,6 @@
 import { ChildThreadApprovals } from "./ChildThreadApprovals";
+import { isCoordinatorThread } from "@t3tools/shared/coordinatorThread";
+import { COORDINATOR_DRAFT_PLACEHOLDER } from "../../state/coordinator-drafts";
 import { useOpenThreadInspector } from "./thread-inspector-navigation";
 import { useSidebarWorkspaceTabs } from "../layout/workspace/useSystemWorkspaceTabBar";
 import { useWorkspaceTabs } from "../layout/workspace/WorkspaceTabsContext";
@@ -1859,7 +1861,10 @@ function ThreadDetailBody(
                             ? props.activePendingApproval.supportsFeedback
                               ? "Send feedback to decline this request"
                               : "Send a message to decline and redirect the agent"
-                            : (props.draftMode?.placeholder ?? "Ask anything")
+                            : (props.draftMode?.placeholder ??
+                              (isCoordinatorThread(props.selectedThread.source)
+                                ? COORDINATOR_DRAFT_PLACEHOLDER
+                                : "Ask anything"))
                         }
                         contentMaxWidth={contentMaxWidth}
                         draftControls={props.draftMode?.controls(draftViewportHeight)}
