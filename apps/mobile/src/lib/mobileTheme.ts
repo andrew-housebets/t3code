@@ -324,9 +324,6 @@ export function themeColorWithAlpha(color: string, alpha: number): string {
   return rgb ? `rgba(${rgb[1]}, ${rgb[2]}, ${rgb[3]}, ${alpha})` : color;
 }
 
-/** Claude iOS sends with its clay accent while the rest of the theme stays blue. */
-const CLAUDE_SEND_COLOR = "#c4674b";
-
 export function createMobileThemeVariables(
   colors: ThemeColors,
   appearance: MobileThemeAppearance,
@@ -500,17 +497,12 @@ export function getMobileThemeVariables(
     groupedCard,
     themeId === "t3-chat" && appearance === "dark"
       ? [colors.messageActionForeground, colors.messageAction]
-      : themeId !== DEFAULT_MOBILE_THEME_ID && themeId !== "t3-chat" && themeId !== "claude"
+      : themeId !== DEFAULT_MOBILE_THEME_ID && themeId !== "t3-chat"
         ? [colors.messageAction, colors.messageActionForeground]
         : undefined,
   );
 
-  const themedVariables =
-    themeId === "claude" ? { ...baseVariables, "--color-send": CLAUDE_SEND_COLOR } : baseVariables;
-
-  return overrides
-    ? ({ ...themedVariables, ...overrides } as MobileThemeVariables)
-    : themedVariables;
+  return overrides ? ({ ...baseVariables, ...overrides } as MobileThemeVariables) : baseVariables;
 }
 
 export function getMobileThemePreviewColors(
