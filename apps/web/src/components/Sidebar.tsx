@@ -520,9 +520,25 @@ function useSidebarThreads(input: {
     }
     return visible.length === settledThreads.length ? settledThreads : visible;
   })();
-  const renderedSettledThreads = settledShelfExpanded
-    ? visibleSettledThreads
-    : routeThreadOnly(visibleSettledThreads, routeRowThreadKey);
+  const settledFolders =
+    folderGroups === null || !settledShelfExpanded
+      ? null
+      : groupSidebarThreadsByProject(folderGroups, visibleSettledThreads, () => false);
+  const settledFolderThreads = settledFolders?.flatMap((folder) => folder.threads) ?? [];
+  const renderedSettledThreads =
+    settledFolders !== null
+      ? [
+          ...settledFolderThreads,
+          ...visibleSettledThreads.filter((thread) => !settledFolderThreads.includes(thread)),
+        ]
+      : settledShelfExpanded
+        ? visibleSettledThreads
+        : routeThreadOnly(visibleSettledThreads, routeRowThreadKey);
+  const settledFolderByFirstThreadKey = new Map(
+    (settledFolders ?? []).map(
+      (folder) => [threadShellKey(folder.threads[0]!), folder.group] as const,
+    ),
+  );
   const visibleSnoozedThreads = snoozedShelfExpanded
     ? snoozedThreads
     : routeThreadOnly(snoozedThreads, routeRowThreadKey);
@@ -594,6 +610,7 @@ function useSidebarThreads(input: {
     toggleSnoozedShelf: () => setSnoozedShelfExpanded((value) => !value),
     workingShelfExpanded,
     toggleWorkingShelf: () => setWorkingShelfExpanded((value) => !value),
+    settledFolderByFirstThreadKey,
     projectFolders,
     toggleProjectFolder: (group: SidebarProjectSnapshot) => {
       const keys = sidebarFolderExpansionKeys(group);
@@ -1336,6 +1353,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     toggleWorkingShelf,
     projectFolders,
     toggleProjectFolder,
+    settledFolderByFirstThreadKey,
     renderedSettledThreads,
     visibleSnoozedThreads,
     visibleWorkingThreads,
@@ -3548,6 +3566,26 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                         if (item.kind === "thread") {
                           // Folders draw active rows in their own place below.
                           if (projectFolders !== null && item.section === "active") continue;
+                          const settledFolder =
+                            item.section === "settled"
+                              ? settledFolderByFirstThreadKey.get(item.key)
+                              : undefined;
+                          if (settledFolder !== undefined) {
+                            items.push(
+                              <li
+                                key={`settled-folder:${settledFolder.projectKey}`}
+                                className="mt-2 flex h-7 list-none items-center gap-2.5 px-(--sidebar-row-content-inset) text-xs text-sidebar-muted-foreground"
+                              >
+                                <ProjectFavicon
+                                  project={settledFolder}
+                                  className="size-3.5 shrink-0"
+                                />
+                                <span className="min-w-0 truncate">
+                                  {settledFolder.displayName}
+                                </span>
+                              </li>,
+                            );
+                          }
                           items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
                           continue;
                         }
