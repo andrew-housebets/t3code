@@ -15,7 +15,9 @@ import type { StaticScreenProps } from "@react-navigation/native";
 import { isReasoningSelect } from "@t3tools/client-runtime/model-traits";
 import { createModelSelection } from "@t3tools/shared/model";
 import { useState, type ComponentProps } from "react";
-import { Pressable, View } from "react-native";
+import { Platform, Pressable, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 
 import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
 import { SymbolView } from "../../components/ui/AppSymbol";
@@ -81,13 +83,24 @@ export function ProjectInstructionsRouteScreen({
 }: StaticScreenProps<{ readonly environmentId: string; readonly projectId: string }>) {
   const environmentId = EnvironmentId.make(route.params.environmentId);
   const projectId = ProjectId.make(route.params.projectId);
+  const insets = useSafeAreaInsets();
   return (
     <SettingsScreen title="Project instructions">
-      <ProjectContextFields
-        key={`${environmentId}:${projectId}`}
-        environmentId={environmentId}
-        projectId={projectId}
-      />
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        className="flex-1"
+        contentContainerClassName="gap-6 px-5 pt-4"
+        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
+      >
+        <ProjectContextFields
+          key={`${environmentId}:${projectId}`}
+          environmentId={environmentId}
+          projectId={projectId}
+        />
+      </ScrollView>
     </SettingsScreen>
   );
 }
@@ -347,7 +360,7 @@ function ProjectContextFields(props: {
           </SettingsSection>
         );
       })}
-      <View className="gap-3 px-5 pb-8">
+      <View className="gap-3 px-2">
         <Text className="text-sm text-foreground-muted">
           Changes apply to threads started afterwards.
         </Text>
