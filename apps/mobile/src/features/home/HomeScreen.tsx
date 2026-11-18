@@ -78,6 +78,7 @@ import { useQueuedThreadKeys } from "../../state/use-thread-outbox";
 import {
   ThreadListV2PendingRow,
   ThreadListV2Row,
+  ThreadListV2ProjectLabel,
   ThreadListV2SettledShelfHeader,
   ThreadListV2ShowMoreRow,
   ThreadListV2SnoozedShelfHeader,
@@ -98,6 +99,7 @@ import {
   buildHomeProjectScopes,
   findHomeProjectScope,
   type HomeProjectSortOrder,
+  resolveHomeProjectGroupOf,
   sortHomeProjectScopes,
 } from "./homeThreadList";
 import { createSwipeRowActivation } from "./swipe-row-activation";
@@ -455,7 +457,13 @@ export function HomeScreen(props: HomeScreenProps) {
     toggleSettledShelf,
     toggleSnoozedShelf,
     toggleWorkingShelf,
+    groupByProject,
+    toggleGroupByProject,
   } = useThreadListV2ShelfPreferences();
+  const projectGroupOf = useMemo(
+    () => (groupByProject ? resolveHomeProjectGroupOf(projectScopes) : null),
+    [groupByProject, projectScopes],
+  );
   const now = useThreadListNow(props.threads);
   const listEnvironments = useAtomValue(threadListEnvironmentsAtom);
   const {
@@ -477,6 +485,7 @@ export function HomeScreen(props: HomeScreenProps) {
     items: threadListV2Items,
     contentOnlyThreadKeys,
     olderSettledShelf,
+    projectGrouped,
   } = useThreadListV2({
     threads: listedThreads,
     pendingTasks: props.pendingTasks,
@@ -498,6 +507,7 @@ export function HomeScreen(props: HomeScreenProps) {
     snoozedShelfExpanded,
     settledShelfExpanded,
     selectedThreadKey,
+    projectGroupOf,
   });
   // Called as `props.onSelectThread(...)`, the compiler would cache this handler on the whole
   // props object, which is new on every render of Home's parent.
@@ -571,6 +581,19 @@ export function HomeScreen(props: HomeScreenProps) {
           onSwipeableWillOpen={handleSwipeableWillOpen}
           simultaneousSwipeGesture={homeScrollGesture}
           activationKey={item.key}
+        />
+      );
+    }
+    if (item.type === "v2-project-label") {
+      return (
+        <ThreadListV2ProjectLabel
+          pane={sidebarSurface ? "sidebar" : "screen"}
+          title={item.title}
+          project={
+            item.environmentId === null || item.projectId === null
+              ? null
+              : (projectByKey.get(scopedProjectKey(item.environmentId, item.projectId)) ?? null)
+          }
         />
       );
     }
@@ -657,7 +680,9 @@ export function HomeScreen(props: HomeScreenProps) {
         reorderSupported={
           item.item.pinned
             ? pinReorderEnvironmentIds.has(thread.environmentId)
-            : !workingShelfEnabled && activeReorderEnvironmentIds.has(thread.environmentId)
+            : !workingShelfEnabled &&
+              !projectGrouped &&
+              activeReorderEnvironmentIds.has(thread.environmentId)
         }
         canMoveUp={item.canMoveUp}
         canMoveDown={item.canMoveDown}
@@ -795,6 +820,8 @@ export function HomeScreen(props: HomeScreenProps) {
           selectedProjectKey={props.selectedProjectKey}
           onEnvironmentChange={props.onEnvironmentChange}
           onProjectChange={props.onProjectChange}
+          groupByProject={groupByProject}
+          onToggleGroupByProject={toggleGroupByProject}
         />
       ) : null}
     </>

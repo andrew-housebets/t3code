@@ -7,6 +7,8 @@ import type {
   HomeListFilterMenuProject,
 } from "./home-list-filter-menu";
 
+const GROUP_BY_PROJECT_ACTION_ID = "group-by-project";
+
 export function ThreadListFilters(props: {
   readonly environments: ReadonlyArray<HomeListFilterMenuEnvironment>;
   readonly projects: ReadonlyArray<HomeListFilterMenuProject>;
@@ -14,6 +16,8 @@ export function ThreadListFilters(props: {
   readonly selectedProjectKey: string | null;
   readonly onEnvironmentChange: (environmentId: EnvironmentId | null) => void;
   readonly onProjectChange: (projectKey: string | null) => void;
+  readonly groupByProject: boolean;
+  readonly onToggleGroupByProject: () => void;
   /** List padding the scroller bleeds through so pills start where row content does. */
   readonly gutter: number;
 }) {
@@ -74,9 +78,23 @@ export function ThreadListFilters(props: {
             title: project.label,
             state: project.key === props.selectedProjectKey ? ("on" as const) : ("off" as const),
           })),
+          {
+            id: "arrangement",
+            title: "",
+            displayInline: true,
+            subactions: [
+              {
+                id: GROUP_BY_PROJECT_ACTION_ID,
+                title: "Group by project",
+                image: "folder",
+                state: props.groupByProject ? ("on" as const) : ("off" as const),
+              },
+            ],
+          },
         ]}
         onSelect={(id) => {
-          if (id === "all") props.onProjectChange(null);
+          if (id === GROUP_BY_PROJECT_ACTION_ID) props.onToggleGroupByProject();
+          else if (id === "all") props.onProjectChange(null);
           else {
             const project = props.projects.find(
               (candidate) => JSON.stringify(candidate.key) === id,

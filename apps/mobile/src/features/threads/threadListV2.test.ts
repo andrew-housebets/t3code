@@ -924,6 +924,131 @@ describe("buildThreadListV2ListItems", () => {
   });
 });
 
+describe("buildThreadListV2ListItems project grouping", () => {
+  const projectA = ProjectId.make("project-a");
+  const projectB = ProjectId.make("project-b");
+  const projectC = ProjectId.make("project-c");
+  const at = (minute: number) => `2026-06-01T10:${String(minute).padStart(2, "0")}:00.000Z`;
+  const thread = (
+    id: string,
+    projectId: ProjectId,
+    minute: number,
+    extra: Partial<EnvironmentThreadShell> = {},
+  ) =>
+    makeThread({
+      id: ThreadId.make(id),
+      title: id,
+      projectId,
+      updatedAt: at(minute),
+      latestUserMessageAt: at(minute),
+      ...extra,
+    });
+  const settled = (id: string, projectId: ProjectId, minute: number) =>
+    thread(id, projectId, minute, { settledOverride: "settled", settledAt: at(minute) });
+  const groupOf = (shell: EnvironmentThreadShell) =>
+    shell.projectId === projectC
+      ? null
+      : {
+          key: `group:${shell.projectId}`,
+          title: shell.projectId === projectA ? "Alpha" : "Beta",
+          environmentId,
+          projectId: shell.projectId,
+        };
+  const threads = [
+    thread("pinned-b", projectB, 1, { pinnedAt: at(1), pinOrderKey: "a0" }),
+    thread("active-a-old", projectA, 2),
+    thread("active-b", projectB, 5),
+    thread("active-a-new", projectA, 3),
+    settled("settled-b", projectB, 9),
+    settled("settled-a-new", projectA, 8),
+    settled("settled-c", projectC, 7),
+    settled("settled-a-old", projectA, 6),
+  ];
+  const describeItems = (items: ReadonlyArray<ThreadListV2ListItem>) =>
+    items.map((item) =>
+      item.type === "v2-thread"
+        ? item.item.thread.id
+        : item.type === "v2-project-label"
+          ? `[${item.section} ${item.title}]`
+          : item.type,
+    );
+  const build = (settledLimit?: number, projectGroupOf: typeof groupOf | null = groupOf) => {
+    const layout = buildThreadListV2Items({
+      threads,
+      environmentId: null,
+      searchQuery: "",
+      now: NOW,
+      ...(settledLimit === undefined ? {} : { settledLimit }),
+    });
+    return buildThreadListV2ListItems({
+      items: layout.items,
+      pendingTasks: [],
+      settledCount: layout.settledCount,
+      settledShelfHeaderIndex: layout.settledShelfHeaderIndex,
+      projectGroupOf,
+    });
+  };
+
+  it.each([
+    {
+      name: "groups Active and Settled under project labels, most recent project first",
+      settledLimit: undefined,
+      expected: [
+        "pinned-b",
+        "[active Beta]",
+        "active-b",
+        "[active Alpha]",
+        "active-a-new",
+        "active-a-old",
+        "v2-settled-shelf",
+        "[settled Beta]",
+        "settled-b",
+        "[settled Alpha]",
+        "settled-a-new",
+        "settled-a-old",
+        "[settled Other]",
+        "settled-c",
+      ],
+    },
+    {
+      name: "groups only the settled rows a page shows",
+      settledLimit: 2,
+      expected: [
+        "pinned-b",
+        "[active Beta]",
+        "active-b",
+        "[active Alpha]",
+        "active-a-new",
+        "active-a-old",
+        "v2-settled-shelf",
+        "[settled Beta]",
+        "settled-b",
+        "[settled Alpha]",
+        "settled-a-new",
+      ],
+    },
+  ])("$name", ({ settledLimit, expected }) => {
+    expect(describeItems(build(settledLimit))).toEqual(expected);
+  });
+
+  it("keeps rows ungrouped and without labels when grouping is off", () => {
+    expect(describeItems(build(undefined, null)).some((label) => label.startsWith("["))).toBe(
+      false,
+    );
+  });
+
+  it("treats rebuilt labels as equal and drops the divider above a label", () => {
+    const first = build();
+    const second = build();
+    const label = (items: ReadonlyArray<ThreadListV2ListItem>) =>
+      items.find((item) => item.type === "v2-project-label")!;
+    expect(threadListV2ListItemsAreEqual(label(first), label(second))).toBe(true);
+    const beforeAlpha =
+      first[first.findIndex((item) => item.key === "v2-project-label:active:group:project-a") - 1];
+    expect(beforeAlpha?.type === "v2-thread" && beforeAlpha.showTrailingDivider).toBe(false);
+  });
+});
+
 describe("pending mobile thread moves", () => {
   function fixture(section: "active" | "pinned" = "active") {
     const rows = ["a", "b", "c"].map((id, index) =>

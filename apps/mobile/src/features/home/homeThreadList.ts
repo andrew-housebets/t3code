@@ -22,6 +22,7 @@ import * as Order from "effect/Order";
 
 import { scopedProjectKey } from "../../lib/scopedEntities";
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
+import type { ThreadListV2ProjectGroup } from "../threads/threadListV2";
 
 export type HomeProjectSortOrder = Exclude<SidebarProjectSortOrder, "manual">;
 
@@ -72,6 +73,28 @@ export function buildHomeProjectScopes(input: {
       archived: group.archived,
     };
   });
+}
+
+/** The project group each thread's list row sits under when the list is grouped by project. */
+export function resolveHomeProjectGroupOf(
+  scopes: ReadonlyArray<HomeProjectScope>,
+): (
+  thread: Pick<EnvironmentThreadShell, "environmentId" | "projectId">,
+) => ThreadListV2ProjectGroup | null {
+  const groupByProjectKey = new Map<string, ThreadListV2ProjectGroup>();
+  for (const scope of scopes) {
+    const group: ThreadListV2ProjectGroup = {
+      key: scope.key,
+      title: scope.title,
+      environmentId: scope.representative.environmentId,
+      projectId: scope.representative.id,
+    };
+    for (const ref of scope.projectRefs) {
+      groupByProjectKey.set(scopedProjectKey(ref.environmentId, ref.projectId), group);
+    }
+  }
+  return (thread) =>
+    groupByProjectKey.get(scopedProjectKey(thread.environmentId, thread.projectId)) ?? null;
 }
 
 /** The scope the thread list's project filter shows; an archived or unknown key shows all projects. */
