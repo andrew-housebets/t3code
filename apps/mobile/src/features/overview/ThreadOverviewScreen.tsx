@@ -41,6 +41,7 @@ import * as Dialog from "../../components/ui/Dialog";
 import { Menu } from "../../components/ui/Menu";
 import { ScreenContent } from "../../components/ui/ScreenContent";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
+import { useContentTopInset } from "../../components/ui/useBarInset";
 import { SheetPane } from "../../components/ui/SheetPane";
 import { useNowMinuteMs } from "../../lib/clock";
 import { relativeTime } from "../../lib/time";
@@ -162,6 +163,7 @@ export function ThreadOverview(props: {
         ]
       : [];
   const navigation = useNavigation();
+  const contentTopInset = useContentTopInset();
   const openLibraryFor = (ownerThreadId: ThreadId | null) => {
     setLibraryOwner(ownerThreadId);
     setTab("library");
@@ -195,7 +197,7 @@ export function ThreadOverview(props: {
         hideBottomBorder
       />
       <ScreenContent>
-        <View className="px-4 pb-3 pt-1">
+        <View className="px-4 pb-3 pt-1" style={{ marginTop: contentTopInset }}>
           <SegmentedControl
             options={tabs}
             selected={tab}
