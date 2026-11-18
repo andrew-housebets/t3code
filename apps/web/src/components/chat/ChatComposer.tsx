@@ -90,6 +90,7 @@ import {
   DEFAULT_COMPOSER_PLACEHOLDER,
 } from "../../composerPlaceholder";
 import { useIsCoordinatorDraft } from "../overview/coordinatorStore";
+import { useIsCoordinatorThread } from "../overview/threadOverviewState";
 import { deriveComposerSendState, getAntigravitySendBlockReason } from "../ChatView.logic";
 import { threadHasStarted } from "../../lib/chatThreadActions";
 import {
@@ -2308,6 +2309,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   );
   // After /clear the next message starts a fresh session that cannot see what the suggestion refers to.
   const freshSessionArmed = useFreshSessionArmed(scopedThreadKey(routeThreadRef));
+  const coordinatorThread = useIsCoordinatorThread(routeThreadRef);
   const coordinatorDraft = useIsCoordinatorDraft(draftId);
   // Offered only where the default placeholder would show, so it never hides a pending question.
   const offeredPromptSuggestion =
@@ -3642,7 +3644,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                             : showProviderUnavailable
                               ? "Enable a provider in Settings to send a message"
                               : (offeredPromptSuggestion ??
-                                (coordinatorDraft
+                                (coordinatorDraft || coordinatorThread
                                   ? COORDINATOR_COMPOSER_PLACEHOLDER
                                   : DEFAULT_COMPOSER_PLACEHOLDER))
                     }
