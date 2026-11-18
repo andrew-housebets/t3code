@@ -380,7 +380,13 @@ const config: ExpoConfig = {
         },
       },
     ],
-    "expo-secure-store",
+    // Its default prompt names $(PRODUCT_NAME), which drops the space from a fork's app name.
+    isForkBuild
+      ? [
+          "expo-secure-store",
+          { faceIDPermission: `Allow ${appLabel} to access your Face ID biometric data.` },
+        ]
+      : "expo-secure-store",
     "expo-sqlite",
     ...(isIosPersonalTeamBuild
       ? [sharingPlugin]

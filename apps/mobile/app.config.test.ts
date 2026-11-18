@@ -79,4 +79,7 @@ it("signs fork builds with their own identity and no upstream Expo project", asy
     "Allow Fork Code to save images to your photo library.",
   );
   expect(JSON.stringify(config.plugins)).not.toContain("Allow T3 Code");
+  expect(JSON.stringify(config.plugins)).toContain(
+    "Allow Fork Code to access your Face ID biometric data.",
+  );
 });
