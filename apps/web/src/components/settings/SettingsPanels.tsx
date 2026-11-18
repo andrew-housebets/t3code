@@ -339,68 +339,70 @@ function AboutVersionSection() {
         }
       />
       {hasDesktopBridge ? (
-        <SettingsRow
-          {...searchableSetting("update-track")}
-          description={
-            nightlyDeniedBy !== undefined ? (
-              `${managedUpdatesMessage(nightlyDeniedBy)} Nightly builds are not available${
-                selectedUpdateChannel === "nightly"
-                  ? "; switch to Stable to keep getting updates."
-                  : "."
-              }`
-            ) : unswitchedMachines > 0 ? (
-              <>
-                {unswitchedMachines === 1
-                  ? "1 machine still runs"
-                  : `${unswitchedMachines} machines still run`}{" "}
-                {channelSwitchLabel(selectedUpdateChannel === "nightly" ? "latest" : "nightly")}.{" "}
-                {/* The dialog moves what it can and says why it skips the rest. */}
-                <Button
-                  size="xs"
-                  variant="link"
-                  disabled={updateRun !== null}
-                  onClick={() => setSwitchChannel(selectedUpdateChannel)}
-                >
-                  Review
-                </Button>
-              </>
-            ) : (
-              "Switches this app and every connected machine whose database the target release supports."
-            )
-          }
-          managed={updatesDenial}
-          control={
-            <Select
-              value={selectedUpdateChannel}
-              onValueChange={(value) => {
-                if (value !== selectedUpdateChannel) {
-                  setSwitchChannel(value as DesktopUpdateChannel);
-                }
-              }}
-            >
-              <SelectTrigger
-                size="sm"
-                className="w-full sm:w-40"
-                aria-label="Update track"
-                disabled={switchChannel !== null || updateRun !== null}
+        updateState?.channelFixed ? null : (
+          <SettingsRow
+            {...searchableSetting("update-track")}
+            description={
+              nightlyDeniedBy !== undefined ? (
+                `${managedUpdatesMessage(nightlyDeniedBy)} Nightly builds are not available${
+                  selectedUpdateChannel === "nightly"
+                    ? "; switch to Stable to keep getting updates."
+                    : "."
+                }`
+              ) : unswitchedMachines > 0 ? (
+                <>
+                  {unswitchedMachines === 1
+                    ? "1 machine still runs"
+                    : `${unswitchedMachines} machines still run`}{" "}
+                  {channelSwitchLabel(selectedUpdateChannel === "nightly" ? "latest" : "nightly")}.{" "}
+                  {/* The dialog moves what it can and says why it skips the rest. */}
+                  <Button
+                    size="xs"
+                    variant="link"
+                    disabled={updateRun !== null}
+                    onClick={() => setSwitchChannel(selectedUpdateChannel)}
+                  >
+                    Review
+                  </Button>
+                </>
+              ) : (
+                "Switches this app and every connected machine whose database the target release supports."
+              )
+            }
+            managed={updatesDenial}
+            control={
+              <Select
+                value={selectedUpdateChannel}
+                onValueChange={(value) => {
+                  if (value !== selectedUpdateChannel) {
+                    setSwitchChannel(value as DesktopUpdateChannel);
+                  }
+                }}
               >
-                <SelectValue>{channelSwitchLabel(selectedUpdateChannel)}</SelectValue>
-              </SelectTrigger>
-              <SelectPopup align="end" alignItemWithTrigger={false}>
-                <SelectItem hideIndicator value="latest">
-                  Stable
-                </SelectItem>
-                <SelectItem
-                  hideIndicator
-                  value="nightly"
-                  disabled={nightlyDeniedBy !== undefined && selectedUpdateChannel !== "nightly"}
+                <SelectTrigger
+                  size="sm"
+                  className="w-full sm:w-40"
+                  aria-label="Update track"
+                  disabled={switchChannel !== null || updateRun !== null}
                 >
-                  Nightly
-                </SelectItem>
-              </SelectPopup>
-            </Select>
-          }
-        />
+                  <SelectValue>{channelSwitchLabel(selectedUpdateChannel)}</SelectValue>
+                </SelectTrigger>
+                <SelectPopup align="end" alignItemWithTrigger={false}>
+                  <SelectItem hideIndicator value="latest">
+                    Stable
+                  </SelectItem>
+                  <SelectItem
+                    hideIndicator
+                    value="nightly"
+                    disabled={nightlyDeniedBy !== undefined && selectedUpdateChannel !== "nightly"}
+                  >
+                    Nightly
+                  </SelectItem>
+                </SelectPopup>
+              </Select>
+            }
+          />
+        )
       ) : selectedHostedAppChannel ? (
         <SettingsRow
           {...searchableSetting("update-track")}

@@ -348,10 +348,14 @@ function getAutoUpdateDisabledReason(args: {
   appImage?: string | undefined;
   isDebPackage: boolean;
   disabledByEnv: boolean;
+  forkWithoutFeed: boolean;
   hasUpdateFeedConfig: boolean;
 }): string | null {
   if (args.policy.mode === "off") {
     return args.policy.message ?? "Updates are turned off on this machine.";
+  }
+  if (args.forkWithoutFeed) {
+    return "Automatic updates are not available in this build.";
   }
   if (!args.hasUpdateFeedConfig) {
     return "Automatic updates are not available because no update feed is configured.";
@@ -386,6 +390,14 @@ export const make = Effect.gen(function* () {
   const policy = yield* DesktopUpdatePolicy.DesktopUpdatePolicy;
   // Any user can set the mock flag, so it never replaces an administrator's update source.
   const mockUpdates = config.mockUpdates && policy.message === null;
+  const isFork = Option.isSome(environment.forkIdentity);
+  const forkUpdateRepository = DesktopEnvironment.resolveForkUpdateRepository(
+    environment.forkIdentity,
+  );
+  const effectiveChannel = (channel: DesktopUpdateChannel): DesktopUpdateChannel =>
+    isFork ? "latest" : channel;
+  const withChannelLock = (state: DesktopUpdateState): DesktopUpdateState =>
+    isFork ? { ...state, channel: "latest", channelFixed: true } : state;
 
   const appUpdateYmlConfigRef = yield* Ref.make<Option.Option<AppUpdateYmlConfig>>(Option.none());
   const activeUpdateActionRef = yield* Ref.make<Option.Option<UpdateAction>>(Option.none());
@@ -411,10 +423,12 @@ export const make = Effect.gen(function* () {
       ),
     );
   const updateStateRef = yield* Ref.make<DesktopUpdateState>(
-    createInitialDesktopUpdateState(
-      environment.appVersion,
-      environment.runtimeInfo,
-      environment.defaultDesktopSettings.updateChannel,
+    withChannelLock(
+      createInitialDesktopUpdateState(
+        environment.appVersion,
+        environment.runtimeInfo,
+        environment.defaultDesktopSettings.updateChannel,
+      ),
     ),
   );
 
@@ -426,12 +440,14 @@ export const make = Effect.gen(function* () {
     Effect.flatMap((state) => electronWindow.sendAll(IpcChannels.UPDATE_STATE_CHANNEL, state)),
   );
 
-  const setState = (state: DesktopUpdateState): Effect.Effect<void> =>
-    stateMutex
+  const setState = (nextState: DesktopUpdateState): Effect.Effect<void> => {
+    const state = withChannelLock(nextState);
+    return stateMutex
       .withPermits(1)(
         Ref.set(updateStateRef, state).pipe(Effect.andThen(PubSub.publish(stateChanges, state))),
       )
       .pipe(Effect.andThen(emitState));
+  };
 
   const updateState = (
     f: (state: DesktopUpdateState) => DesktopUpdateState,
@@ -467,7 +483,10 @@ export const make = Effect.gen(function* () {
   const hasUpdateFeedConfig = Ref.get(appUpdateYmlConfigRef).pipe(
     Effect.map(
       (appUpdateYmlConfig) =>
-        Option.isSome(appUpdateYmlConfig) || mockUpdates || policy.feedUrl !== undefined,
+        mockUpdates ||
+        (isFork
+          ? Option.isSome(forkUpdateRepository)
+          : Option.isSome(appUpdateYmlConfig) || policy.feedUrl !== undefined),
     ),
   );
 
@@ -481,7 +500,8 @@ export const make = Effect.gen(function* () {
         platform: environment.platform,
         appImage: Option.getOrUndefined(config.appImagePath),
         isDebPackage,
-        disabledByEnv: config.disableAutoUpdate || Option.isSome(environment.forkIdentity),
+        disabledByEnv: config.disableAutoUpdate,
+        forkWithoutFeed: isFork && Option.isNone(forkUpdateRepository),
         hasUpdateFeedConfig: hasFeedConfig,
       }),
     );
@@ -490,11 +510,13 @@ export const make = Effect.gen(function* () {
   // Without nightly, an install on that channel stays put until its user picks stable: moving it
   // silently would be a downgrade nobody asked for, and checking nightly would break the policy.
   const channelBlockedReason = (channel: DesktopUpdateChannel): Option.Option<string> =>
-    channel === "nightly" && !policy.allowNightly
-      ? Option.some(
-          `${policy.message ?? "Nightly updates are turned off on this machine."} Switch to the stable channel to keep getting updates.`,
-        )
-      : Option.none();
+    isFork && channel === "nightly"
+      ? Option.some(`${environment.branding.baseName} offers only its own stable builds.`)
+      : channel === "nightly" && !policy.allowNightly
+        ? Option.some(
+            `${policy.message ?? "Nightly updates are turned off on this machine."} Switch to the stable channel to keep getting updates.`,
+          )
+        : Option.none();
 
   const resolveStateDisabledReason = (channel: DesktopUpdateChannel) =>
     resolveDisabledReason.pipe(Effect.map(Option.orElse(() => channelBlockedReason(channel))));
@@ -1211,7 +1233,13 @@ export const make = Effect.gen(function* () {
           provider: "generic",
           url: `http://localhost:${config.mockUpdateServerPort}`,
         } as ElectronUpdater.ElectronUpdaterFeedUrl);
-      } else if (policy.feedUrl !== undefined) {
+      } else if (Option.isSome(forkUpdateRepository)) {
+        yield* electronUpdater.setFeedURL({
+          provider: "github",
+          owner: forkUpdateRepository.value.owner,
+          repo: forkUpdateRepository.value.repo,
+        } as ElectronUpdater.ElectronUpdaterFeedUrl);
+      } else if (!isFork && policy.feedUrl !== undefined) {
         // The administrator's mirror replaces the GitHub feed baked into app-update.yml.
         yield* electronUpdater.setFeedURL({
           provider: "generic",
@@ -1219,7 +1247,11 @@ export const make = Effect.gen(function* () {
         } as ElectronUpdater.ElectronUpdaterFeedUrl);
       }
 
-      const settings = yield* desktopSettings.get;
+      const storedSettings = yield* desktopSettings.get;
+      const settings = {
+        ...storedSettings,
+        updateChannel: effectiveChannel(storedSettings.updateChannel),
+      };
       const disabledReason = yield* resolveDisabledReason;
       // A blocked nightly channel still lets the user switch back to stable, so it stays updatable.
       yield* Ref.set(desktopState.canInstallUpdates, Option.isNone(disabledReason));
@@ -1280,7 +1312,9 @@ export const make = Effect.gen(function* () {
       if (Option.isSome(channelBlockedReason(nextChannel))) {
         return yield* new DesktopUpdateChannelManagedError({
           channel: nextChannel,
-          policyMessage: policy.message ?? "Your administrator manages T3 Code updates.",
+          policyMessage: isFork
+            ? `${environment.branding.baseName} offers only its own stable builds.`
+            : (policy.message ?? "Your administrator manages T3 Code updates."),
         });
       }
       // A background check holds the updater only briefly, so wait it out instead of refusing.

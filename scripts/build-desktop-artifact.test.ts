@@ -31,6 +31,7 @@ import {
   readWorkspaceConfig,
   createBuildConfig,
   resolveDesktopForkDefaultTheme,
+  resolveDesktopForkIdentity,
   DESKTOP_FILE_EXCLUSIONS,
   InvalidMacPasskeyRpDomainError,
   InvalidMacPasskeyPublishableKeyError,
@@ -584,6 +585,68 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
               T3CODE_DESKTOP_APP_ID: "com.b4sed.code",
               T3CODE_APP_NAME: "B4SED Code",
               T3CODE_DESKTOP_DATA_NAME: "b4sed",
+            },
+          }),
+        ),
+      ),
+    ),
+  );
+
+  it.effect("points a fork build's feed only at its own update repository", () =>
+    Effect.gen(function* () {
+      const config = yield* createBuildConfig(
+        "mac",
+        "dmg",
+        "0.1.9-b4sed.202611181200",
+        false,
+        false,
+        undefined,
+        undefined,
+      );
+      assert.deepStrictEqual(config.publish, [
+        {
+          provider: "github",
+          owner: "andrew-housebets",
+          repo: "b4sed-code-releases",
+          releaseType: "release",
+          channel: "latest",
+        },
+      ]);
+      const fork = yield* resolveDesktopForkIdentity();
+      assert.deepStrictEqual(fork?.updateRepository, {
+        owner: "andrew-housebets",
+        repo: "b4sed-code-releases",
+      });
+    }).pipe(
+      Effect.provide(
+        ConfigProvider.layer(
+          ConfigProvider.fromEnv({
+            env: {
+              GITHUB_REPOSITORY: "pingdotgg/t3code",
+              T3CODE_DESKTOP_APP_ID: "com.b4sed.code",
+              T3CODE_APP_NAME: "B4SED Code",
+              T3CODE_DESKTOP_DATA_NAME: "b4sed",
+              T3CODE_DESKTOP_UPDATE_REPOSITORY: "andrew-housebets/b4sed-code-releases",
+            },
+          }),
+        ),
+      ),
+    ),
+  );
+
+  it.effect("rejects a fork update repository that is not owner/repo", () =>
+    Effect.gen(function* () {
+      const error = yield* resolveDesktopForkIdentity().pipe(Effect.flip);
+      assert.equal(error._tag, "InvalidDesktopForkIdentityError");
+    }).pipe(
+      Effect.provide(
+        ConfigProvider.layer(
+          ConfigProvider.fromEnv({
+            env: {
+              T3CODE_DESKTOP_APP_ID: "com.b4sed.code",
+              T3CODE_APP_NAME: "B4SED Code",
+              T3CODE_DESKTOP_DATA_NAME: "b4sed",
+              T3CODE_DESKTOP_UPDATE_REPOSITORY: "https://github.com/andrew-housebets/x",
             },
           }),
         ),

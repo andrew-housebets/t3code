@@ -3,6 +3,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import * as DesktopConfig from "./DesktopConfig.ts";
@@ -38,6 +39,31 @@ const makeEnvironment = (
 ) => DesktopEnvironment.DesktopEnvironment.pipe(Effect.provide(layerEnvironment(overrides, env)));
 
 describe("DesktopEnvironment", () => {
+  it("reads a fork's own update repository and never falls back to upstream releases", () => {
+    const fork = { appName: "B4SED Code", dataName: "b4sed" };
+    const withFeed = Option.some({
+      ...fork,
+      updateRepository: "andrew-housebets/b4sed-code-releases",
+    });
+    assert.deepStrictEqual(
+      DesktopEnvironment.resolveForkUpdateRepository(withFeed),
+      Option.some({ owner: "andrew-housebets", repo: "b4sed-code-releases" }),
+    );
+    assert.deepStrictEqual(
+      DesktopEnvironment.resolveDesktopReleasesUrl(withFeed),
+      Option.some("https://github.com/andrew-housebets/b4sed-code-releases/releases"),
+    );
+    for (const updateRepository of [undefined, "", "owner", "owner/repo/extra", "../repo"]) {
+      const identity = Option.some({ ...fork, updateRepository });
+      assert.isTrue(Option.isNone(DesktopEnvironment.resolveForkUpdateRepository(identity)));
+      assert.isTrue(Option.isNone(DesktopEnvironment.resolveDesktopReleasesUrl(identity)));
+    }
+    assert.deepStrictEqual(
+      DesktopEnvironment.resolveDesktopReleasesUrl(Option.none()),
+      Option.some("https://github.com/pingdotgg/t3code/releases"),
+    );
+  });
+
   it.effect("uses the packaged Windows server sidecar as the backend root", () =>
     Effect.gen(function* () {
       const environment = yield* makeEnvironment({

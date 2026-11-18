@@ -979,6 +979,7 @@ interface StagePackageJson {
     readonly appName: string;
     readonly dataName: string;
     readonly defaultTheme?: DesktopForkDefaultTheme;
+    readonly updateRepository?: string;
   };
   readonly t3codeWebAuthn?: MacWebAuthnEntitlements;
   readonly private: true;
@@ -1172,6 +1173,7 @@ export interface DesktopForkIdentity {
   readonly dataName: string;
   readonly iconPng: string | undefined;
   readonly defaultThemePath: string | undefined;
+  readonly updateRepository: { readonly owner: string; readonly repo: string } | undefined;
 }
 
 export interface DesktopForkDefaultTheme {
@@ -1239,11 +1241,12 @@ export class InvalidDesktopForkIdentityError extends Schema.TaggedError<InvalidD
   },
 ) {
   override get message(): string {
-    return `T3CODE_DESKTOP_APP_ID '${this.appId}' needs T3CODE_APP_NAME and a lowercase T3CODE_DESKTOP_DATA_NAME, and must differ from ${DESKTOP_APP_ID}.`;
+    return `T3CODE_DESKTOP_APP_ID '${this.appId}' needs T3CODE_APP_NAME and a lowercase T3CODE_DESKTOP_DATA_NAME, must differ from ${DESKTOP_APP_ID}, and takes T3CODE_DESKTOP_UPDATE_REPOSITORY only as owner/repo.`;
   }
 }
 
-// Fork builds get their own bundle id, T3 home, Electron profile and keychain item, and no update feed.
+// Fork builds get their own bundle id, T3 home, Electron profile and keychain item. They update
+// only from T3CODE_DESKTOP_UPDATE_REPOSITORY, never from GITHUB_REPOSITORY or upstream.
 export const resolveDesktopForkIdentity = Effect.fn("resolveDesktopForkIdentity")(function* () {
   const env = yield* Config.all({
     appId: Config.String("T3CODE_DESKTOP_APP_ID").pipe(Config.option),
@@ -1251,9 +1254,19 @@ export const resolveDesktopForkIdentity = Effect.fn("resolveDesktopForkIdentity"
     dataName: Config.String("T3CODE_DESKTOP_DATA_NAME").pipe(Config.option),
     iconPng: Config.String("T3CODE_DESKTOP_ICON").pipe(Config.option),
     defaultThemePath: Config.String("T3CODE_DESKTOP_DEFAULT_THEME").pipe(Config.option),
+    updateRepository: Config.String("T3CODE_DESKTOP_UPDATE_REPOSITORY").pipe(Config.option),
   });
   const appId = Option.getOrUndefined(env.appId)?.trim();
   if (!appId) return undefined;
+  const rawUpdateRepository = Option.getOrUndefined(env.updateRepository)?.trim() ?? "";
+  const [updateOwner, updateRepo, ...updateRest] = rawUpdateRepository.split("/");
+  const updateRepository =
+    updateOwner && updateRepo && updateRest.length === 0
+      ? { owner: updateOwner, repo: updateRepo }
+      : undefined;
+  if (rawUpdateRepository && !updateRepository) {
+    return yield* new InvalidDesktopForkIdentityError({ appId });
+  }
   const appName = Option.getOrUndefined(env.appName)?.trim() ?? "";
   const dataName = Option.getOrUndefined(env.dataName)?.trim() ?? "";
   if (appId === DESKTOP_APP_ID || !appName || !DESKTOP_DATA_NAME_PATTERN.test(dataName)) {
@@ -1265,6 +1278,7 @@ export const resolveDesktopForkIdentity = Effect.fn("resolveDesktopForkIdentity"
     dataName,
     iconPng: Option.getOrUndefined(env.iconPng)?.trim() || undefined,
     defaultThemePath: Option.getOrUndefined(env.defaultThemePath)?.trim() || undefined,
+    updateRepository,
   } satisfies DesktopForkIdentity;
 });
 
@@ -2943,7 +2957,17 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   const updateChannel = resolveDesktopUpdateChannel(version);
   // Missing publish config infers a GitHub feed from tokens; staging has no repository, so manifest generation would crash.
   buildConfig.publish = null;
-  if (!fork && !isDesktopPreviewVersion(version)) {
+  if (fork?.updateRepository && !isDesktopPreviewVersion(version)) {
+    buildConfig.publish = [
+      {
+        provider: "github",
+        owner: fork.updateRepository.owner,
+        repo: fork.updateRepository.repo,
+        releaseType: "release",
+        channel: "latest",
+      },
+    ];
+  } else if (!fork && !isDesktopPreviewVersion(version)) {
     const publishConfig = yield* resolveGitHubPublishConfig(updateChannel);
     if (publishConfig) {
       buildConfig.publish = [publishConfig];
@@ -4076,6 +4100,11 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
             appName: fork.appName,
             dataName: fork.dataName,
             ...(forkDefaultTheme ? { defaultTheme: forkDefaultTheme } : {}),
+            ...(fork.updateRepository
+              ? {
+                  updateRepository: `${fork.updateRepository.owner}/${fork.updateRepository.repo}`,
+                }
+              : {}),
           },
         }
       : {}),

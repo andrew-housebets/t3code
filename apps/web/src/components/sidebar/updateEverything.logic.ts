@@ -11,6 +11,7 @@ import { cliReleaseChannelOf, desktopUpdateChannelOf } from "@t3tools/shared/cli
 import { compareSemverVersions } from "@t3tools/shared/semver";
 
 import {
+  publishedServerReleaseVersion,
   resolveServerSelfUpdateCapability,
   resolveVersionMismatch,
   supportsDesktopAppUpdate,
@@ -71,11 +72,12 @@ export interface SkippedMachine {
  * release before it restarts, so no registry precheck runs here. */
 export function collectServerUpdateTargets(
   machines: ReadonlyArray<UpdateEverythingMachine>,
-  targetVersion: string,
+  appVersion: string,
 ): {
   readonly targets: ServerUpdateTarget[];
   readonly skipped: SkippedMachine[];
 } {
+  const targetVersion = publishedServerReleaseVersion(appVersion);
   const targets: ServerUpdateTarget[] = [];
   const skipped: SkippedMachine[] = [];
   for (const machine of machines) {

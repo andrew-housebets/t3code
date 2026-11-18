@@ -46,6 +46,14 @@ function machine(
 }
 
 describe("collectServerUpdateTargets", () => {
+  it("moves servers to the published release a fork build is based on", () => {
+    const { targets } = collectServerUpdateTargets(
+      [machine("service", "0.0.40", "boot-service")],
+      "0.0.50-b4sed.202611181200",
+    );
+    expect(targets.map((target) => target.targetVersion)).toEqual(["0.0.50"]);
+  });
+
   it("updates remote servers that can move to the target and names every skipped one", () => {
     const { targets, skipped } = collectServerUpdateTargets(
       [

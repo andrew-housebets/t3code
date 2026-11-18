@@ -24,8 +24,42 @@ export const DesktopForkIdentity = Schema.Struct({
   appName: Schema.String,
   dataName: Schema.String,
   defaultTheme: Schema.optional(Schema.Unknown),
+  updateRepository: Schema.optional(Schema.String),
 });
 export type DesktopForkIdentity = typeof DesktopForkIdentity.Type;
+
+export interface DesktopForkUpdateRepository {
+  readonly owner: string;
+  readonly repo: string;
+}
+
+const GITHUB_REPOSITORY_SEGMENT = /^[A-Za-z0-9._-]+$/;
+
+export function resolveForkUpdateRepository(
+  forkIdentity: Option.Option<DesktopForkIdentity>,
+): Option.Option<DesktopForkUpdateRepository> {
+  if (Option.isNone(forkIdentity)) return Option.none();
+  const [owner, repo, ...rest] = (forkIdentity.value.updateRepository ?? "").trim().split("/");
+  const valid = (segment: string | undefined): segment is string =>
+    segment !== undefined &&
+    segment !== "." &&
+    segment !== ".." &&
+    GITHUB_REPOSITORY_SEGMENT.test(segment);
+  return valid(owner) && valid(repo) && rest.length === 0
+    ? Option.some({ owner, repo })
+    : Option.none();
+}
+
+export function resolveDesktopReleasesUrl(
+  forkIdentity: Option.Option<DesktopForkIdentity>,
+): Option.Option<string> {
+  if (Option.isNone(forkIdentity))
+    return Option.some("https://github.com/pingdotgg/t3code/releases");
+  return Option.map(
+    resolveForkUpdateRepository(forkIdentity),
+    ({ owner, repo }) => `https://github.com/${owner}/${repo}/releases`,
+  );
+}
 
 const decodeAppPackageForkIdentity = Schema.decodeEffect(
   Schema.fromJsonString(
