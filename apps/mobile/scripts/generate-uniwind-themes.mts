@@ -12,6 +12,7 @@ import {
   DEFAULT_MOBILE_THEME_ID,
   type MobileThemeAppearance,
 } from "../src/lib/mobileTheme.ts";
+import { themeFontFamilies } from "../src/lib/fontFamilies.ts";
 
 const APPEARANCES = ["light", "dark"] as const;
 const GENERATED_CSS_PATH = NodePath.resolve(import.meta.dirname, "../generated-uniwind-themes.css");
@@ -169,8 +170,18 @@ const adaptiveVariablesFor = (appearance: MobileThemeAppearance) =>
     ]),
   );
 
+const fontVariablesFor = (themeId: string) => {
+  const fonts = themeFontFamilies(themeId);
+  return {
+    "--font-sans": `"${fonts.regular}"`,
+    "--font-medium": `"${fonts.medium}"`,
+    "--font-bold": `"${fonts.bold}"`,
+  };
+};
+
 const variablesFor = (themeId: MobilePaletteThemeId, appearance: MobileThemeAppearance) => ({
   ...getMobileThemeVariables(themeId, appearance),
+  ...fontVariablesFor(themeId),
   ...adaptiveVariablesFor(appearance),
   ...clerkVariablesFor(appearance),
 });
@@ -223,6 +234,7 @@ export const renderUniwindThemesCSS = () => {
     ...APPEARANCES.map((appearance) =>
       renderVariant(appearance, {
         ...getMobileThemeVariables(DEFAULT_MOBILE_THEME_ID, appearance),
+        ...fontVariablesFor(DEFAULT_MOBILE_THEME_ID),
         ...adaptiveVariablesFor(appearance),
         ...clerkVariablesFor(appearance),
       }),

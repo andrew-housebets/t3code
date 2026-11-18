@@ -28,6 +28,7 @@ import type { SelectableMarkdownTextProps } from "./SelectableMarkdownText.types
 import { useAppearancePreferences } from "../features/settings/appearance/AppearancePreferencesProvider";
 import { Menu } from "../components/ui/Menu";
 import { useEnrichedLinkVariants } from "./useEnrichedLinkVariants";
+import { SYSTEM_FONT_FAMILY } from "../lib/fontFamilies";
 import { useRetryingImageSource } from "./useRetryingImageSource";
 import * as Dialog from "../components/ui/Dialog";
 import { copyTextWithHaptic } from "../lib/copyTextWithHaptic";
@@ -90,7 +91,11 @@ function enrichedStyle(
     h4: heading(4),
     h5: heading(5),
     h6: heading(6),
-    strong: { color: style.strongColor, fontFamily: style.boldFontFamily, fontWeight: "normal" },
+    strong: {
+      color: style.strongColor,
+      fontFamily: style.boldFontFamily,
+      fontWeight: style.boldFontFamily === SYSTEM_FONT_FAMILY ? "bold" : "normal",
+    },
     link: { color: style.linkColor, underline: false },
     code: {
       fontFamily: monospace,
