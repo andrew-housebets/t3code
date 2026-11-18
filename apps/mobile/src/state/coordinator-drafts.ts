@@ -10,8 +10,7 @@ import { AsyncResult } from "effect/reactivity";
 import { appAtomRegistry } from "./atom-registry";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "./preferences";
 
-export const COORDINATOR_DRAFT_PLACEHOLDER =
-  "Describe the work. Threads will be started for each task.";
+export const COORDINATOR_DRAFT_PLACEHOLDER = "Ask a question or start a task...";
 
 const storedDraftKeys = (
   result: AsyncResult.AsyncResult<{ readonly coordinatorDraftKeys?: KeySet }, unknown>,
