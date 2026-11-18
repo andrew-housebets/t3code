@@ -4,7 +4,6 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 SRC, OUT = HERE / "t3-code-claude.json", HERE / "t3-code-claude-desktop.json"
 CSS_LIMIT = 50_000
-CLAY = r"#(?:D97757|C96442|B5573A|E8937A|44342D|5A4030|F2D6C9)|217,\s*119,\s*87|232,\s*147,\s*122"
 
 
 def luminance(hex_):
@@ -21,22 +20,15 @@ def contrast(a, b):
     return (hi + 0.05) / (lo + 0.05)
 
 
-def darken_until(hex_, on, ratio):
-    rgb = [int(hex_[i : i + 2], 16) for i in (1, 3, 5)]
-    for step in range(100):
-        out = "#%02X%02X%02X" % tuple(round(v * (1 - step / 200)) for v in rgb)
-        if contrast(out, on) >= ratio:
-            return out
-    raise AssertionError(hex_)
-
-
 def rgb(hex_):
     return ",".join(str(int(hex_[i : i + 2], 16)) for i in (1, 3, 5))
 
 
-BLUE = "#257DE0"
-FILL = darken_until(BLUE, "#FFFFFF", 4.5)
-LIGHT_BLUE = "#1F6FD1"
+CLAY = "#D97757"
+FILL = CLAY
+LIGHT_CLAY = "#C96442"
+LIGHT_CLAY_HOVER = "#B5573A"
+INK = "#141413"
 
 # Sampled from Claude Desktop dark screenshots.
 DARK = dict(
@@ -44,38 +36,38 @@ DARK = dict(
     toolbarBorder="#2E2E2E", toolbarControl="#252525", toolbarControlForeground="#C8C8C8",
     toolbarControlHover="#2A2A2A", surface="#252424", surfaceRaised="#2A2A2A",
     surfaceOverlay="#2A2A2A", text="#E4E4E4", textMuted="#929292", border="#2E2E2E",
-    input="#303030", focus=BLUE, accent=FILL, accentForeground="#FFFFFF", secondary="#2E2E2E",
+    input="#303030", focus=CLAY, accent=FILL, accentForeground=INK, secondary="#2E2E2E",
     secondaryForeground="#E4E4E4", muted="#222222", mutedForeground="#929292",
     placeholder="#838383", secondaryLabel="#7F7F7F", iconMuted="#929292",
     accentSurface="#2C2C2C", accentSurfaceForeground="#E4E4E4", messageSurface="#25242E",
-    messageForeground="#E4E4E4", messageAction=FILL, messageActionForeground="#FFFFFF",
-    messageActionHover=darken_until(FILL, "#FFFFFF", 5.5), codeBackground="#202020",
+    messageForeground="#E4E4E4", messageAction=FILL, messageActionForeground=INK,
+    messageActionHover=LIGHT_CLAY, codeBackground="#202020",
     codeForeground="#E4E4E4", sidebar="#202021", sidebarForeground="#DEDEDE",
     sidebarMutedForeground="#929292", sidebarControlSurface="#2A2A2B", sidebarRowHover="#2C2C2D",
     sidebarRowActive="#414242", sidebarRowSelected="#414242", sidebarBorder="#353535",
-    terminalBackground="#191919", terminalForeground="#E4E4E4", terminalCursor=BLUE,
-    terminalSelection="#264F78", error="#E5644E", warning="#E49C08",
-    searchMatchBackground="#2D4A6E", searchMatchForeground="#FFFFFF",
-    searchMatchActiveBackground=FILL, searchMatchActiveForeground="#FFFFFF",
+    terminalBackground="#191919", terminalForeground="#E4E4E4", terminalCursor=CLAY,
+    terminalSelection="#5A4030", error="#E5644E", warning="#E49C08",
+    searchMatchBackground="#5A4030", searchMatchForeground="#FFFFFF",
+    searchMatchActiveBackground=FILL, searchMatchActiveForeground=INK,
 )
 LIGHT = dict(
     canvas="#FFFFFF", chrome="#FAFAFA", toolbar="#FFFFFF", toolbarForeground="#3F3F3F",
     toolbarBorder="#E6E6E6", toolbarControl="#FFFFFF", toolbarControlForeground="#3F3F3F",
     toolbarControlHover="#F0F0F0", surface="#FFFFFF", surfaceRaised="#FFFFFF",
     surfaceOverlay="#FFFFFF", text="#1F1F1F", textMuted="#6B6B6B", border="#E3E3E3",
-    input="#FFFFFF", focus=LIGHT_BLUE, accent=LIGHT_BLUE, accentForeground="#FFFFFF",
+    input="#FFFFFF", focus=LIGHT_CLAY, accent=LIGHT_CLAY, accentForeground=INK,
     secondary="#F0F0F0", secondaryForeground="#2B2B2B", muted="#F4F4F4",
     mutedForeground="#6B6B6B", placeholder="#8E8E8E", secondaryLabel="#737373",
     iconMuted="#7A7A7A", accentSurface="#EFEFEF", accentSurfaceForeground="#1F1F1F",
-    messageSurface="#EEEEF3", messageForeground="#1F1F1F", messageAction=LIGHT_BLUE,
-    messageActionForeground="#FFFFFF", messageActionHover="#195DB0", codeBackground="#F6F6F6",
+    messageSurface="#EEEEF3", messageForeground="#1F1F1F", messageAction=LIGHT_CLAY,
+    messageActionForeground=INK, messageActionHover=LIGHT_CLAY_HOVER, codeBackground="#F6F6F6",
     codeForeground="#2B2B2B", sidebar="#F7F7F7", sidebarForeground="#2B2B2B",
     sidebarMutedForeground="#6B6B6B", sidebarControlSurface="#EDEDED", sidebarRowHover="#EDEDED",
     sidebarRowActive="#E3E3E4", sidebarRowSelected="#E3E3E4", sidebarBorder="#E3E3E3",
-    terminalBackground="#FAFAFA", terminalForeground="#2B2B2B", terminalCursor=LIGHT_BLUE,
-    terminalSelection="#CFE1F7", error="#B5452F", warning="#A86A1C",
-    searchMatchBackground="#CFE1F7", searchMatchForeground="#1F1F1F",
-    searchMatchActiveBackground=LIGHT_BLUE, searchMatchActiveForeground="#FFFFFF",
+    terminalBackground="#FAFAFA", terminalForeground="#2B2B2B", terminalCursor=LIGHT_CLAY,
+    terminalSelection="#F2D6C9", error="#B5452F", warning="#A86A1C",
+    searchMatchBackground="#F2D6C9", searchMatchForeground="#1F1F1F",
+    searchMatchActiveBackground=LIGHT_CLAY, searchMatchActiveForeground=INK,
 )
 
 PLUS = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'%3E%3Cpath d='M12 5v14M5 12h14'/%3E%3C/svg%3E"
@@ -137,7 +129,7 @@ EXTRA = """
 [data-right-panel-tabbar]{background:var(--app-theme-toolbar);border-bottom:1px solid var(--app-theme-toolbar-border)}
 [data-right-panel-tabbar] [data-active-tab]{background:transparent!important;font-size:13px;color:var(--mu)!important}
 [data-right-panel-tabbar] [data-right-panel-tab-list]:has([data-active-tab=false]) [data-active-tab=true]{color:var(--hi)!important;background:var(--app-theme-accent-surface)!important}
-[data-chat-column]:has(~[data-workspace-area=panel][aria-label$=Overview]) button[aria-label=Threads]{color:var(--o4)!important;background:rgba(BLUE_RGB,.14)!important}
+[data-chat-column]:has(~[data-workspace-area=panel][aria-label$=Overview]) button[aria-label=Threads]{color:var(--o4)!important;background:rgba(CLAY_RGB,.14)!important}
 [data-sidebar-nav]{margin-top:2px!important;gap:2px!important}
 :is([data-sidebar-nav-row],[data-sidebar-pinned-project]){height:32px!important;padding:0 10px!important;gap:10px!important;border-radius:8px!important;font-size:14px!important;font-weight:400!important;color:var(--app-theme-sidebar-foreground)!important;
 &:hover{background:var(--app-theme-sidebar-row-hover)!important}
@@ -155,11 +147,11 @@ section[aria-labelledby^=thread-overview-]{border-top:none!important;padding:8px
 EDITS = [
     (
         "--o:#D97757;--o2:#C96442;--o3:#B5573A;--o4:#E8937A;--hi:#EFEFF0;--hi2:#fff;--mu:#A3A3A3;--mu2:#7E7F80;--mu3:#8E8F8F;--seg:#3A3A3A;--pop:#2A2A2A;--off:#343434;--offi:#7C7C7C;",
-        f"--o:{BLUE};--o2:{FILL};--o3:{DARK['messageActionHover']};--o4:#78B0F0;--hi:#E4E4E4;--hi2:#F2F2F2;--mu:#929292;--mu2:#7F7F7F;--mu3:#929292;--seg:#3A3A3A;--pop:#2A2A2A;--off:transparent;--offi:#8A8A8A;",
+        f"--o:{CLAY};--o2:{FILL};--o3:{DARK['messageActionHover']};--o4:#E8937A;--hi:#E4E4E4;--hi2:#F2F2F2;--mu:#929292;--mu2:#7F7F7F;--mu3:#929292;--seg:#3A3A3A;--pop:#2A2A2A;--off:transparent;--offi:#8A8A8A;",
     ),
     (
         ":root:not(.dark){--pk:#B5573A;--sb:#fff;--sbb:#E5E3DA;",
-        f":root:not(.dark){{--o:{LIGHT_BLUE};--o2:#195DB0;--o3:#154F97;--o4:#1A5FB4;--pk:{LIGHT_BLUE};--sb:#fff;--sbb:{LIGHT['border']};",
+        f":root:not(.dark){{--o:{LIGHT_CLAY};--o2:{LIGHT_CLAY_HOVER};--o3:#9E4A30;--o4:{LIGHT_CLAY};--pk:{LIGHT_CLAY};--sb:#fff;--sbb:{LIGHT['border']};",
     ),
     ("--cb:#E8E6DC;", f"--cb:{LIGHT['border']};"),
     (
@@ -237,8 +229,8 @@ def build_css(css):
         css = replace_block(css, start, end, new)
     for old, new in EDITS:
         css = replace_once(css, old, new)
-    css = re.sub(r"rgba\((?:217,119,87|232,147,122),", f"rgba({rgb(BLUE)},", css)
-    return css + minify(EXTRA.replace("BLUE_RGB", rgb(BLUE)))
+    css = re.sub(r"rgba\((?:217,119,87|232,147,122),", f"rgba({rgb(CLAY)},", css)
+    return css + minify(EXTRA.replace("CLAY_RGB", rgb(CLAY)))
 
 
 def main():
@@ -249,8 +241,6 @@ def main():
     )
     assert set(DARK) == set(json.loads(SRC.read_text())["colors"]) == set(LIGHT)
     text = json.dumps(theme, indent=2)
-    leftovers = sorted(set(re.findall(CLAY, text, re.I)))
-    assert not leftovers, ("clay left", leftovers)
     assert "T3 Clawd" not in text
     assert len(theme["css"]) < CSS_LIMIT, len(theme["css"])
     for name, p in (("dark", DARK), ("light", LIGHT)):
@@ -266,7 +256,7 @@ def main():
         assert checks["accentForeground/accent"] >= 4.5, name
         assert checks["messageActionForeground/messageAction"] >= 4.5, name
     OUT.write_text(text + "\n")
-    print("css chars", len(theme["css"]), "mark", BLUE, "fill", FILL, "->", OUT)
+    print("css chars", len(theme["css"]), "mark", CLAY, "fill", FILL, "->", OUT)
 
 
 if __name__ == "__main__" and not sys.argv[1:]:
