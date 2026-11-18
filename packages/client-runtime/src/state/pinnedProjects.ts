@@ -93,3 +93,19 @@ export function pinnedProjects<TGroup>(
       };
     });
 }
+
+/** The threads without each pinned project's coordinator, which the pinned row stands for. */
+export function withoutPinnedCoordinators<TGroup, TThread extends EnvironmentThreadShell>(
+  groups: ReadonlyArray<TGroup>,
+  membersOf: (group: TGroup) => ReadonlyArray<PinnableProject>,
+  threads: ReadonlyArray<TThread>,
+): ReadonlyArray<TThread> {
+  const hidden = new Set(
+    pinnedProjects(groups, membersOf, threads).flatMap(({ coordinator }) =>
+      coordinator === null ? [] : [refKey(coordinator.environmentId, coordinator.threadId)],
+    ),
+  );
+  return hidden.size === 0
+    ? threads
+    : threads.filter((thread) => !hidden.has(refKey(thread.environmentId, thread.id)));
+}

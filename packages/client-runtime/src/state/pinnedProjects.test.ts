@@ -10,7 +10,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { presentThreadShell, type PendingSubagentRequest } from "./models.ts";
 import { v2Now, v2ThreadShell } from "./orchestrationV2TestFixtures.ts";
-import { pinnedProjects } from "./pinnedProjects.ts";
+import { pinnedProjects, withoutPinnedCoordinators } from "./pinnedProjects.ts";
 
 const local = EnvironmentId.make("local");
 const remote = EnvironmentId.make("remote");
@@ -111,23 +111,25 @@ const run = (threads: ReadonlyArray<ReturnType<typeof thread>>) =>
 
 describe("pinnedProjects", () => {
   it("lists pinned, unarchived groups newest pin first, each opening its latest coordinator", () => {
-    expect(
-      run([
-        thread("plain", "older", { updatedAt: "2026-11-14T00:00:00Z" }),
-        thread("first", "older", { coordinator: true, updatedAt: "2026-11-12T00:00:00Z" }),
-        thread("latest", "older", { coordinator: true, updatedAt: "2026-11-13T00:00:00Z" }),
-        thread("gone", "older", {
-          coordinator: true,
-          updatedAt: "2026-11-15T00:00:00Z",
-          overrides: { archivedAt: v2Now },
-        }),
-        thread("on-remote", "app", { environmentId: remote, coordinator: true }),
-        thread("elsewhere", "unpinned", { coordinator: true }),
-      ]),
-    ).toEqual([
+    const threads = [
+      thread("plain", "older", { updatedAt: "2026-11-14T00:00:00Z" }),
+      thread("first", "older", { coordinator: true, updatedAt: "2026-11-12T00:00:00Z" }),
+      thread("latest", "older", { coordinator: true, updatedAt: "2026-11-13T00:00:00Z" }),
+      thread("gone", "older", {
+        coordinator: true,
+        updatedAt: "2026-11-15T00:00:00Z",
+        overrides: { archivedAt: v2Now },
+      }),
+      thread("on-remote", "app", { environmentId: remote, coordinator: true }),
+      thread("elsewhere", "unpinned", { coordinator: true }),
+    ];
+    expect(run(threads)).toEqual([
       ["two-checkouts", "on-remote", false],
       ["older", "latest", false],
     ]);
+    expect(
+      withoutPinnedCoordinators(groups, (group) => group.members, threads).map(({ id }) => id),
+    ).toEqual(["plain", "first", "gone", "elsewhere"]);
   });
 
   it.each([

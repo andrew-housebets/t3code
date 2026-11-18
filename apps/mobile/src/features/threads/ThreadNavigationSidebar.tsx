@@ -80,6 +80,7 @@ import {
 import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
 import { NativeScrollView } from "../../native/NativeScrollViewMarker";
 import { DrawerNavigationHeader, DrawerSectionLabel } from "./DrawerNavigationRows";
+import { withoutPinnedCoordinators } from "@t3tools/client-runtime/state/pinned-projects";
 import { drawerRecentsIndex } from "./drawerSections";
 
 type SidebarListItem =
@@ -210,6 +211,10 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
     [projectScopes],
   );
   const selectedProjectScope = resolveHomeProjectFilterScope(projectScopes, projects, options);
+  const listedThreads = useMemo(
+    () => withoutPinnedCoordinators(projectScopes, (scope) => scope.projects, launchingThreads),
+    [projectScopes, launchingThreads],
+  );
   const threadSearch = useThreadSearch(
     searchEnvironmentIds,
     props.searchQuery,
@@ -272,7 +277,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
     contentOnlyThreadKeys,
     olderSettledShelf,
   } = useThreadListV2({
-    threads: launchingThreads,
+    threads: listedThreads,
     pendingTasks,
     environmentId: options.selectedEnvironmentId,
     projectRefs: selectedProjectScope === null ? null : selectedProjectScope.projectRefs,

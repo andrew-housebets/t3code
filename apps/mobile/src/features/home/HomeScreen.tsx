@@ -69,6 +69,7 @@ import { useThreadListNow } from "../threads/use-thread-list-now";
 import { useSearchScrollRestoration } from "../layout/workspace/useSearchScrollRestoration";
 import { useThreadJumpShortcuts } from "../keyboard/threadKeyboardShortcuts";
 import { DrawerNavigationHeader, DrawerSectionLabel } from "../threads/DrawerNavigationRows";
+import { withoutPinnedCoordinators } from "@t3tools/client-runtime/state/pinned-projects";
 import { drawerRecentsIndex } from "../threads/drawerSections";
 import { usePendingThreadOrder } from "../../state/thread-order";
 import { threadListEnvironmentsAtom } from "../../state/presentation";
@@ -381,6 +382,11 @@ export function HomeScreen(props: HomeScreenProps) {
       }),
     [projects, selectedEnvironmentId, projectGroupingMode],
   );
+  const threads = props.threads;
+  const listedThreads = useMemo(
+    () => withoutPinnedCoordinators(projectScopes, (scope) => scope.projects, threads),
+    [projectScopes, threads],
+  );
   const hasSearchQuery = props.searchQuery.trim().length > 0;
   // While searching, the keyboard lifts the bottom clearance and the pill would cover results.
   const showsNewSessionPill =
@@ -472,7 +478,7 @@ export function HomeScreen(props: HomeScreenProps) {
     contentOnlyThreadKeys,
     olderSettledShelf,
   } = useThreadListV2({
-    threads: props.threads,
+    threads: listedThreads,
     pendingTasks: props.pendingTasks,
     environmentId: props.selectedEnvironmentId,
     projectRefs: v2ScopedProjectGroup === null ? null : v2ScopedProjectGroup.projectRefs,

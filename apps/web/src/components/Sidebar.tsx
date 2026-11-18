@@ -35,7 +35,10 @@ import {
   createInboxReturnTracker,
   isThreadWorking,
 } from "@t3tools/client-runtime/state/thread-inbox";
-import { pinnedProjects } from "@t3tools/client-runtime/state/pinned-projects";
+import {
+  pinnedProjects,
+  withoutPinnedCoordinators,
+} from "@t3tools/client-runtime/state/pinned-projects";
 import { sortSettledThreads } from "@t3tools/client-runtime/state/thread-sort";
 import {
   nextShownOrder,
@@ -1129,10 +1132,15 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   );
   const routeThreadShell = useQuietThreadShell(routeThreadRef);
   const promotingDraftThreadKeys = usePromotingDraftThreadKeys();
+  const unpinnedThreads = withoutPinnedCoordinators(
+    projectGroups,
+    (group) => group.memberProjects,
+    threads,
+  );
   const listedThreads =
     promotingDraftThreadKeys.length === 0
-      ? threads
-      : threads.map((thread) =>
+      ? unpinnedThreads
+      : unpinnedThreads.map((thread) =>
           promotingDraftThreadKeys.includes(threadShellKey(thread))
             ? asLaunchingThread(thread)
             : thread,
