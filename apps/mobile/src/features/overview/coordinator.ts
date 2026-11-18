@@ -27,6 +27,7 @@ import { AtomRegistry } from "effect/reactivity";
 
 import * as Dialog from "../../components/ui/Dialog";
 import { uuidv4 } from "../../lib/uuid";
+import { scheduledTaskDefaultModel } from "../settings/scheduledTaskDraft";
 import { appAtomRegistry } from "../../state/atom-registry";
 import { isCoordinatorDraft, setCoordinatorDraft } from "../../state/coordinator-drafts";
 import { projectEnvironment } from "../../state/projects";
@@ -141,13 +142,12 @@ async function createProjectCoordinator(
   project: EnvironmentProject,
 ): Promise<ScopedThreadRef | null> {
   const { environmentId, id: projectId } = project;
-  const serverSettings = appAtomRegistry
-    .get(environmentServerConfigsAtom)
-    .get(environmentId)?.settings;
-  if (serverSettings === undefined) return null;
-  const { settings } = resolveProjectSettings(serverSettings, projectId, project);
+  const serverConfig = appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId);
+  if (serverConfig === undefined) return null;
+  const { settings } = resolveProjectSettings(serverConfig.settings, projectId, project);
   const modelSelection =
-    (await readCoordinatorModelDefault(environmentId, projectId)) ?? settings.defaultModelSelection;
+    (await readCoordinatorModelDefault(environmentId, projectId)) ??
+    scheduledTaskDefaultModel(serverConfig, project);
   if (modelSelection === null) return null;
   const threadId = ThreadId.make(uuidv4());
   const created = await runAtomCommand(
