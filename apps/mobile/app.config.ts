@@ -489,7 +489,10 @@ const config: ExpoConfig = {
     ...(!isIosPersonalTeamBuild
       ? [
           forkWidgetLogoSvg
-            ? ["./plugins/withWidgetLogoAsset.cjs", { svg: forkWidgetLogoSvg }]
+            ? (["./plugins/withWidgetLogoAsset.cjs", { svg: forkWidgetLogoSvg }] satisfies [
+                string,
+                { svg: string },
+              ])
             : "./plugins/withWidgetLogoAsset.cjs",
           widgetsPlugin,
         ]
