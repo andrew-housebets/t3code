@@ -1,8 +1,11 @@
-const connectName = process.env.T3CODE_CONNECT_NAME?.trim();
-const rename = (value) => value.replaceAll("T3 Connect", connectName);
+const renames = [
+  ["T3 Connect", process.env.T3CODE_CONNECT_NAME?.trim()],
+  ["T3 Account", process.env.T3CODE_ACCOUNT_NAME?.trim()],
+].filter(([, name]) => name);
+const rename = (value) => renames.reduce((text, [from, to]) => text.replaceAll(from, to), value);
 
 // Forks that run their own relay rename the service in every bundled string.
-const connectBrandPlugin = () => ({
+const brandPlugin = () => ({
   visitor: {
     StringLiteral(path) {
       path.node.value = rename(path.node.value);
@@ -18,9 +21,9 @@ const connectBrandPlugin = () => ({
 });
 
 module.exports = function (api) {
-  api.cache(!connectName);
+  api.cache(renames.length === 0);
   return {
     presets: [["babel-preset-expo", { unstable_transformImportMeta: true }]],
-    plugins: connectName ? [connectBrandPlugin] : [],
+    plugins: renames.length > 0 ? [brandPlugin] : [],
   };
 };
