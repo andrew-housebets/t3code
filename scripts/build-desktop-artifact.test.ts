@@ -555,7 +555,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     ),
   );
 
-  it.effect("gives fork builds their own identity, no t3code scheme and no update feed", () =>
+  it.effect("gives fork builds their own identity, their own scheme and no update feed", () =>
     Effect.gen(function* () {
       const config = yield* createBuildConfig(
         "mac",
@@ -571,10 +571,9 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.equal(config.appId, "com.b4sed.code");
       assert.equal(config.productName, "B4SED Code");
       assert.isNull(config.publish);
-      assert.notInclude(
-        mac.protocols.flatMap((protocol) => protocol.schemes),
-        "t3code",
-      );
+      const schemes = mac.protocols.flatMap((protocol) => protocol.schemes);
+      assert.notInclude(schemes, "t3code");
+      assert.include(schemes, "b4sed");
     }).pipe(
       Effect.provide(
         ConfigProvider.layer(

@@ -64,7 +64,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
 const DESKTOP_APP_ID = "com.t3tools.t3code";
-const DESKTOP_DATA_NAME_PATTERN = /^[a-z0-9][a-z0-9-]*$/u;
+const DESKTOP_DATA_NAME_PATTERN = /^[a-z][a-z0-9-]*$/u;
 const FORK_WEB_ICON_SIZES = [
   ["favicon-16x16.png", "16"],
   ["favicon-32x32.png", "32"],
@@ -2986,14 +2986,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
         ],
       },
       protocols: [
-        ...(fork
-          ? []
-          : [
-              {
-                name: "T3 Code",
-                schemes: ["t3code", "t3code-dev"],
-              },
-            ]),
+        fork
+          ? { name: fork.appName, schemes: [fork.dataName] }
+          : { name: "T3 Code", schemes: ["t3code", "t3code-dev"] },
         {
           name: "Web site URL",
           schemes: ["http", "https"],
@@ -3043,10 +3038,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       synopsis: "Desktop GUI for coding agents",
       maintainer: "T3 Tools <hello@t3.codes>",
       protocols: [
-        {
-          name: "T3 Code",
-          schemes: ["t3code", "t3code-dev"],
-        },
+        fork
+          ? { name: fork.appName, schemes: [fork.dataName] }
+          : { name: "T3 Code", schemes: ["t3code", "t3code-dev"] },
       ],
       desktop: {
         entry: {
