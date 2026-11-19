@@ -219,6 +219,15 @@ const layerDesktopWslBackend = DesktopWslBackend.layer.pipe(
 );
 
 const layerDesktopLocalEnvironmentAuth = DesktopLocalEnvironmentAuth.layer.pipe(
+  Layer.provide(
+    Layer.effect(
+      DesktopLocalEnvironmentAuth.ClientLabel,
+      Effect.map(
+        Effect.service(DesktopEnvironment.DesktopEnvironment),
+        (environment) => `${environment.branding.baseName} Desktop`,
+      ),
+    ),
+  ),
   Layer.provideMerge(layerDesktopBackend),
 );
 
