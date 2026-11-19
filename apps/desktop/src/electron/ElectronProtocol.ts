@@ -23,8 +23,8 @@ let packagedScheme: string | undefined;
 
 // Fork builds serve the renderer from their own scheme so OS deep links reach them, not T3 Code.
 function readPackagedScheme(): string {
-  if (!Electron.app?.isPackaged) return DESKTOP_PRODUCTION_SCHEME;
   try {
+    if (!Electron.app.isPackaged) return DESKTOP_PRODUCTION_SCHEME;
     const manifest: unknown = JSON.parse(
       NodeFS.readFileSync(NodePath.join(Electron.app.getAppPath(), "package.json"), "utf8"),
     );
