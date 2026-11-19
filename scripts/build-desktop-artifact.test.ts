@@ -42,6 +42,7 @@ import {
   preflightWindowsDesktopBuild,
   renderMacPasskeyEntitlements,
   renderMacRuntimeEntitlements,
+  resolveReproducibleRustEnv,
   resolveMacFileExclusions,
   resolveMacWebAuthnEntitlements,
   resolveMacPasskeySigningConfiguration,
@@ -1712,6 +1713,22 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     assert.match(entitlements, /<key>com\.apple\.security\.device\.audio-input<\/key>\s*<true\/>/u);
     assert.notInclude(entitlements, "keychain-access-groups");
     assert.notInclude(entitlements, "com.apple.developer.web-browser.public-key-credential");
+  });
+
+  it("keeps the builder's home and checkout paths out of Rust binaries", () => {
+    const env = resolveReproducibleRustEnv(
+      { RUSTFLAGS: "-C target-cpu=native", RUSTUP_TOOLCHAIN: "1.98.1" },
+      "/Users/builder",
+      "/Users/builder/src/t3code",
+    );
+    assert.equal(env.RUSTUP_TOOLCHAIN, "1.98.1");
+    assert.deepStrictEqual(env.CARGO_ENCODED_RUSTFLAGS?.split("\x1f"), [
+      "-C",
+      "target-cpu=native",
+      "--remap-path-prefix=/Users/builder=/home",
+      "--remap-path-prefix=/Users/builder/.cargo=/cargo",
+      "--remap-path-prefix=/Users/builder/src/t3code=/t3code",
+    ]);
   });
 
   it("signs fork builds with the runtime entitlements and no passkey identity", () => {

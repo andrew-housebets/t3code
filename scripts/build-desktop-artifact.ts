@@ -4,6 +4,7 @@
 import * as NodeFSP from "node:fs/promises";
 import * as NodeCrypto from "node:crypto";
 import * as NodeModule from "node:module";
+import * as NodeOS from "node:os";
 // plist is CommonJS; Node cannot load its named exports from an ES module.
 import Plist from "plist";
 
@@ -2468,6 +2469,7 @@ export const stageLinuxCaptureHelper = Effect.fn("stageLinuxCaptureHelper")(func
     yield* runCommand(
       ChildProcess.make(spawnCommand.command, spawnCommand.args, {
         cwd: input.repoRoot,
+        env: resolveReproducibleRustEnv(process.env, NodeOS.homedir(), input.repoRoot),
         shell: spawnCommand.shell,
       }),
       {
@@ -2496,6 +2498,26 @@ export const stageLinuxCaptureHelper = Effect.fn("stageLinuxCaptureHelper")(func
     );
   }
 });
+
+export function resolveReproducibleRustEnv(
+  env: NodeJS.ProcessEnv,
+  homeDirectory: string,
+  repoRoot: string,
+): NodeJS.ProcessEnv {
+  const inherited = env.CARGO_ENCODED_RUSTFLAGS
+    ? env.CARGO_ENCODED_RUSTFLAGS.split("\x1f")
+    : (env.RUSTFLAGS ?? "").split(/\s+/).filter((flag) => flag.length > 0);
+  const cargoHome = env.CARGO_HOME?.trim() || `${homeDirectory}/.cargo`;
+  return {
+    ...env,
+    CARGO_ENCODED_RUSTFLAGS: [
+      ...inherited,
+      `--remap-path-prefix=${homeDirectory}=/home`,
+      `--remap-path-prefix=${cargoHome}=/cargo`,
+      `--remap-path-prefix=${repoRoot}=/t3code`,
+    ].join("\x1f"),
+  };
+}
 
 export const stageResourceMonitor = Effect.fn("stageResourceMonitor")(function* (input: {
   readonly repoRoot: string;
@@ -2528,6 +2550,7 @@ export const stageResourceMonitor = Effect.fn("stageResourceMonitor")(function* 
       yield* runCommand(
         ChildProcess.make(spawnCommand.command, spawnCommand.args, {
           cwd: input.repoRoot,
+          env: resolveReproducibleRustEnv(process.env, NodeOS.homedir(), input.repoRoot),
           shell: spawnCommand.shell,
         }),
         {
