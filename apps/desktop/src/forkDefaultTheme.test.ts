@@ -27,6 +27,29 @@ describe("seedForkDefaultTheme", () => {
     expect(storage.map.has("t3code:theme")).toBe(false);
   });
 
+  it("refreshes the stored copy when a build ships a changed theme, keeping the user's choice", () => {
+    const storage = storageWith();
+    seedForkDefaultTheme(storage, theme);
+    storage.map.set("t3code:theme", "mine");
+    const updated = { ...theme, css: "a{}" };
+
+    expect(seedForkDefaultTheme(storage, updated)).toBe(true);
+    expect(JSON.parse(storage.map.get("t3code:themes:v1")!)).toEqual([updated]);
+    expect(storage.map.get("t3code:theme")).toBe("mine");
+    expect(seedForkDefaultTheme(storage, updated)).toBe(false);
+  });
+
+  it("refreshes a copy seeded by a build that kept no fingerprint", () => {
+    const storage = storageWith({
+      "t3code:fork-default-theme-seeded": "1",
+      "t3code:theme": "t3-code-claude",
+      "t3code:themes:v1": JSON.stringify([{ ...theme, css: "old{}" }]),
+    });
+
+    expect(seedForkDefaultTheme(storage, theme)).toBe(true);
+    expect(JSON.parse(storage.map.get("t3code:themes:v1")!)).toEqual([theme]);
+  });
+
   it("keeps a theme the user already chose", () => {
     const storage = storageWith({ "t3code:theme": "system" });
 
