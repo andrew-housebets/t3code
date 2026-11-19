@@ -5,6 +5,7 @@ import type {
   ServerSelfUpdateCapability,
 } from "@t3tools/contracts";
 import type { ServerUpdateState } from "@t3tools/client-runtime/state/server";
+import { cliReleaseChannelOf } from "@t3tools/shared/cliRelease";
 import { compareSemverVersions, parseSemver } from "@t3tools/shared/semver";
 import * as Schema from "effect/Schema";
 
@@ -44,6 +45,10 @@ function versionCore(version: string): string {
   return version.replace(/[-+].*$/, "");
 }
 
+export function publishedServerReleaseVersion(version: string): string {
+  return cliReleaseChannelOf(version) === "stable" ? versionCore(version) : version;
+}
+
 export function resolveVersionMismatch(
   serverVersion: string | null | undefined,
   clientVersion: string = APP_VERSION,
@@ -71,7 +76,7 @@ export function resolveVersionMismatch(
   }
 
   return {
-    clientVersion: normalizedClientVersion,
+    clientVersion: publishedServerReleaseVersion(normalizedClientVersion),
     serverVersion: normalizedServerVersion,
     hint: "Version mismatch. Try syncing the client and server to the same T3 Code version.",
   };

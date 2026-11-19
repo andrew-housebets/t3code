@@ -1233,6 +1233,59 @@ describe("DesktopUpdates under a managed policy", () => {
     ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
   });
 
+  it.effect("keeps a fork build without its own feed off", () => {
+    const harness = makeHarness({
+      env: { T3CODE_DESKTOP_MOCK_UPDATES: "false" },
+      forkIdentity: { appName: "B4SED Code", dataName: "b4sed" },
+      policy: managed({ feedUrl: "https://updates.example.com/t3code" }),
+    });
+
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+        yield* TestClock.adjust("10 minutes");
+        const state = yield* updates.getState;
+        assert.equal(state.status, "disabled");
+        assert.equal(state.message, "Automatic updates are not available in this build.");
+        assert.isTrue(state.channelFixed);
+        assert.deepEqual(harness.feedUrls(), []);
+        assert.equal(harness.checkCount(), 0);
+      }),
+    ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
+  });
+
+  it.effect("updates a fork build only from its own repository on the stable channel", () => {
+    const harness = makeHarness({
+      env: { T3CODE_DESKTOP_MOCK_UPDATES: "false" },
+      appVersion: "0.1.9-b4sed.202611181200",
+      savedChannel: "nightly",
+      forkIdentity: {
+        appName: "B4SED Code",
+        dataName: "b4sed",
+        updateRepository: "andrew-housebets/b4sed-code-releases",
+      },
+      policy: managed({ feedUrl: "https://updates.example.com/t3code" }),
+    });
+
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+        const state = yield* updates.getState;
+        assert.equal(state.status, "idle");
+        assert.equal(state.channel, "latest");
+        assert.isTrue(state.channelFixed);
+        assert.deepEqual(harness.feedUrls(), [
+          { provider: "github", owner: "andrew-housebets", repo: "b4sed-code-releases" },
+        ]);
+        const error = yield* updates.setChannel("nightly").pipe(Effect.flip);
+        assert.equal(error._tag, "DesktopUpdateChannelManagedError");
+        assert.equal((yield* updates.getState).channel, "latest");
+      }),
+    ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
+  });
+
   it.effect("refuses the nightly channel without nightly", () => {
     const harness = makeHarness({ policy: managed({ allowNightly: false }) });
 

@@ -74,6 +74,15 @@ describe("versionSkew", () => {
     });
   });
 
+  it("targets the published release a fork build is based on", () => {
+    expect(resolveVersionMismatch("0.0.33", "0.0.34-b4sed.202611181200")).toEqual({
+      clientVersion: "0.0.34",
+      serverVersion: "0.0.33",
+      hint: MISMATCH_HINT,
+    });
+    expect(resolveVersionMismatch("0.0.34", "0.0.34-b4sed.202611181200")).toBeNull();
+  });
+
   it("does not warn when the server is ahead of the client", () => {
     expect(resolveVersionMismatch("0.0.35")).toBeNull();
     expect(resolveVersionMismatch("9.9.9")).toBeNull();

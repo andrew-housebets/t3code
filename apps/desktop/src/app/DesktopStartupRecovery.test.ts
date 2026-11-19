@@ -149,6 +149,7 @@ it.effect.each([
               stateDir: "/task/state",
               logDir: "/task/logs",
               path: { join: (...parts: string[]) => parts.join("/") },
+              forkIdentity: Option.none(),
             } as unknown as DesktopEnvironment.DesktopEnvironment["Service"]),
             Layer.succeed(ElectronApp.ElectronApp, {
               on: (event: string, listener: (...args: readonly unknown[]) => void) =>

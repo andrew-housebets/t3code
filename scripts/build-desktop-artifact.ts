@@ -4,6 +4,7 @@
 import * as NodeFSP from "node:fs/promises";
 import * as NodeCrypto from "node:crypto";
 import * as NodeModule from "node:module";
+import * as NodeOS from "node:os";
 // plist is CommonJS; Node cannot load its named exports from an ES module.
 import Plist from "plist";
 
@@ -979,6 +980,7 @@ interface StagePackageJson {
     readonly appName: string;
     readonly dataName: string;
     readonly defaultTheme?: DesktopForkDefaultTheme;
+    readonly updateRepository?: string;
   };
   readonly t3codeWebAuthn?: MacWebAuthnEntitlements;
   readonly private: true;
@@ -1172,6 +1174,7 @@ export interface DesktopForkIdentity {
   readonly dataName: string;
   readonly iconPng: string | undefined;
   readonly defaultThemePath: string | undefined;
+  readonly updateRepository: { readonly owner: string; readonly repo: string } | undefined;
 }
 
 export interface DesktopForkDefaultTheme {
@@ -1239,11 +1242,12 @@ export class InvalidDesktopForkIdentityError extends Schema.TaggedError<InvalidD
   },
 ) {
   override get message(): string {
-    return `T3CODE_DESKTOP_APP_ID '${this.appId}' needs T3CODE_APP_NAME and a lowercase T3CODE_DESKTOP_DATA_NAME, and must differ from ${DESKTOP_APP_ID}.`;
+    return `T3CODE_DESKTOP_APP_ID '${this.appId}' needs T3CODE_APP_NAME and a lowercase T3CODE_DESKTOP_DATA_NAME, must differ from ${DESKTOP_APP_ID}, and takes T3CODE_DESKTOP_UPDATE_REPOSITORY only as owner/repo.`;
   }
 }
 
-// Fork builds get their own bundle id, T3 home, Electron profile and keychain item, and no update feed.
+// Fork builds get their own bundle id, T3 home, Electron profile and keychain item. They update
+// only from T3CODE_DESKTOP_UPDATE_REPOSITORY, never from GITHUB_REPOSITORY or upstream.
 export const resolveDesktopForkIdentity = Effect.fn("resolveDesktopForkIdentity")(function* () {
   const env = yield* Config.all({
     appId: Config.String("T3CODE_DESKTOP_APP_ID").pipe(Config.option),
@@ -1251,9 +1255,19 @@ export const resolveDesktopForkIdentity = Effect.fn("resolveDesktopForkIdentity"
     dataName: Config.String("T3CODE_DESKTOP_DATA_NAME").pipe(Config.option),
     iconPng: Config.String("T3CODE_DESKTOP_ICON").pipe(Config.option),
     defaultThemePath: Config.String("T3CODE_DESKTOP_DEFAULT_THEME").pipe(Config.option),
+    updateRepository: Config.String("T3CODE_DESKTOP_UPDATE_REPOSITORY").pipe(Config.option),
   });
   const appId = Option.getOrUndefined(env.appId)?.trim();
   if (!appId) return undefined;
+  const rawUpdateRepository = Option.getOrUndefined(env.updateRepository)?.trim() ?? "";
+  const [updateOwner, updateRepo, ...updateRest] = rawUpdateRepository.split("/");
+  const updateRepository =
+    updateOwner && updateRepo && updateRest.length === 0
+      ? { owner: updateOwner, repo: updateRepo }
+      : undefined;
+  if (rawUpdateRepository && !updateRepository) {
+    return yield* new InvalidDesktopForkIdentityError({ appId });
+  }
   const appName = Option.getOrUndefined(env.appName)?.trim() ?? "";
   const dataName = Option.getOrUndefined(env.dataName)?.trim() ?? "";
   if (appId === DESKTOP_APP_ID || !appName || !DESKTOP_DATA_NAME_PATTERN.test(dataName)) {
@@ -1265,6 +1279,7 @@ export const resolveDesktopForkIdentity = Effect.fn("resolveDesktopForkIdentity"
     dataName,
     iconPng: Option.getOrUndefined(env.iconPng)?.trim() || undefined,
     defaultThemePath: Option.getOrUndefined(env.defaultThemePath)?.trim() || undefined,
+    updateRepository,
   } satisfies DesktopForkIdentity;
 });
 
@@ -1467,6 +1482,21 @@ export function resolveMacWebAuthnEntitlements(
   };
 }
 
+const MAC_RUNTIME_ENTITLEMENTS = `    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    <!-- The hardened runtime denies camera and microphone to the app and every
+         child process, with no prompt, unless the app claims these. Terminals
+         and coding agents inherit the app's TCC identity, so without these a
+         command like ffmpeg or imagesnap gets silent access-denied. -->
+    <key>com.apple.security.device.camera</key>
+    <true/>
+    <key>com.apple.security.device.audio-input</key>
+    <true/>`;
+
 export function renderMacPasskeyEntitlements(
   configuration: MacPasskeySigningConfiguration,
   webAuthn: MacWebAuthnEntitlements,
@@ -1499,20 +1529,18 @@ export function renderMacPasskeyEntitlements(
     <array>
 ${associatedDomains}
     </array>${keychainAccessGroups}${browserPasskeys}
-    <key>com.apple.security.cs.allow-jit</key>
-    <true/>
-    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
-    <true/>
-    <key>com.apple.security.cs.disable-library-validation</key>
-    <true/>
-    <!-- The hardened runtime denies camera and microphone to the app and every
-         child process, with no prompt, unless the app claims these. Terminals
-         and coding agents inherit the app's TCC identity, so without these a
-         command like ffmpeg or imagesnap gets silent access-denied. -->
-    <key>com.apple.security.device.camera</key>
-    <true/>
-    <key>com.apple.security.device.audio-input</key>
-    <true/>
+${MAC_RUNTIME_ENTITLEMENTS}
+  </dict>
+</plist>
+`;
+}
+
+export function renderMacRuntimeEntitlements(): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+${MAC_RUNTIME_ENTITLEMENTS}
   </dict>
 </plist>
 `;
@@ -2441,6 +2469,7 @@ export const stageLinuxCaptureHelper = Effect.fn("stageLinuxCaptureHelper")(func
     yield* runCommand(
       ChildProcess.make(spawnCommand.command, spawnCommand.args, {
         cwd: input.repoRoot,
+        env: resolveReproducibleRustEnv(process.env, NodeOS.homedir(), input.repoRoot),
         shell: spawnCommand.shell,
       }),
       {
@@ -2469,6 +2498,26 @@ export const stageLinuxCaptureHelper = Effect.fn("stageLinuxCaptureHelper")(func
     );
   }
 });
+
+export function resolveReproducibleRustEnv(
+  env: NodeJS.ProcessEnv,
+  homeDirectory: string,
+  repoRoot: string,
+): NodeJS.ProcessEnv {
+  const inherited = env.CARGO_ENCODED_RUSTFLAGS
+    ? env.CARGO_ENCODED_RUSTFLAGS.split("\x1f")
+    : (env.RUSTFLAGS ?? "").split(/\s+/).filter((flag) => flag.length > 0);
+  const cargoHome = env.CARGO_HOME?.trim() || `${homeDirectory}/.cargo`;
+  return {
+    ...env,
+    CARGO_ENCODED_RUSTFLAGS: [
+      ...inherited,
+      `--remap-path-prefix=${homeDirectory}=/home`,
+      `--remap-path-prefix=${cargoHome}=/cargo`,
+      `--remap-path-prefix=${repoRoot}=/t3code`,
+    ].join("\x1f"),
+  };
+}
 
 export const stageResourceMonitor = Effect.fn("stageResourceMonitor")(function* (input: {
   readonly repoRoot: string;
@@ -2501,6 +2550,7 @@ export const stageResourceMonitor = Effect.fn("stageResourceMonitor")(function* 
       yield* runCommand(
         ChildProcess.make(spawnCommand.command, spawnCommand.args, {
           cwd: input.repoRoot,
+          env: resolveReproducibleRustEnv(process.env, NodeOS.homedir(), input.repoRoot),
           shell: spawnCommand.shell,
         }),
         {
@@ -2900,7 +2950,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   macPasskeySigning:
     | {
         readonly entitlementsPath: string;
-        readonly provisioningProfilePath: string;
+        readonly provisioningProfilePath?: string;
       }
     | undefined,
   wslRuntimeBundled = false,
@@ -2943,7 +2993,17 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   const updateChannel = resolveDesktopUpdateChannel(version);
   // Missing publish config infers a GitHub feed from tokens; staging has no repository, so manifest generation would crash.
   buildConfig.publish = null;
-  if (!fork && !isDesktopPreviewVersion(version)) {
+  if (fork?.updateRepository && !isDesktopPreviewVersion(version)) {
+    buildConfig.publish = [
+      {
+        provider: "github",
+        owner: fork.updateRepository.owner,
+        repo: fork.updateRepository.repo,
+        releaseType: "release",
+        channel: "latest",
+      },
+    ];
+  } else if (!fork && !isDesktopPreviewVersion(version)) {
     const publishConfig = yield* resolveGitHubPublishConfig(updateChannel);
     if (publishConfig) {
       buildConfig.publish = [publishConfig];
@@ -2999,7 +3059,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       ...(macPasskeySigning
         ? {
             entitlements: macPasskeySigning.entitlementsPath,
-            provisioningProfile: macPasskeySigning.provisioningProfilePath,
+            ...(macPasskeySigning.provisioningProfilePath
+              ? { provisioningProfile: macPasskeySigning.provisioningProfilePath }
+              : {}),
           }
         : {}),
     };
@@ -4002,7 +4064,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   yield* fs.copy(stageResourcesDir, stageProdResourcesDir);
 
   const configuredMacPasskeySigning =
-    options.platform === "mac" && options.signed
+    options.platform === "mac" && options.signed && !fork
       ? yield* Effect.try({
           try: () => resolveMacPasskeySigningConfiguration(loadRepoEnv({ repoRoot })),
           catch: MacPasskeySigningConfigurationResolutionError.fromCause,
@@ -4017,9 +4079,14 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
         ),
       }
     : undefined;
-  const macEntitlementsPath = macPasskeySigning
-    ? path.join(stageAppDir, "entitlements.mac.plist")
-    : undefined;
+  const signsForkMacRuntime = options.platform === "mac" && options.signed && fork !== undefined;
+  const macEntitlementsPath =
+    macPasskeySigning || signsForkMacRuntime
+      ? path.join(stageAppDir, "entitlements.mac.plist")
+      : undefined;
+  if (signsForkMacRuntime && macEntitlementsPath) {
+    yield* fs.writeFileString(macEntitlementsPath, renderMacRuntimeEntitlements());
+  }
   let macWebAuthn: MacWebAuthnEntitlements | undefined;
   if (macPasskeySigning && macEntitlementsPath) {
     if (!(yield* fs.exists(macPasskeySigning.provisioningProfilePath))) {
@@ -4070,6 +4137,11 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
             appName: fork.appName,
             dataName: fork.dataName,
             ...(forkDefaultTheme ? { defaultTheme: forkDefaultTheme } : {}),
+            ...(fork.updateRepository
+              ? {
+                  updateRepository: `${fork.updateRepository.owner}/${fork.updateRepository.repo}`,
+                }
+              : {}),
           },
         }
       : {}),
@@ -4090,10 +4162,12 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
       options.signed,
       options.mockUpdates,
       options.mockUpdateServerPort,
-      macPasskeySigning && macEntitlementsPath
+      macEntitlementsPath
         ? {
             entitlementsPath: macEntitlementsPath,
-            provisioningProfilePath: macPasskeySigning.provisioningProfilePath,
+            ...(macPasskeySigning
+              ? { provisioningProfilePath: macPasskeySigning.provisioningProfilePath }
+              : {}),
           }
         : undefined,
       bundlesWslRuntime({ platform: options.platform, runtimeArchivePath: options.wslRuntime }),
