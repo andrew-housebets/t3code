@@ -1,7 +1,11 @@
 const fromEnv = (name) => process.env[name]?.trim() || undefined;
-const names = { connect: fromEnv("T3CODE_CONNECT_NAME"), app: fromEnv("T3CODE_APP_NAME") };
+const names = {
+  connect: fromEnv("T3CODE_CONNECT_NAME"),
+  app: fromEnv("T3CODE_APP_NAME"),
+  githubApp: fromEnv("T3CODE_GITHUB_APP_NAME"),
+};
 const accountName = fromEnv("T3CODE_ACCOUNT_NAME");
-const isRenaming = Boolean(names.connect || names.app || accountName);
+const isRenaming = Boolean(names.connect || names.app || names.githubApp || accountName);
 const renameBrand = isRenaming
   ? require("../../scripts/lib/connect-brand-plugin.ts").renameBrand
   : (value) => value;

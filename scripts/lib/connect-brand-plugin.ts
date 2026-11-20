@@ -1,4 +1,6 @@
 const UPSTREAM_CONNECT_NAME = "T3 Connect";
+const UPSTREAM_GITHUB_APP_NAME = "T3 Code for GitHub";
+const UPSTREAM_GITHUB_APP_PATH = "apps/t3-code-for-github/";
 
 /** Source snippets that are matched, persisted or sent on the wire, so they keep the upstream name. */
 export const KEPT_UPSTREAM_SNIPPETS = [
@@ -8,11 +10,9 @@ export const KEPT_UPSTREAM_SNIPPETS = [
   '"Written by T3 Code: runs',
   'CODEX_CLIENT_NAME = "T3 Code"',
   'agent_name_hint: "T3 Code"',
-  'title: "T3 Code", version:',
   'resource_name: "T3 Code"',
   "T3 Code for GitHub",
   '=== "T3 Code"',
-  "T3 Code · ",
   "the T3 server WebSocket",
 ];
 
@@ -39,18 +39,31 @@ const APP_NAME_PATTERN = new RegExp(
 export interface BrandNames {
   readonly connect?: string | undefined;
   readonly app?: string | undefined;
+  readonly githubApp?: string | undefined;
 }
 
 function brandNamesFromEnv(env: Record<string, string | undefined> = process.env) {
   return {
     connect: env.T3CODE_CONNECT_NAME?.trim() || undefined,
     app: env.T3CODE_APP_NAME?.trim() || undefined,
+    githubApp: env.T3CODE_GITHUB_APP_NAME?.trim() || undefined,
   };
 }
 
 /** Rewrites upstream product names in one module's text; returns the input when nothing applies. */
 export function renameBrand(text: string, names: BrandNames, moduleId = "") {
-  const connected = names.connect ? text.replaceAll(UPSTREAM_CONNECT_NAME, names.connect) : text;
+  const githubApp = names.githubApp;
+  const ownApp = githubApp
+    ? text
+        .replaceAll(UPSTREAM_GITHUB_APP_NAME, githubApp)
+        .replaceAll(
+          UPSTREAM_GITHUB_APP_PATH,
+          `apps/${githubApp.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}/`,
+        )
+    : text;
+  const connected = names.connect
+    ? ownApp.replaceAll(UPSTREAM_CONNECT_NAME, names.connect)
+    : ownApp;
   const app = names.app;
   if (!app || KEPT_UPSTREAM_MODULES.test(moduleId)) return connected;
   const lead = app.split(" ")[0] ?? app;
@@ -65,7 +78,7 @@ export function renameBrand(text: string, names: BrandNames, moduleId = "") {
 /** Forks rename the app and its relay service in every bundled string with T3CODE_APP_NAME and T3CODE_CONNECT_NAME. */
 export function connectBrandPlugin(names: BrandNames = brandNamesFromEnv()) {
   const transform = (code: string, id?: string) => {
-    if (!names.connect && !names.app) return undefined;
+    if (!names.connect && !names.app && !names.githubApp) return undefined;
     const renamed = renameBrand(code, names, id);
     return renamed === code ? undefined : renamed;
   };
