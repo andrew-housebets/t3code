@@ -115,6 +115,7 @@ vi.mock("./server", async () => {
 });
 vi.mock("./git", () => ({ gitEnvironment: {} }));
 vi.mock("./threads", () => ({ threadEnvironment: {} }));
+vi.mock("./coordinator-drafts", () => ({ setCoordinatorDraft: vi.fn() }));
 vi.mock("./use-atom-command", () => ({ useAtomCommand: () => async () => undefined }));
 vi.mock("./session", async () => {
   const { Atom } = await import("effect/reactivity");

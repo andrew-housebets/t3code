@@ -243,6 +243,8 @@ it.effect("installs the build the update action downloaded, not the one it offer
               stateDir: "/task/state",
               logDir: "/task/logs",
               path: { join: (...parts: string[]) => parts.join("/") },
+              branding: { baseName: "T3 Code", stageLabel: "Beta", displayName: "T3 Code (Beta)" },
+              forkIdentity: Option.none(),
             } as unknown as DesktopEnvironment.DesktopEnvironment["Service"]),
             Layer.succeed(ElectronApp.ElectronApp, {
               on: () => Effect.void,
