@@ -189,7 +189,9 @@ export function RightPanelSurfaceContent(props: {
         return (
           <PullRequestsUnavailableState
             title={gt("Issues unavailable")}
-            error={gt("Update this environment's T3 Code server to browse issues.")}
+            error={gt("Update this environment's {app} server to browse issues.", {
+              app: APP_BASE_NAME,
+            })}
           />
         );
       }

@@ -1,4 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
+import { APP_BASE_NAME } from "../../branding";
 import {
   continueIssuePage,
   groupIssues,
@@ -506,7 +507,9 @@ export function IssuesPage() {
   const listBody: ReactNode = !issuesSupported ? (
     <PullRequestsUnavailableState
       title={gt("Issues unavailable")}
-      error={gt("Update this environment's T3 Code server to browse issues.")}
+      error={gt("Update this environment's {app} server to browse issues.", {
+        app: APP_BASE_NAME,
+      })}
     />
   ) : noneAnswered && list.isPending ? (
     <PullRequestListGhost />
