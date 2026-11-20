@@ -1564,7 +1564,7 @@ function OpenCommandPaletteDialog(props: {
     });
   }
 
-  if (activeThread !== null) {
+  if (activeThread) {
     actionItems.push(
       threadOverviewPaletteItem(activeThread, messages),
       ...projectPanelPaletteItems(activeThread, messages),
