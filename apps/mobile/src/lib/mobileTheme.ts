@@ -1,5 +1,5 @@
 import {
-  BUILT_IN_THEMES,
+  MOBILE_PALETTE_THEMES,
   T3_CHAT_THEME,
   T3_CODE_LIGHT_THEME_COLORS,
   T3_CODE_DARK_THEME_COLORS,
@@ -17,6 +17,7 @@ import {
 
 export const DEFAULT_MOBILE_THEME_ID = MOBILE_DEFAULT_THEME_ID;
 export const MOBILE_THEME_IDS = [...SHARED_MOBILE_THEME_IDS, "material-you"] as const;
+const UNSET_MOBILE_THEME_ID = "claude" satisfies SharedMobileThemeId;
 export type MobileThemeId = SharedMobileThemeId | "material-you";
 export type MobileThemeAppearance = ThemeAppearance;
 export type MobileThemeMode = MobileThemeAppearance | "system";
@@ -28,7 +29,7 @@ export const MOBILE_THEME_OPTIONS: ReadonlyArray<{
 }> = [
   { id: DEFAULT_MOBILE_THEME_ID, label: "T3 Code" },
   { id: "material-you", label: "Material You" },
-  ...BUILT_IN_THEMES.map((theme) => ({ id: theme.id as MobileThemeId, label: theme.label })),
+  ...MOBILE_PALETTE_THEMES.map((theme) => ({ id: theme.id as MobileThemeId, label: theme.label })),
 ];
 
 export type MobileThemeVariable = keyof ReturnType<typeof createMobileThemeVariables>;
@@ -37,7 +38,7 @@ export type MobileThemeVariables = Readonly<Record<MobileThemeVariable, string>>
 function normalizeMobileThemeId(value: unknown): MobileThemeId {
   return typeof value === "string" && (MOBILE_THEME_IDS as readonly string[]).includes(value)
     ? (value as MobileThemeId)
-    : DEFAULT_MOBILE_THEME_ID;
+    : UNSET_MOBILE_THEME_ID;
 }
 
 export function normalizeMobileThemeMode(value: unknown): MobileThemeMode {
@@ -385,6 +386,7 @@ export function createMobileThemeVariables(
     "--color-primary-foreground": c.messageActionForeground,
     "--color-primary-text": themeColorWithContrast(c.messageAction, textSurfaces),
     "--color-primary-shadow": "#000000",
+    "--color-send": c.messageAction,
     "--color-secondary": c.secondary,
     "--color-secondary-foreground": c.secondaryForeground,
     "--color-secondary-border": c.border,
@@ -455,7 +457,8 @@ export function getMobileThemeColors(
   if (themeId === DEFAULT_MOBILE_THEME_ID) {
     return appearance === "dark" ? T3_CODE_DARK_THEME_COLORS : T3_CODE_LIGHT_THEME_COLORS;
   }
-  const theme = BUILT_IN_THEMES.find((candidate) => candidate.id === themeId) ?? T3_CHAT_THEME;
+  const theme =
+    MOBILE_PALETTE_THEMES.find((candidate) => candidate.id === themeId) ?? T3_CHAT_THEME;
   return getThemeColorsForAppearance(theme, appearance) ?? theme.colors;
 }
 
@@ -508,7 +511,8 @@ export function getMobileThemePreviewColors(
 ): ThemePreviewColors {
   if (themeId === DEFAULT_MOBILE_THEME_ID || themeId === "material-you")
     return STANDARD_THEME_PREVIEW_COLORS[appearance];
-  const theme = BUILT_IN_THEMES.find((candidate) => candidate.id === themeId) ?? T3_CHAT_THEME;
+  const theme =
+    MOBILE_PALETTE_THEMES.find((candidate) => candidate.id === themeId) ?? T3_CHAT_THEME;
   const colors = getThemeColorsForAppearance(theme, appearance) ?? theme.colors;
   return {
     canvas: themeColorToNativeColor(colors.canvas),

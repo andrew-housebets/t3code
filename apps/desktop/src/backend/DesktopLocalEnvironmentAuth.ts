@@ -58,6 +58,11 @@ export const DesktopLocalEnvironmentAuthError = Schema.Union([
 ]);
 export type DesktopLocalEnvironmentAuthError = typeof DesktopLocalEnvironmentAuthError.Type;
 
+export class ClientLabel extends Context.Reference<string>(
+  "@t3tools/desktop/backend/DesktopLocalEnvironmentAuth/ClientLabel",
+  { defaultValue: () => "T3 Code Desktop" },
+) {}
+
 export class DesktopLocalEnvironmentAuth extends Context.Service<
   DesktopLocalEnvironmentAuth,
   {
@@ -68,6 +73,7 @@ export class DesktopLocalEnvironmentAuth extends Context.Service<
 /** @public */
 export const make = Effect.gen(function* () {
   const pool = yield* DesktopBackendPool.DesktopBackendPool;
+  const clientLabel = yield* ClientLabel;
   const httpClient = yield* HttpClient.HttpClient;
   const mac = yield* Mac.Mac;
   const tokenRef = yield* Ref.make(Option.none<string>());
@@ -106,7 +112,7 @@ export const make = Effect.gen(function* () {
           httpBaseUrl: config.httpBaseUrl.href,
           credential,
           clientMetadata: {
-            label: "T3 Code Desktop",
+            label: clientLabel,
             deviceType: "desktop",
           },
         }).pipe(

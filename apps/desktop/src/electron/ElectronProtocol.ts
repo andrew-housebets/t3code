@@ -1,3 +1,6 @@
+// @effect-diagnostics nodeBuiltinImport:off - the fork scheme is read synchronously before Electron is ready.
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -16,8 +19,34 @@ export const DESKTOP_HOST = "app";
 const DESKTOP_PRODUCTION_SCHEME = "t3code";
 const DESKTOP_DEVELOPMENT_SCHEME = "t3code-dev";
 
+let packagedScheme: string | undefined;
+
+// Fork builds serve the renderer from their own scheme so OS deep links reach them, not T3 Code.
+function readPackagedScheme(): string {
+  try {
+    if (!Electron.app.isPackaged) return DESKTOP_PRODUCTION_SCHEME;
+    const manifest: unknown = JSON.parse(
+      NodeFS.readFileSync(NodePath.join(Electron.app.getAppPath(), "package.json"), "utf8"),
+    );
+    const identity =
+      typeof manifest === "object" && manifest !== null && "t3codeDesktopIdentity" in manifest
+        ? manifest.t3codeDesktopIdentity
+        : undefined;
+    return typeof identity === "object" &&
+      identity !== null &&
+      "dataName" in identity &&
+      typeof identity.dataName === "string"
+      ? identity.dataName
+      : DESKTOP_PRODUCTION_SCHEME;
+  } catch {
+    return DESKTOP_PRODUCTION_SCHEME;
+  }
+}
+
 export function getDesktopScheme(isDevelopment: boolean): string {
-  return isDevelopment ? DESKTOP_DEVELOPMENT_SCHEME : DESKTOP_PRODUCTION_SCHEME;
+  if (isDevelopment) return DESKTOP_DEVELOPMENT_SCHEME;
+  packagedScheme ??= readPackagedScheme();
+  return packagedScheme;
 }
 
 function getDesktopOrigin(isDevelopment: boolean): string {
@@ -111,7 +140,7 @@ function withContentSecurityPolicy(response: Response, policy: string): Response
 function registerDesktopSchemePrivilegesSync(): void {
   Electron.protocol.registerSchemesAsPrivileged([
     {
-      scheme: DESKTOP_PRODUCTION_SCHEME,
+      scheme: getDesktopScheme(false),
       privileges: {
         standard: true,
         secure: true,

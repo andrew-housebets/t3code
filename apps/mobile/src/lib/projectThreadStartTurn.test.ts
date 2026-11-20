@@ -5,6 +5,7 @@ import { serializeComposerMessageForServer } from "./composerContext";
 
 import {
   buildProjectThreadStartTurnInput,
+  launchDroppedCoordinatorTag,
   type ProjectThreadStartTurnSpec,
 } from "./projectThreadStartTurn";
 
@@ -68,5 +69,57 @@ describe("project thread title", () => {
     expect(relaunched.titleSeed).toBe(title);
     expect(relaunched.message.text).toBe(wire.text);
     expect(relaunched.message.attachments).toEqual(uploadedAttachments);
+  });
+
+  it("commits a coordinator's tag with the thread it creates", () => {
+    const spec = {
+      projectId: ProjectId.make("project"),
+      projectCwd: "/workspace",
+      threadId: "coordinator-thread",
+      commandId: "coordinator-command",
+      messageId: "coordinator-message",
+      createdAt: "2026-09-04T00:00:00Z",
+      text: "Plan the release",
+      uploadedAttachments: [],
+      modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.6-sol" },
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      workspaceMode: "local",
+      branch: null,
+      worktreePath: null,
+      startFromOrigin: false,
+      worktreeBranchName: "unused",
+    } satisfies ProjectThreadStartTurnSpec;
+
+    expect(
+      buildProjectThreadStartTurnInput({ ...spec, tags: ["coordinator"] }).bootstrap,
+    ).toMatchObject({
+      tags: ["coordinator"],
+    });
+    expect(buildProjectThreadStartTurnInput(spec).bootstrap).not.toHaveProperty("tags");
+  });
+
+  it.each([
+    { name: "a plain launch", tags: undefined, launched: { sequence: 1 }, dropped: false },
+    {
+      name: "a server that kept the tag",
+      tags: ["coordinator"],
+      launched: { projection: { thread: { tags: ["coordinator"] } } },
+      dropped: false,
+    },
+    {
+      name: "a server that dropped the tag",
+      tags: ["coordinator"],
+      launched: { projection: { thread: { tags: [] } } },
+      dropped: true,
+    },
+    {
+      name: "a server without a projection",
+      tags: ["coordinator"],
+      launched: { sequence: 1 },
+      dropped: true,
+    },
+  ])("tags after launch for $name: $dropped", ({ tags, launched, dropped }) => {
+    expect(launchDroppedCoordinatorTag(tags, launched)).toBe(dropped);
   });
 });

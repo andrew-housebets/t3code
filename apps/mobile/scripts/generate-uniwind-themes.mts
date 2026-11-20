@@ -3,7 +3,7 @@
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import tailwindColors from "tailwindcss/colors";
-import { BUILT_IN_THEME_IDS, type BuiltInThemeId } from "@t3tools/shared/themePalettes";
+import { MOBILE_PALETTE_THEME_IDS, type MobilePaletteThemeId } from "@t3tools/shared/themePalettes";
 
 import {
   createMobileThemeVariables,
@@ -12,6 +12,7 @@ import {
   DEFAULT_MOBILE_THEME_ID,
   type MobileThemeAppearance,
 } from "../src/lib/mobileTheme.ts";
+import { themeFontFamilies } from "../src/lib/fontFamilies.ts";
 
 const APPEARANCES = ["light", "dark"] as const;
 const GENERATED_CSS_PATH = NodePath.resolve(import.meta.dirname, "../generated-uniwind-themes.css");
@@ -157,7 +158,7 @@ const ADAPTIVE_COLORS: Readonly<Record<string, readonly [light: string, dark: st
   "--color-adaptive-zinc-600-300": [color("zinc", 600), color("zinc", 300)],
 };
 
-export const customThemeNames = BUILT_IN_THEME_IDS.flatMap((themeId) =>
+export const customThemeNames = MOBILE_PALETTE_THEME_IDS.flatMap((themeId) =>
   APPEARANCES.map((appearance) => `${themeId}-${appearance}`),
 );
 
@@ -169,8 +170,18 @@ const adaptiveVariablesFor = (appearance: MobileThemeAppearance) =>
     ]),
   );
 
-const variablesFor = (themeId: BuiltInThemeId, appearance: MobileThemeAppearance) => ({
+const fontVariablesFor = (themeId: string) => {
+  const fonts = themeFontFamilies(themeId);
+  return {
+    "--font-sans": `"${fonts.regular}"`,
+    "--font-medium": `"${fonts.medium}"`,
+    "--font-bold": `"${fonts.bold}"`,
+  };
+};
+
+const variablesFor = (themeId: MobilePaletteThemeId, appearance: MobileThemeAppearance) => ({
   ...getMobileThemeVariables(themeId, appearance),
+  ...fontVariablesFor(themeId),
   ...adaptiveVariablesFor(appearance),
   ...clerkVariablesFor(appearance),
 });
@@ -223,11 +234,12 @@ export const renderUniwindThemesCSS = () => {
     ...APPEARANCES.map((appearance) =>
       renderVariant(appearance, {
         ...getMobileThemeVariables(DEFAULT_MOBILE_THEME_ID, appearance),
+        ...fontVariablesFor(DEFAULT_MOBILE_THEME_ID),
         ...adaptiveVariablesFor(appearance),
         ...clerkVariablesFor(appearance),
       }),
     ),
-    ...BUILT_IN_THEME_IDS.flatMap((themeId) =>
+    ...MOBILE_PALETTE_THEME_IDS.flatMap((themeId) =>
       APPEARANCES.map((appearance) =>
         renderVariant(`${themeId}-${appearance}`, variablesFor(themeId, appearance)),
       ),

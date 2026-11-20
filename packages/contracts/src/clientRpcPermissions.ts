@@ -3,6 +3,7 @@ import { GitPreparePullRequestThreadInput, GitRunStackedActionInput } from "./gi
 import {
   AuthAccessWriteScope,
   AuthEnvironmentMaintainScope,
+  AuthFilesystemWriteScope,
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   AuthPreviewOperateScope,
@@ -40,9 +41,24 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.pullRequestsSetFilesViewed]: AuthSourceControlWriteScope,
   [WS_METHODS.pullRequestsRequestReviewers]: AuthSourceControlWriteScope,
   [WS_METHODS.pullRequestsSetLabels]: AuthSourceControlWriteScope,
+  [WS_METHODS.issuesCreate]: AuthSourceControlWriteScope,
+  [WS_METHODS.issuesComment]: AuthSourceControlWriteScope,
+  [WS_METHODS.issuesUpdate]: AuthSourceControlWriteScope,
+  [WS_METHODS.issuesSetState]: AuthSourceControlWriteScope,
+  [WS_METHODS.issuesReact]: AuthSourceControlWriteScope,
+  // A tracker credential and a project's binding are settings, saved under the same grant.
+  [WS_METHODS.issueTrackersConnect]: AuthSettingsWriteScope,
+  [WS_METHODS.issueTrackersBindProject]: AuthSettingsWriteScope,
   // Writing a guide runs a model on this environment's providers, which reading one does not.
   [WS_METHODS.pullRequestsGenerateReviewGuide]: AuthOrchestrationOperateScope,
   [WS_METHODS.projectsCreateFromThread]: AuthOrchestrationOperateScope,
+  // Every thread the project delegates afterwards starts with what this writes.
+  [WS_METHODS.projectContextWrite]: AuthOrchestrationOperateScope,
+  // Every coordinator draft and delegated thread in the project starts on what this saves.
+  [WS_METHODS.projectContextWriteModelDefaults]: AuthOrchestrationOperateScope,
+  // Both write files on the host, into the project's Library.
+  [WS_METHODS.projectContextAddLibraryFile]: AuthFilesystemWriteScope,
+  [WS_METHODS.projectContextRemoveLibraryFile]: AuthFilesystemWriteScope,
   [WS_METHODS.sourceControlCloneRepository]: AuthSourceControlWriteScope,
   [WS_METHODS.sourceControlPublishRepository]: AuthSourceControlWriteScope,
   [WS_METHODS.sourceControlStar]: AuthSourceControlWriteScope,

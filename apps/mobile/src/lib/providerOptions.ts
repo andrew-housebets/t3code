@@ -8,6 +8,7 @@ import type {
 } from "@t3tools/contracts";
 import {
   buildProviderOptionSelectionsFromDescriptors,
+  createModelSelection,
   getProviderOptionDescriptors,
   withImplicitFastModeDefault,
 } from "@t3tools/shared/model";
@@ -69,4 +70,22 @@ export function applyProviderOptionSelection(
   ) as ReadonlyArray<ProviderOptionDescriptor>;
 
   return buildProviderOptionSelectionsFromDescriptors(nextDescriptors) ?? [];
+}
+
+/** Picking another model keeps the options already set that it supports, such as effort set on web. */
+export function pickModelKeepingOptions(
+  current: ModelSelection | null,
+  picked: { readonly selection: ModelSelection; readonly capabilities: ModelCapabilities | null },
+): ModelSelection {
+  const descriptors = resolveProviderOptionDescriptors({
+    capabilities: picked.capabilities,
+    selections: null,
+  });
+  return createModelSelection(
+    picked.selection.instanceId,
+    picked.selection.model,
+    (current?.options ?? []).filter(
+      (option) => applyProviderOptionSelection(descriptors, option) !== null,
+    ),
+  );
 }

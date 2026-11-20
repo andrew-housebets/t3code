@@ -2,6 +2,7 @@ import type { OlderSettledScope } from "@t3tools/client-runtime/state/threads";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { useMemo, useSyncExternalStore } from "react";
 
+import { keepMarked } from "../../i18n/messages";
 import { scopedProjectKey } from "../../lib/scopedEntities";
 import { useOlderSettledShelf, useOlderSettledShelfGrowth } from "../../state/olderSettledShelf";
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
@@ -9,6 +10,7 @@ import {
   buildThreadListV2Items,
   buildThreadListV2ListItems,
   getThreadListV2OrderedSection,
+  type ThreadListV2ProjectGroup,
   threadListInboxReturns,
   threadListV2LayoutTime,
 } from "./threadListV2";
@@ -65,6 +67,10 @@ export function useThreadListV2(input: {
   readonly snoozedShelfExpanded: boolean;
   readonly settledShelfExpanded: boolean;
   readonly selectedThreadKey: string | null;
+  /** The project group a thread belongs to; null leaves the list ungrouped. */
+  readonly projectGroupOf:
+    | ((thread: LayoutInput["threads"][number]) => ThreadListV2ProjectGroup | null)
+    | null;
 }) {
   const { threads, workingShelfEnabled } = input;
   const layoutTime = useMemo(
@@ -80,7 +86,13 @@ export function useThreadListV2(input: {
     () => observeInbox(workingShelfEnabled ? threads : null, inboxVersion),
     [threads, workingShelfEnabled, inboxVersion],
   );
-  // Compute move availability per section; per-row planning is quadratic.
+  // A single project or a search has nothing to group by.
+  const projectGroupOf =
+    input.projectRefs == null && input.searchQuery.trim().length === 0
+      ? input.projectGroupOf
+      : null;
+  // Compute move availability per section; per-row planning is quadratic. Grouped Active rows
+  // do not move: their flat order would carry them across groups the list does not show.
   const moveAvailability = useMemo(() => {
     const sectionAvailability = (section: "pinned" | "active") =>
       computeThreadMoveAvailability({
@@ -101,7 +113,7 @@ export function useThreadListV2(input: {
       });
     return new Map([
       ...sectionAvailability("pinned"),
-      ...(workingShelfEnabled ? [] : sectionAvailability("active")),
+      ...(workingShelfEnabled || projectGroupOf !== null ? [] : sectionAvailability("active")),
     ]);
   }, [
     threads,
@@ -113,6 +125,7 @@ export function useThreadListV2(input: {
     input.snoozeEnvironmentIds,
     input.queuedThreadKeys,
     workingShelfEnabled,
+    projectGroupOf,
   ]);
   // Older settled threads load in pages; the shelf lists them only as far as they are loaded.
   const scopes = useMemo(
@@ -228,6 +241,8 @@ export function useThreadListV2(input: {
         queuedThreadKeys: input.queuedThreadKeys,
         moveAvailability,
         shelfPreferencesLoading: !input.shelfPreferencesLoaded,
+        projectGroupOf,
+        resolve: keepMarked,
       }),
     [
       layout,
@@ -240,9 +255,16 @@ export function useThreadListV2(input: {
       input.queuedThreadKeys,
       moveAvailability,
       input.shelfPreferencesLoaded,
+      projectGroupOf,
     ],
   );
-  return { layout, items, contentOnlyThreadKeys, olderSettledShelf };
+  return {
+    layout,
+    items,
+    contentOnlyThreadKeys,
+    olderSettledShelf,
+    projectGrouped: projectGroupOf !== null,
+  };
 }
 
 /** The list's scope per environment: its projects there, or every project. */

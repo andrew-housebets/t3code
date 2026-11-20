@@ -37,6 +37,7 @@ import * as ContextHandoffService from "../ContextHandoffService.ts";
 import * as EffectOutbox from "../EffectOutbox.ts";
 import * as EffectWorker from "../EffectWorker.ts";
 import * as EventSink from "../EventSink.ts";
+import * as ThreadViewers from "../ThreadViewers.ts";
 import * as EventStore from "../EventStore.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as Orchestrator from "../Orchestrator.ts";
@@ -57,6 +58,7 @@ import * as ProviderTurnControlService from "../ProviderTurnControlService.ts";
 import * as ProviderTurnStartService from "../ProviderTurnStartService.ts";
 import * as ProviderTurnStartServiceTestkit from "../ProviderTurnStartService.testkit.ts";
 import * as McpAppModelContext from "../../mcpApps/McpAppModelContext.ts";
+import * as ProjectContext from "../../projectContext/ProjectContext.ts";
 import * as PreviewAgentActivity from "../../preview/PreviewAgentActivity.ts";
 import * as RunExecutionService from "../RunExecutionService.ts";
 import * as RunFinalizationService from "../RunFinalizationService.ts";
@@ -349,7 +351,7 @@ export function layerWithRegistry<Error>(
     TurnItemPositionStore.layer,
   ).pipe(Layer.provide(layerDatabase));
   const layerEventSinkProvided = EventSink.layerFromStores.pipe(
-    Layer.provide(Layer.mergeAll(layerStores, layerDatabase)),
+    Layer.provide(Layer.mergeAll(layerStores, layerDatabase, ThreadViewers.layer)),
   );
   const layerRuntime = RuntimePolicy.layerEnforcingCeiling.pipe(
     Layer.provide(Layer.merge(layerRuntimeBase, layerServerSettings)),
@@ -423,6 +425,7 @@ export function layerWithRegistry<Error>(
     Layer.provide(
       Layer.mergeAll(
         McpAppModelContext.layerEmpty,
+        ProjectContext.layer.pipe(Layer.provide(layerServerConfig)),
         PreviewAgentActivity.layer,
         layerCheckpointServiceProvided,
         layerEventSinkProvided,
@@ -454,7 +457,12 @@ export function layerWithRegistry<Error>(
   );
   const layerProviderTurnControlServiceProvided = ProviderTurnControlService.layer.pipe(
     Layer.provide(
-      Layer.mergeAll(layerEventSinkProvided, layerStores, layerProviderSessionManagerProvided),
+      Layer.mergeAll(
+        layerEventSinkProvided,
+        McpAppModelContext.layerEmpty,
+        layerStores,
+        layerProviderSessionManagerProvided,
+      ),
     ),
   );
   const layerRuntimeRequestServiceProvided = RuntimeRequestService.layer.pipe(

@@ -1,11 +1,15 @@
 import { modelChipIcon } from "../lib/contextChipIconSource";
 import { useMemo } from "react";
+import {
+  assistantCitationLabel,
+  parseAssistantCitationHref,
+} from "@t3tools/shared/assistantCitations";
 import { Image } from "react-native";
 import type { LinkPillContent, MarkdownStyle } from "react-native-enriched-markdown";
 import type { ComposerContextRecord } from "@t3tools/contracts";
 import { contextChipAccent, contextChipPresentation } from "../lib/composerChipPresentation";
 import { CONTEXT_CHIP_ICON_SOURCES } from "../lib/contextChipIcons.generated";
-import { FONT_FAMILIES } from "../lib/fontFamilies";
+import { useFontFamilies } from "../lib/useClaudeLook";
 import { contextChipIconSource } from "../lib/contextChipIconSource";
 import { markdownFileIconSource } from "../lib/markdownFileIcons";
 import { markdownLinkIcon } from "../lib/markdownLinkIcons";
@@ -65,6 +69,13 @@ function presentation(
 ): MarkdownLinkCustomization | undefined {
   const custom = props.linkCustomization?.(url);
   if (custom) return custom;
+  const citation = parseAssistantCitationHref(url);
+  if (citation)
+    return {
+      label: assistantCitationLabel(citation),
+      icon: CONTEXT_CHIP_ICON_SOURCES["message-circle"],
+      chip: { accent: contextChipPresentation("citation").accent, tintsIcon: true },
+    };
   const context = enrichedContextLinkCustomization(url);
   if (context) return context;
   const skill = enrichedSkillReference(url, props.skills);
@@ -110,6 +121,7 @@ export function useEnrichedLinkVariants(
 ) {
   const { linkCustomization, skills, models, textStyle, fileEmbedLabel } = props;
   const theme = useUniwindTheme();
+  const mediumFontFamily = useFontFamilies().medium;
   const links = useMemo(() => {
     const byUrl = new Map<string, MarkdownLinkCustomization>();
     for (const url of urls) {
@@ -153,7 +165,7 @@ export function useEnrichedLinkVariants(
                 paddingHorizontal: 5,
                 paddingVertical: 2,
               },
-              fontFamily: chipForeground ? FONT_FAMILIES.medium : textStyle.fontFamily,
+              fontFamily: chipForeground ? mediumFontFamily : textStyle.fontFamily,
               color: chipForeground ?? link.color ?? textStyle.fileTextColor,
               underline: false,
               backgroundColor: "transparent",
@@ -161,7 +173,7 @@ export function useEnrichedLinkVariants(
           ];
         }),
       ),
-    [chipForegrounds, links, textStyle],
+    [chipForegrounds, links, mediumFontFamily, textStyle],
   );
   const linkPillContent = useMemo<Record<string, LinkPillContent>>(
     () =>

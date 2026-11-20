@@ -1,3 +1,5 @@
+import { mFallback, msg } from "gt-i18n";
+import type { MFunctionType } from "gt-i18n/types";
 import {
   isOrchestrationV2WorkActive,
   ORCHESTRATION_V2_WS_METHODS,
@@ -38,6 +40,7 @@ import {
   subscribeDynamic,
   subscriptionRetryDelay,
 } from "../rpc/client.ts";
+import type { RpcSession } from "../rpc/session.ts";
 import { parseThreadKey, threadKey } from "./entities.ts";
 import { applyOrchestrationV2ProjectionEvent } from "./orchestrationV2Projection.ts";
 import { THREAD_SNAPSHOT_IDLE_TTL_MS } from "./threadRetention.ts";
@@ -50,6 +53,7 @@ import {
   EMPTY_THREAD_HISTORY_META,
   isActiveHistoryRequestCursor,
   mergeOlderHistoryIntoProjection,
+  mergeOlderSubagentsIntoProjection,
   type ThreadHistoryMeta,
 } from "./threadHistoryMerge.ts";
 import * as ThreadSnapshotLoader from "./threadSnapshotHttp.ts";
@@ -68,18 +72,36 @@ function statusWithoutLiveData(
   return Option.isSome(data) ? "cached" : "empty";
 }
 
+const THREAD_SYNC_ERROR = msg("Could not synchronize the thread.");
+const HISTORY_LOAD_ERROR = msg("Could not load earlier activity.");
+const WORK_HISTORY_CHANGED_ERROR = msg("Work history changed. Retry loading it.");
+const THREAD_ERRORS: ReadonlySet<string> = new Set([
+  THREAD_SYNC_ERROR,
+  HISTORY_LOAD_ERROR,
+  WORK_HISTORY_CHANGED_ERROR,
+]);
+
+/**
+ * A thread or history error in the active language. Errors this module wrote translate;
+ * messages from the server or another error stay as they are.
+ * @public
+ */
+export function threadErrorText(error: string, resolve: MFunctionType = mFallback): string {
+  return THREAD_ERRORS.has(error) ? resolve(error) : error;
+}
+
 function formatThreadError(cause: Cause.Cause<unknown>): string {
   const error = Cause.squash(cause);
   return error instanceof Error && error.message.trim().length > 0
     ? error.message
-    : "Could not synchronize the thread.";
+    : THREAD_SYNC_ERROR;
 }
 
 function formatHistoryError(error: unknown): string {
   if (error instanceof Error && error.message.trim().length > 0) {
     return error.message;
   }
-  return "Could not load earlier activity.";
+  return HISTORY_LOAD_ERROR;
 }
 
 // Steers join a running turn; every other user message opens one. The timeline shows every
@@ -732,7 +754,7 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
       latest: EnvironmentThreadState,
     ): ThreadHistoryController.ThreadHistoryLoadEarlierResult =>
       workAnchorId !== undefined && workCursor(latest) !== null
-        ? { _tag: "error", message: "Work history changed. Retry loading it." }
+        ? { _tag: "error", message: WORK_HISTORY_CHANGED_ERROR }
         : { _tag: "noop" };
     if (workAnchorId === undefined)
       yield* patchHistoryMeta((history) =>
@@ -820,12 +842,15 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
                   {
                     ...latest,
                     data: Option.some(
-                      mergeOlderHistoryIntoProjection(
-                        latest.data.value,
-                        page.items,
-                        workAnchorId === undefined
-                          ? undefined
-                          : { anchorId: workAnchorId, nextCursor: page.nextCursor },
+                      mergeOlderSubagentsIntoProjection(
+                        mergeOlderHistoryIntoProjection(
+                          latest.data.value,
+                          page.items,
+                          workAnchorId === undefined
+                            ? undefined
+                            : { anchorId: workAnchorId, nextCursor: page.nextCursor },
+                        ),
+                        page.subagents,
                       ),
                     ),
                     status:
@@ -954,15 +979,21 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
     Effect.forkScoped,
   );
 
+  const foregroundCatchUp = yield* Ref.make(false);
+  const subscribedSession = yield* Ref.make<RpcSession | null>(null);
   const foregroundResubscriptions = Option.match(wakeups, {
     onNone: () => Stream.never,
     onSome: (service) =>
-      service.changes.pipe(Stream.filter(ConnectionWakeups.shouldResubscribeAfterWakeup)),
+      service.changes.pipe(
+        Stream.filter(ConnectionWakeups.shouldResubscribeAfterWakeup),
+        Stream.tap(() => Ref.set(foregroundCatchUp, true)),
+      ),
   });
 
-  // Only the first subscription after a warm live resume keeps the retained
-  // status. A replacement session or foreground resubscribe on the same scope
-  // may have missed events, so those show sync progress until confirmed.
+  // Only the first subscription after a warm live resume, and a foreground
+  // catch-up on the live session, keep the live status: the stream replays what
+  // they missed like any other event. A replacement session or a retry shows
+  // sync progress until confirmed.
   const resumingLive = yield* Ref.make(initialState.status === "live");
   // A cold open tries the socket snapshot once. Any later cold attempt, after a
   // failure or a dropped session, asks HTTP, which also tells a missing thread
@@ -992,9 +1023,7 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
   const backOffAfterDefect = Effect.suspend(() => {
     const retryDelay = subscriptionRetryDelay(THREAD_SUBSCRIPTION_RETRY_DELAY, defectRetries);
     defectRetries += 1;
-    return setStreamError("Could not synchronize the thread.").pipe(
-      Effect.andThen(Effect.sleep(retryDelay)),
-    );
+    return setStreamError(THREAD_SYNC_ERROR).pipe(Effect.andThen(Effect.sleep(retryDelay)));
   });
   const followThread = (): Effect.Effect<
     void,
@@ -1011,8 +1040,17 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
         }
 
         const config = yield* Effect.option(session.initialConfig);
-        yield* Ref.set(awaitingCompletion, true);
-        yield* markSynchronizing;
+        const foreground = yield* Ref.getAndSet(foregroundCatchUp, false);
+        const previousSession = yield* Ref.getAndSet(subscribedSession, session);
+        const catchingUp =
+          foreground &&
+          previousSession === session &&
+          current.status === "live" &&
+          Option.isSome(current.data);
+        if (!catchingUp) {
+          yield* Ref.set(awaitingCompletion, true);
+          yield* markSynchronizing;
+        }
         yield* Ref.set(resumingLive, false);
 
         // A server that pages snapshots sends the same bounded window over the
@@ -1115,7 +1153,7 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
             return yield* Queue.offer(resubscribes, undefined);
           }
           if (!Cause.hasDies(cause)) {
-            return yield* setStreamError("Could not synchronize the thread.");
+            return yield* setStreamError(THREAD_SYNC_ERROR);
           }
           yield* backOffAfterDefect;
           yield* Queue.offer(resubscribes, undefined);

@@ -1,4 +1,7 @@
 import type { ContextMenuItem } from "@t3tools/contracts";
+import { msg } from "gt-react";
+
+import { m } from "./i18n/messages";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -133,6 +136,13 @@ const ICON_PATHS: Record<string, ReadonlyArray<{ tag: string; attrs: Record<stri
         d: "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z",
       },
     },
+  ],
+  network: [
+    { tag: "rect", attrs: { x: "16", y: "16", width: "6", height: "6", rx: "1" } },
+    { tag: "rect", attrs: { x: "2", y: "16", width: "6", height: "6", rx: "1" } },
+    { tag: "rect", attrs: { x: "9", y: "2", width: "6", height: "6", rx: "1" } },
+    { tag: "path", attrs: { d: "M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" } },
+    { tag: "path", attrs: { d: "M12 12V8" } },
   ],
   "folder-tree": [
     {
@@ -395,7 +405,7 @@ export function showContextMenuFallback<T extends string>(
       menu.dataset.level = String(level);
       menu.dataset.contextMenu = "true";
       menu.setAttribute("role", "menu");
-      menu.setAttribute("aria-label", parentTrigger?.textContent ?? "Context menu");
+      menu.setAttribute("aria-label", parentTrigger?.textContent ?? m(msg("Context menu")));
       menu.tabIndex = -1;
 
       const inner = document.createElement("div");

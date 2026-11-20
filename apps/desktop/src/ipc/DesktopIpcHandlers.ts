@@ -1,3 +1,4 @@
+import { startFileDrag } from "./methods/fileDrag.ts";
 import * as Effect from "effect/Effect";
 
 import { receiveProviderAuthCallback, cancelProviderAuthCallback } from "./methods/providerAuth.ts";
@@ -35,6 +36,7 @@ import {
 } from "./methods/updates.ts";
 import {
   getAppBranding,
+  getForkDefaultTheme,
   getLocalEnvironmentBootstraps,
   getLocalEnvironmentBearerToken,
   installRelayTelemetryEnabled,
@@ -99,6 +101,7 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handleSync(takeLegacyLocalStorage);
   yield* ipc.handle(completeLegacyLocalStorage);
   yield* ipc.handleSync(getAppBranding);
+  yield* ipc.handleSync(getForkDefaultTheme);
   yield* installRelayTelemetryEnabled();
   yield* ipc.handleSync(getSystemLocale);
   yield* ipc.handleSync(getPreferredSystemLanguages);
@@ -110,6 +113,7 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(getHostEnvironmentId);
   yield* ipc.handle(getLocalEnvironmentBearerToken);
 
+  yield* ipc.handle(startFileDrag);
   yield* ipc.handle(restartAudioService);
   yield* ipc.handle(getClientSettings);
   yield* ipc.handle(setClientSettings);

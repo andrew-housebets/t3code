@@ -14,19 +14,21 @@ import {
   replaceComposerContextReferences,
 } from "@t3tools/shared/composerContextReferences";
 import { filePreviewKind } from "@t3tools/shared/filePreview";
+import { splitProjectContextBlock } from "@t3tools/shared/projectContextBlock";
 import { imageMimeType } from "@t3tools/shared/image";
 import { videoMimeType } from "@t3tools/shared/video";
+import { msg } from "gt-i18n";
 
 /** The working row while T3 Code's own compaction runs. */
 export const IDLE_COMPACTING_LABELS = {
-  beforeCacheExpires: "Compacting before the cache expires…",
-  onReturn: "Compacting…",
+  beforeCacheExpires: msg("Compacting before the cache expires…"),
+  onReturn: msg("Compacting…"),
 } satisfies Record<OrchestrationV2IdleCompaction, string>;
 
 /** Leads the finished compaction's token counts, in place of "Context compacted". */
 export const IDLE_COMPACTION_TITLES = {
-  beforeCacheExpires: "Context automatically compacted before cache expiry",
-  onReturn: "Context compacted before sending",
+  beforeCacheExpires: msg("Auto-compacted before cache expiry"),
+  onReturn: msg("Context compacted before sending"),
 } satisfies Record<OrchestrationV2IdleCompaction, string>;
 
 const LEGACY_AUTOMATION_PREFIX = /^\[Triggered by schedule task: [^\r\n]+\]\r?\n\r?\n/;
@@ -72,6 +74,8 @@ export function resolveUserMessagePresentation(message: {
   readonly scheduledTaskId: ScheduledTaskId | undefined;
   /** Set when `attribution` is "guest". */
   readonly guestName?: string;
+  /** The project's standing context an agent prepended to a delegated task. */
+  readonly projectContext?: string;
 } {
   if (message.role !== "user") {
     return { text: message.text, attribution: null, scheduledTaskId: undefined };
@@ -102,6 +106,15 @@ export function resolveUserMessagePresentation(message: {
       text: message.text.slice(legacyPrefix[0].length),
       attribution: "automation",
       scheduledTaskId: legacyTaskId === undefined ? undefined : ScheduledTaskId.make(legacyTaskId),
+    };
+  }
+  const delegated = message.createdBy === "agent" ? splitProjectContextBlock(message.text) : null;
+  if (delegated?.context != null) {
+    return {
+      text: delegated.task,
+      attribution: message.creationSource === "server" ? "t3code" : "agent",
+      scheduledTaskId: undefined,
+      projectContext: delegated.context,
     };
   }
   return {

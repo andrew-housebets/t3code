@@ -100,6 +100,10 @@ function emit(value: string, resetGeneration = native.resetGeneration) {
 }
 
 vi.mock("expo", () => ({ requireNativeView: () => NativeView }));
+vi.mock("../lib/useClaudeLook", async () => {
+  const { themeFontFamilies } = await import("../lib/fontFamilies");
+  return { useFontFamilies: () => themeFontFamilies("default"), useClaudeLook: () => false };
+});
 // Vite resolves the platform-neutral module; the race lives in the iOS editor.
 vi.mock("../native/T3ComposerEditor", () => import("../native/T3ComposerEditor.ios"));
 vi.mock("react-native", () => ({ StyleSheet: { flatten: (style: unknown) => style } }));
@@ -116,6 +120,7 @@ vi.mock("expo-file-system", () => ({
 vi.mock("./ui/Dialog", () => ({ alert: vi.fn() }));
 vi.mock("./ui/AppText", () => ({ AppText: ({ children }: { children?: ReactNode }) => children }));
 vi.mock("./ComposerContextSheet", () => ({ ComposerContextSheet: () => null }));
+vi.mock("./AssistantCitationSheet", () => ({ AssistantCitationSheet: () => null }));
 vi.mock("../features/threads/useOpenLinkedThread", () => ({ useOpenLinkedThread: () => vi.fn() }));
 vi.mock("../state/peerLinks", () => ({ useLinkedEnvironments: () => [] }));
 vi.mock("../state/model-mentions", () => ({ useModelMentions: () => [] }));

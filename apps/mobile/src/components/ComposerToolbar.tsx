@@ -306,7 +306,9 @@ export function ComposerActionButton(props: {
             ? "bg-danger"
             : props.disabled
               ? "bg-foreground/12"
-              : "bg-primary",
+              : props.variant === "primary"
+                ? "bg-send"
+                : "bg-primary",
         )}
       >
         {/* Fade the icon as one layer: a translucent tint, or opacity on a Tabler icon (which

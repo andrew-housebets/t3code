@@ -10,7 +10,8 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { ChevronDownIcon } from "lucide-react";
+import { T, useGT, Var } from "gt-react";
+import { ChevronDownIcon, NetworkIcon, TriangleAlertIcon } from "lucide-react";
 import {
   memo,
   useEffect,
@@ -43,6 +44,7 @@ import { cn } from "~/lib/utils";
 import { textDirection } from "~/textDirection";
 import { useClientSettings } from "../../hooks/useSettings";
 import { GuestShareIndicator } from "./GuestShareControls";
+import { ThreadOverviewHeaderButton } from "../overview/ThreadOverviewEntryPoints";
 
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
@@ -55,6 +57,9 @@ interface ChatHeaderProps {
   onOpenThread: (threadId: ThreadId) => void;
   rightPanelOpen: boolean;
   onNewThreadInProject: () => void;
+  onNewCoordinatorInProject: () => void;
+  coordinator: boolean;
+  coordinatorWarning?: string | null | undefined;
   onOpenProjectSettings?: (() => void) | undefined;
   onFindInThread?: ((threadRef: ScopedThreadRef) => void) | undefined;
 }
@@ -80,10 +85,14 @@ export const ChatHeader = memo(function ChatHeader({
   onOpenThread,
   rightPanelOpen,
   onNewThreadInProject,
+  onNewCoordinatorInProject,
+  coordinator,
+  coordinatorWarning,
   onOpenProjectSettings,
   onFindInThread,
 }: ChatHeaderProps) {
-  const activeProjectName = activeProject?.isScratch ? "No project" : activeProject?.title;
+  const gt = useGT();
+  const activeProjectName = activeProject?.isScratch ? gt("No project") : activeProject?.title;
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
   const interfaceFont = useClientSettings((settings) => settings.fontFamilySans);
   const breadcrumbContainerRef = useRef<HTMLDivElement>(null);
@@ -179,7 +188,7 @@ export const ChatHeader = memo(function ChatHeader({
       originalTitle: renamingTitle ?? activeThreadTitle,
     });
     if (resolution.action === "reject-empty") {
-      toastManager.add({ type: "warning", title: "Thread title cannot be empty" });
+      toastManager.add({ type: "warning", title: gt("Thread title cannot be empty") });
       return;
     }
     if (resolution.action === "noop") return;
@@ -191,8 +200,8 @@ export const ChatHeader = memo(function ChatHeader({
         const error = squashAtomCommandFailure(result);
         toastManager.add({
           type: "error",
-          title: "Failed to rename thread",
-          description: error instanceof Error ? error.message : "An error occurred.",
+          title: gt("Failed to rename thread"),
+          description: error instanceof Error ? error.message : gt("An error occurred."),
         });
       }
     });
@@ -224,7 +233,7 @@ export const ChatHeader = memo(function ChatHeader({
       const api = readLocalApi();
       if (!api) return;
       void api.contextMenu
-        .show([{ id: "project-settings", label: "Project settings", icon: "settings" }], {
+        .show([{ id: "project-settings", label: gt("Project settings"), icon: "settings" }], {
           x: event.clientX,
           y: event.clientY,
         })
@@ -234,6 +243,24 @@ export const ChatHeader = memo(function ChatHeader({
       return;
     }
     openMenu({ x: event.clientX, y: event.clientY });
+  };
+  const handleProjectContextMenu = (event: ReactMouseEvent) => {
+    const api = readLocalApi();
+    if (!api) return;
+    event.preventDefault();
+    event.stopPropagation();
+    void api.contextMenu
+      .show(
+        [
+          { id: "new-thread", label: gt("New thread"), icon: "message-square-plus" },
+          { id: "new-coordinator", label: gt("New coordinator"), icon: "network" },
+        ],
+        { x: event.clientX, y: event.clientY },
+      )
+      .then((action) => {
+        if (action === "new-thread") onNewThreadInProject();
+        if (action === "new-coordinator") onNewCoordinatorInProject();
+      });
   };
   const handleRenameKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.nativeEvent.isComposing || event.keyCode === 229) return;
@@ -250,25 +277,26 @@ export const ChatHeader = memo(function ChatHeader({
     <div
       ref={breadcrumbContainerRef}
       className={cn(
-        "flex min-w-0 flex-1 items-center gap-2 sm:gap-3",
+        "@container/chat-header flex min-w-0 flex-1 items-center gap-2 sm:gap-3",
         rightPanelOpen ? "pr-10" : "pr-24",
       )}
       onContextMenu={handleHeaderContextMenu}
     >
       <WorkspaceBreadcrumb
-        ariaLabel="Thread breadcrumb"
+        ariaLabel={gt("Thread breadcrumb")}
         className="flex-1 overflow-clip [overflow-clip-margin:2px]"
       >
         {activeProject ? (
           <>
-            <WorkspaceBreadcrumbItem className="shrink">
+            <WorkspaceBreadcrumbItem className={coordinator ? "shrink-[100]" : "shrink"}>
               <Tooltip>
                 <TooltipTrigger
                   render={
                     <button
                       type="button"
-                      aria-label={`New thread in ${activeProjectName}`}
+                      aria-label={gt("New thread in {project}", { project: activeProjectName })}
                       onClick={onNewThreadInProject}
+                      onContextMenu={handleProjectContextMenu}
                       className="inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1.5 rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                     />
                   }
@@ -281,7 +309,11 @@ export const ChatHeader = memo(function ChatHeader({
                     variant="cap-aligned"
                   />
                 </TooltipTrigger>
-                <TooltipPopup side="top">New thread in {activeProjectName}</TooltipPopup>
+                <TooltipPopup side="top">
+                  <T>
+                    New thread in <Var>{activeProjectName}</Var>
+                  </T>
+                </TooltipPopup>
               </Tooltip>
             </WorkspaceBreadcrumbItem>
             <WorkspaceBreadcrumbSeparator>
@@ -297,7 +329,9 @@ export const ChatHeader = memo(function ChatHeader({
                   render={
                     <button
                       type="button"
-                      aria-label={`Open parent thread: ${parentThreadLink.title}`}
+                      aria-label={gt("Open parent thread: {title}", {
+                        title: parentThreadLink.title,
+                      })}
                       onClick={() => onOpenThread(parentThreadLink.threadId)}
                       className="inline-flex min-w-0 max-w-full cursor-pointer items-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                     />
@@ -323,12 +357,15 @@ export const ChatHeader = memo(function ChatHeader({
             </WorkspaceBreadcrumbSeparator>
           </>
         ) : null}
-        <WorkspaceBreadcrumbItem current className="min-w-10 flex-1">
+        <WorkspaceBreadcrumbItem
+          current
+          className={cn("min-w-10", coordinator ? "flex-auto" : "flex-1")}
+        >
           {renamingTitle !== null ? (
             <input
               autoFocus
               dir="auto"
-              aria-label="Thread title"
+              aria-label={gt("Thread title")}
               className="min-w-0 flex-1 rounded-sm bg-transparent text-sm font-medium text-foreground outline-none ring-1 ring-inset ring-ring/50 focus:ring-ring"
               defaultValue={renamingTitle}
               onBlur={(event) => {
@@ -351,7 +388,7 @@ export const ChatHeader = memo(function ChatHeader({
                 render={
                   <button
                     type="button"
-                    aria-label={`Thread actions for ${activeThreadTitle}`}
+                    aria-label={gt("Thread actions for {title}", { title: activeThreadTitle })}
                     aria-haspopup="menu"
                     onClick={openMenuFromTitle}
                     onDoubleClick={canOperateThread ? handleTitleDoubleClick : undefined}
@@ -386,18 +423,48 @@ export const ChatHeader = memo(function ChatHeader({
               <TooltipPopup side="top">{activeThreadTitle}</TooltipPopup>
             </Tooltip>
           )}
+          {renamingTitle === null && coordinator ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={<Badge data-coordinator-badge variant="secondary" size="sm" />}
+              >
+                <NetworkIcon aria-hidden />
+                <span className="@max-[40rem]/chat-header:sr-only">
+                  {gt("Coordinator", { $context: "badge on a thread that plans and delegates" })}
+                </span>
+              </TooltipTrigger>
+              <TooltipPopup side="top">
+                <T>Plans and delegates. Each task runs in a thread of its own.</T>
+              </TooltipPopup>
+            </Tooltip>
+          ) : null}
+          {renamingTitle === null && coordinator && coordinatorWarning ? (
+            <Tooltip>
+              <TooltipTrigger render={<Badge variant="warning" size="sm" />}>
+                <TriangleAlertIcon aria-hidden />
+                <span className="@max-[40rem]/chat-header:sr-only">{gt("Not read-only")}</span>
+              </TooltipTrigger>
+              <TooltipPopup side="top">{coordinatorWarning}</TooltipPopup>
+            </Tooltip>
+          ) : null}
           {renamingTitle === null && activeThreadLinkOrigin ? (
             <Tooltip>
               <TooltipTrigger render={<Badge variant="info" size="sm" />}>
-                From {activeThreadLinkOrigin}
+                <T>
+                  From <Var>{activeThreadLinkOrigin}</Var>
+                </T>
               </TooltipTrigger>
               <TooltipPopup side="top">
-                Started by an agent on {activeThreadLinkOrigin} through a linked environment.
+                <T>
+                  Started by an agent on <Var>{activeThreadLinkOrigin}</Var> through a linked
+                  environment.
+                </T>
               </TooltipPopup>
             </Tooltip>
           ) : null}
         </WorkspaceBreadcrumbItem>
       </WorkspaceBreadcrumb>
+      {isServerThread ? <ThreadOverviewHeaderButton threadRef={activeThreadRef} /> : null}
       {isServerThread ? <GuestShareIndicator threadRef={activeThreadRef} /> : null}
     </div>
   );

@@ -170,6 +170,32 @@ import {
 } from "./provider.ts";
 import { ProviderInstanceId, ProviderInstanceMutation } from "./providerInstance.ts";
 import {
+  IssueCandidates,
+  IssueCommentInput,
+  IssueCommentsPage,
+  IssueCommentsPageInput,
+  IssueCreateInput,
+  IssueCreateResult,
+  IssueDetail,
+  IssueLinkedThreadsResult,
+  IssueListInput,
+  IssueListResult,
+  IssueOperationError,
+  IssueReactionInput,
+  IssueRef,
+  IssueScopeRef,
+  IssueSetStateInput,
+  IssueTemplateList,
+  IssueTrackerBindProjectInput,
+  IssueTrackerConnectInput,
+  IssueTrackerConnection,
+  IssueTrackerConnectionError,
+  IssueTrackerConnectionList,
+  IssueUnavailableError,
+  IssueUpdateInput,
+  ThreadIssueKey,
+} from "./issue.ts";
+import {
   GuestShareCreateError,
   GuestShareCreateInput,
   GuestShareCreateResult,
@@ -413,6 +439,19 @@ import {
 } from "./sourceControl.ts";
 import { VcsError } from "./vcs.ts";
 import { Project, ProjectMutation, ProjectMutationError } from "./project.ts";
+import {
+  ProjectContextError,
+  ProjectContextFiles,
+  ProjectContextInput,
+  ProjectContextWriteInput,
+  ProjectArtifactListing,
+  ProjectLibraryAddInput,
+  ProjectLibraryAddResult,
+  ProjectLibraryFileExistsError,
+  ProjectLibraryRemoveInput,
+  ProjectModelDefaults,
+  ProjectModelDefaultsWriteInput,
+} from "./projectContext.ts";
 
 export const WS_METHODS = {
   projectsListEntries: "projects.listEntries",
@@ -421,6 +460,13 @@ export const WS_METHODS = {
   projectsSearchContents: "projects.searchContents",
   projectsSearchEntries: "projects.searchEntries",
   projectsWriteFile: "projects.writeFile",
+  projectContextListArtifacts: "projectContext.listArtifacts",
+  projectContextAddLibraryFile: "projectContext.addLibraryFile",
+  projectContextRemoveLibraryFile: "projectContext.removeLibraryFile",
+  projectContextReadModelDefaults: "projectContext.readModelDefaults",
+  projectContextWriteModelDefaults: "projectContext.writeModelDefaults",
+  projectContextRead: "projectContext.read",
+  projectContextWrite: "projectContext.write",
   projectsMutate: "projects.mutate",
   projectsEnsureScratch: "projects.ensureScratch",
   projectsCreateNew: "projects.createNew",
@@ -601,6 +647,22 @@ export const WS_METHODS = {
   pullRequestsRequestReviewers: "pullRequests.requestReviewers",
   pullRequestsLabelCandidates: "pullRequests.labelCandidates",
   pullRequestsSetLabels: "pullRequests.setLabels",
+
+  // Issue tracking methods
+  issuesList: "issues.list",
+  issuesDetail: "issues.detail",
+  issuesComments: "issues.comments",
+  issuesTemplates: "issues.templates",
+  issuesCandidates: "issues.candidates",
+  issuesCreate: "issues.create",
+  issuesComment: "issues.comment",
+  issuesUpdate: "issues.update",
+  issuesSetState: "issues.setState",
+  issuesReact: "issues.react",
+  issuesLinkedThreads: "issues.linkedThreads",
+  issueTrackersList: "issueTrackers.list",
+  issueTrackersConnect: "issueTrackers.connect",
+  issueTrackersBindProject: "issueTrackers.bindProject",
 
   sourceControlLookupRepository: "sourceControl.lookupRepository",
   sourceControlCloneRepository: "sourceControl.cloneRepository",
@@ -1283,6 +1345,108 @@ const WsPullRequestsSetLabelsRpc = Rpc.make(WS_METHODS.pullRequestsSetLabels, {
   error: PullRequestRpcError,
 });
 
+const IssueRpcError = Schema.Union([
+  IssueUnavailableError,
+  IssueOperationError,
+  EnvironmentAuthorizationError,
+]);
+
+const WsIssuesListRpc = Rpc.make(WS_METHODS.issuesList, {
+  payload: IssueListInput,
+  success: IssueListResult,
+  error: IssueRpcError,
+});
+
+const WsIssuesDetailRpc = Rpc.make(WS_METHODS.issuesDetail, {
+  payload: IssueRef,
+  success: IssueDetail,
+  error: IssueRpcError,
+});
+
+/** Older comments, one page at a time, past the cursor the detail handed over. */
+const WsIssuesLinkedThreadsRpc = Rpc.make(WS_METHODS.issuesLinkedThreads, {
+  payload: ThreadIssueKey,
+  success: IssueLinkedThreadsResult,
+  error: IssueRpcError,
+});
+
+const WsIssuesCommentsRpc = Rpc.make(WS_METHODS.issuesComments, {
+  payload: IssueCommentsPageInput,
+  success: IssueCommentsPage,
+  error: IssueRpcError,
+});
+
+const WsIssuesTemplatesRpc = Rpc.make(WS_METHODS.issuesTemplates, {
+  payload: IssueScopeRef,
+  success: IssueTemplateList,
+  error: IssueRpcError,
+});
+
+/** Read when a label or assignee picker opens, not with every issue. */
+const WsIssuesCandidatesRpc = Rpc.make(WS_METHODS.issuesCandidates, {
+  payload: IssueScopeRef,
+  success: IssueCandidates,
+  error: IssueRpcError,
+});
+
+const WsIssuesCreateRpc = Rpc.make(WS_METHODS.issuesCreate, {
+  payload: IssueCreateInput,
+  success: IssueCreateResult,
+  error: IssueRpcError,
+});
+
+const WsIssuesCommentRpc = Rpc.make(WS_METHODS.issuesComment, {
+  payload: IssueCommentInput,
+  success: Schema.Void,
+  error: IssueRpcError,
+});
+
+const WsIssuesUpdateRpc = Rpc.make(WS_METHODS.issuesUpdate, {
+  payload: IssueUpdateInput,
+  success: Schema.Void,
+  error: IssueRpcError,
+});
+
+const WsIssuesSetStateRpc = Rpc.make(WS_METHODS.issuesSetState, {
+  payload: IssueSetStateInput,
+  success: Schema.Void,
+  error: IssueRpcError,
+});
+
+const WsIssuesReactRpc = Rpc.make(WS_METHODS.issuesReact, {
+  payload: IssueReactionInput,
+  success: Schema.Void,
+  error: IssueRpcError,
+});
+
+const IssueTrackerRpcError = Schema.Union([
+  IssueTrackerConnectionError,
+  EnvironmentAuthorizationError,
+]);
+
+/** Every standalone tracker this server ships, each with its connection probed afresh. */
+const WsIssueTrackersListRpc = Rpc.make(WS_METHODS.issueTrackersList, {
+  payload: Schema.Struct({}),
+  success: IssueTrackerConnectionList,
+  error: IssueTrackerRpcError,
+});
+
+/**
+ * Verifies the credential against the tracker before storing it; the result is the new status.
+ * A null token disconnects, which also unbinds every project that pointed at the tracker.
+ */
+const WsIssueTrackersConnectRpc = Rpc.make(WS_METHODS.issueTrackersConnect, {
+  payload: IssueTrackerConnectInput,
+  success: IssueTrackerConnection,
+  error: IssueTrackerRpcError,
+});
+
+const WsIssueTrackersBindProjectRpc = Rpc.make(WS_METHODS.issueTrackersBindProject, {
+  payload: IssueTrackerBindProjectInput,
+  success: Schema.Void,
+  error: IssueTrackerRpcError,
+});
+
 const WsSourceControlLookupRepositoryRpc = Rpc.make(WS_METHODS.sourceControlLookupRepository, {
   payload: SourceControlRepositoryLookupInput,
   success: SourceControlRepositoryInfo,
@@ -1400,6 +1564,54 @@ const WsProjectsReadFileRpc = Rpc.make(WS_METHODS.projectsReadFile, {
   payload: ProjectReadFileInput,
   success: ProjectReadFileResult,
   error: Schema.Union([ProjectReadFileError, EnvironmentAuthorizationError]),
+});
+
+const WsProjectContextListArtifactsRpc = Rpc.make(WS_METHODS.projectContextListArtifacts, {
+  payload: ProjectContextInput,
+  success: ProjectArtifactListing,
+  error: Schema.Union([ProjectContextError, EnvironmentAuthorizationError]),
+});
+
+const WsProjectContextAddLibraryFileRpc = Rpc.make(WS_METHODS.projectContextAddLibraryFile, {
+  payload: ProjectLibraryAddInput,
+  success: ProjectLibraryAddResult,
+  error: Schema.Union([
+    ProjectLibraryFileExistsError,
+    ProjectContextError,
+    EnvironmentAuthorizationError,
+  ]),
+});
+
+const WsProjectContextRemoveLibraryFileRpc = Rpc.make(WS_METHODS.projectContextRemoveLibraryFile, {
+  payload: ProjectLibraryRemoveInput,
+  error: Schema.Union([ProjectContextError, EnvironmentAuthorizationError]),
+});
+
+const WsProjectContextReadModelDefaultsRpc = Rpc.make(WS_METHODS.projectContextReadModelDefaults, {
+  payload: ProjectContextInput,
+  success: ProjectModelDefaults,
+  error: Schema.Union([ProjectContextError, EnvironmentAuthorizationError]),
+});
+
+const WsProjectContextWriteModelDefaultsRpc = Rpc.make(
+  WS_METHODS.projectContextWriteModelDefaults,
+  {
+    payload: ProjectModelDefaultsWriteInput,
+    success: ProjectModelDefaults,
+    error: Schema.Union([ProjectContextError, EnvironmentAuthorizationError]),
+  },
+);
+
+const WsProjectContextReadRpc = Rpc.make(WS_METHODS.projectContextRead, {
+  payload: ProjectContextInput,
+  success: ProjectContextFiles,
+  error: Schema.Union([ProjectContextError, EnvironmentAuthorizationError]),
+});
+
+const WsProjectContextWriteRpc = Rpc.make(WS_METHODS.projectContextWrite, {
+  payload: ProjectContextWriteInput,
+  success: ProjectContextFiles,
+  error: Schema.Union([ProjectContextError, EnvironmentAuthorizationError]),
 });
 
 const WsProjectsWriteFileRpc = Rpc.make(WS_METHODS.projectsWriteFile, {
@@ -2111,6 +2323,20 @@ export class RpcScopeAuthorization extends RpcMiddleware.Service<RpcScopeAuthori
 ) {}
 
 export const WsRpcGroup = RpcGroup.make(
+  WsIssuesListRpc,
+  WsIssuesDetailRpc,
+  WsIssuesCommentsRpc,
+  WsIssuesTemplatesRpc,
+  WsIssuesCandidatesRpc,
+  WsIssuesLinkedThreadsRpc,
+  WsIssuesCreateRpc,
+  WsIssuesCommentRpc,
+  WsIssuesUpdateRpc,
+  WsIssuesSetStateRpc,
+  WsIssuesReactRpc,
+  WsIssueTrackersListRpc,
+  WsIssueTrackersConnectRpc,
+  WsIssueTrackersBindProjectRpc,
   WsGuestShareCreateRpc,
   WsServerProbeRpc,
   WsServerGetConfigRpc,
@@ -2241,6 +2467,13 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsCreateNewRpc,
   WsProjectsCreateFromThreadRpc,
   WsProjectsWriteFileRpc,
+  WsProjectContextListArtifactsRpc,
+  WsProjectContextAddLibraryFileRpc,
+  WsProjectContextRemoveLibraryFileRpc,
+  WsProjectContextReadModelDefaultsRpc,
+  WsProjectContextWriteModelDefaultsRpc,
+  WsProjectContextReadRpc,
+  WsProjectContextWriteRpc,
   WsProjectsMutateRpc,
   WsShellOpenInEditorRpc,
   WsFilesystemBrowseRpc,

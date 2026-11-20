@@ -206,6 +206,7 @@ export function pendingThreadCreationShell(
     snoozedUntil: null,
     snoozedAt: null,
     pinnedAt: null,
+    ...(creation.tags === undefined ? {} : { tags: creation.tags }),
     pinOrderKey: null,
     activeOrderKey: null,
     deletedAt: null,

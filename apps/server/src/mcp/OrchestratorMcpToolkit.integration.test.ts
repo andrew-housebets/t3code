@@ -52,6 +52,7 @@ import * as RemoteDelegation from "../peer/RemoteDelegation.ts";
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as McpHttpServer from "./McpHttpServer.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
+import * as ServerConfig from "../config.ts";
 import * as PeerForwarding from "../peer/PeerForwarding.ts";
 import * as PeerLinkRequests from "../peer/PeerLinkRequests.ts";
 import * as PeerLinks from "../peer/PeerLinks.ts";
@@ -59,6 +60,11 @@ import * as PeerLinks from "../peer/PeerLinks.ts";
 const layerOrchestratorToolkit = McpHttpServer.layerOrchestratorToolkit.pipe(
   Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
   Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
+  Layer.provide(
+    ServerConfig.layerTest(process.cwd(), { prefix: "t3-mcp-orchestrator-toolkit-" }).pipe(
+      Layer.provide(NodeServices.layer),
+    ),
+  ),
 );
 
 /** A task delegated here always has a local child thread. */
@@ -103,8 +109,15 @@ const readDelegatedTaskStatusTranscript = Effect.fn("readDelegatedTaskStatusTran
   function* (followupResult: string) {
     const fs = yield* FileSystem.FileSystem;
     const text = yield* fs.readFileString(NodeURL.fileURLToPath(delegatedTaskStatusTranscriptFile));
+    // The recording names the parent, then the child, after the fixture's titles; this test's differ.
+    const threadNames = ["MCP replay parent", delegatedPrompt];
     const transcript = yield* decodeProviderReplayNdjson(
-      text.replaceAll(queuedFollowupResult, followupResult),
+      text
+        .replaceAll(queuedFollowupResult, followupResult)
+        .replace(
+          /"name":"Replay fixture: delegated_task_status"/g,
+          () => `"name":${JSON.stringify(threadNames.shift())}`,
+        ),
     );
     // The recording ends when the recorder closes the app-server while the parent
     // turn is still open. This test keeps acting as that parent afterwards, and
@@ -271,7 +284,9 @@ describe("orchestrator MCP toolkit", () => {
         Layer.provide(Layer.mock(PeerForwarding.PeerForwarding)({})),
         Layer.provide(Layer.mock(PeerLinkRequests.PeerLinkRequests)({})),
         Layer.provide(Layer.mock(PeerLinks.PeerLinks)({})),
-        Layer.provide(Layer.mock(ProjectService.ProjectService)({})),
+        Layer.provide(
+          Layer.mock(ProjectService.ProjectService)({ workspaceScanDirectory: Effect.succeed }),
+        ),
         Layer.provideMerge(
           SecretRequests.layer.pipe(
             Layer.provide(layerMemorySecretStore),

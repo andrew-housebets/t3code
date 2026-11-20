@@ -17,6 +17,7 @@ import {
   ThreadId,
   TurnItemId,
 } from "@t3tools/contracts";
+import { COORDINATOR_THREAD_TAG } from "@t3tools/shared/coordinatorThread";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -653,6 +654,38 @@ it.effect("a repeated Stop that changes nothing still stops the delegated tasks"
       ["stop-again:first", "stop-again:second"],
     );
   }).pipe(Effect.provide(layerTest)),
+);
+
+it.effect.each(["thread.stop", "run.interrupt"] as const)(
+  "%s on a coordinator leaves its delegated tasks running",
+  (type) =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const sql = yield* SqlClient.SqlClient;
+      const threadId = ThreadId.make(`thread:stop-coordinator:${type}`);
+      yield* createWatchingThread(threadId, 9);
+      yield* orchestrator.dispatch({
+        type: "thread.tag.set",
+        commandId: CommandId.make(`tag:${threadId}`),
+        threadId,
+        tag: COORDINATOR_THREAD_TAG,
+        tagged: true,
+      });
+      yield* send(threadId, "first", "start_immediately");
+      yield* delegate(threadId, `coordinator child ${type}`);
+      const run = (yield* orchestrator.getThreadProjection(threadId)).runs.at(-1)!;
+      const stop = { commandId: CommandId.make(`stop-coordinator:${type}`), threadId };
+      yield* orchestrator.dispatch(
+        type === "thread.stop"
+          ? { ...stop, type }
+          : { ...stop, type, runId: run.id, holdQueue: true },
+      );
+      const walks = yield* sql`
+        SELECT command_id FROM orchestration_v2_effect_outbox
+        WHERE effect_type = 'delegated-tasks.stop' AND thread_id = ${threadId}
+      `;
+      assert.lengthOf(walks, 0);
+    }).pipe(Effect.provide(layerTest)),
 );
 
 it.effect.each(["thread.stop", "run.interrupt"] as const)(

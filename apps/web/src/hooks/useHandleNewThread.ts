@@ -14,6 +14,8 @@ import {
   useComposerDraftStore,
 } from "../composerDraftStore";
 import { newDraftId, newThreadId } from "../lib/utils";
+import { useCoordinatorStore } from "../components/overview/coordinatorStore";
+import { readCoordinatorModelDefault } from "../components/overview/projectModelDefaults.logic";
 import { orderItemsByPreferredIds } from "../components/Sidebar.logic";
 import {
   deriveLogicalProjectKeyFromSettings,
@@ -102,6 +104,8 @@ export function createNewThreadHandler(router: AnyRouter) {
       replace?: boolean;
       /** Composer text for the draft, set before it shows. A draft with user text keeps it. */
       prompt?: string;
+      /** Starts the draft as a coordinator; any other call makes a reused draft a plain one. */
+      coordinator?: boolean;
     },
   ): Promise<{ draftId: DraftId; threadId: ThreadId } | null> => {
     const projects = readProjects();
@@ -122,7 +126,17 @@ export function createNewThreadHandler(router: AnyRouter) {
       setPrompt,
     } = useComposerDraftStore.getState();
     // Never over text the user wrote: a draft can gain some while this awaits.
-    const seedPrompt = (draftId: DraftId) => {
+    // Started before any other await, so the coordinator's model is set before the draft shows.
+    const coordinatorModelRead =
+      options?.coordinator === true
+        ? readCoordinatorModelDefault(projectRef.environmentId, projectRef.projectId)
+        : Promise.resolve(null);
+    const seedDraft = async (draftId: DraftId) => {
+      useCoordinatorStore.getState().markDraft(draftId, options?.coordinator === true);
+      const coordinatorModelSelection = await coordinatorModelRead;
+      if (coordinatorModelSelection !== null) {
+        setModelSelection(draftId, coordinatorModelSelection, { explicit: true });
+      }
       if (options?.prompt === undefined) return;
       if (composerDraftHasUserContent(getComposerDraft(draftId))) return;
       setPrompt(draftId, options.prompt);
@@ -233,6 +247,21 @@ export function createNewThreadHandler(router: AnyRouter) {
     const logicalProjectKey = project
       ? deriveLogicalProjectKeyFromSettings(project, projectGroupingSettings)
       : scopedProjectKey(projectRef);
+    // Another opener (home's own first-project draft) may have reached this project's draft first.
+    // Matches lag the location during a navigation, so compare against the location.
+    const resultIfAbandoned = () => {
+      const draft = getDraftSessionByLogicalProjectKey(logicalProjectKey);
+      if (draft === null || draft.promotedTo != null || readProject(projectRef) === null) {
+        return null;
+      }
+      const draftHref = router.buildLocation({
+        to: "/draft/$draftId",
+        params: { draftId: draft.draftId },
+      }).href;
+      return router.state.location.href === draftHref
+        ? { draftId: draft.draftId, threadId: draft.threadId }
+        : null;
+    };
     const hasBranchOption = options?.branch !== undefined;
     const hasWorktreePathOption = options?.worktreePath !== undefined;
     const hasEnvModeOption = options?.envMode !== undefined;
@@ -274,7 +303,7 @@ export function createNewThreadHandler(router: AnyRouter) {
         } else if (!isDraftAlreadyOpen) {
           const defaultEnvMode = await resolveDefaultEnvMode();
           if (abandonedSinceRequest()) {
-            return null;
+            return resultIfAbandoned();
           }
           // Concurrent calls may change the draft; stale resets, remaps, or navigation could clobber it.
           const routeTargetNow = getCurrentRouteTarget();
@@ -338,7 +367,7 @@ export function createNewThreadHandler(router: AnyRouter) {
           draftId: emptyStoredDraftThread.draftId,
           threadId: emptyStoredDraftThread.threadId,
         };
-        seedPrompt(emptyStoredDraftThread.draftId);
+        await seedDraft(emptyStoredDraftThread.draftId);
         const routeTargetAfterWrites = getCurrentRouteTarget();
         if (
           routeTargetAfterWrites?.kind === "draft" &&
@@ -377,11 +406,11 @@ export function createNewThreadHandler(router: AnyRouter) {
         interactionMode: latestActiveDraftThread.interactionMode,
         ...pickExplicitWorkspaceOptions(options),
       });
-      seedPrompt(currentRouteTarget.draftId);
-      return Promise.resolve({
+      const reused = {
         draftId: currentRouteTarget.draftId,
         threadId: latestActiveDraftThread.threadId,
-      });
+      };
+      return seedDraft(currentRouteTarget.draftId).then(() => reused);
     }
 
     const draftId = newDraftId();
@@ -390,7 +419,7 @@ export function createNewThreadHandler(router: AnyRouter) {
     return (async () => {
       const initialEnvMode = options?.envMode ?? (await resolveDefaultEnvMode());
       if (abandonedSinceRequest()) {
-        return null;
+        return resultIfAbandoned();
       }
       // Reuse drafts registered while awaiting so their pending navigation cannot lose them.
       const racedDraft = getDraftSessionByLogicalProjectKey(logicalProjectKey);
@@ -406,7 +435,7 @@ export function createNewThreadHandler(router: AnyRouter) {
           interactionMode: racedDraft.interactionMode,
           ...pickExplicitWorkspaceOptions(options),
         });
-        seedPrompt(racedDraft.draftId);
+        await seedDraft(racedDraft.draftId);
         await router.navigate({
           to: "/draft/$draftId",
           params: { draftId: racedDraft.draftId },
@@ -434,7 +463,7 @@ export function createNewThreadHandler(router: AnyRouter) {
       if (modelSelectionOverride) {
         setModelSelection(draftId, modelSelectionOverride, { replaceOptions: true });
       }
-      seedPrompt(draftId);
+      await seedDraft(draftId);
       await router.navigate({
         to: "/draft/$draftId",
         params: { draftId },

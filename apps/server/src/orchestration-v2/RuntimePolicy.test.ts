@@ -1,5 +1,10 @@
 import { assert, it } from "@effect/vitest";
 import {
+  COORDINATOR_LOCK_BY_DRIVER,
+  COORDINATOR_UNLOCKED_WARNING,
+  coordinatorProviderWarning,
+} from "@t3tools/shared/coordinatorThread";
+import {
   type ManagedPolicySummary,
   type ModelSelection,
   type OrchestrationV2AppThread,
@@ -17,6 +22,7 @@ import * as Stream from "effect/Stream";
 import type { ProviderInstance } from "@t3tools/provider-core/server/driver";
 import { acpPermissionDisposition } from "@t3tools/provider-acp/server/clientPolicy";
 import * as ServerSettings from "../serverSettings.ts";
+import { BUILT_IN_DRIVERS } from "../provider/builtInDrivers.ts";
 import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.ts";
 import * as ProjectStore from "./ProjectStore.ts";
 import * as RuntimePolicy from "./RuntimePolicy.ts";
@@ -157,6 +163,49 @@ it.layer(layerTest)("RuntimePolicyV2", (it) => {
       assert.equal(yield* modeFor(providerInstanceId, "auto-accept-edits"), "auto-accept-edits");
     }),
   );
+  it.effect(
+    "locks a coordinator's own session to read-only without changing its stored modes",
+    () =>
+      Effect.gen(function* () {
+        const policy = yield* RuntimePolicy.RuntimePolicyV2;
+        const now = yield* DateTime.now;
+        const untagged = makeThread({ now, worktreePath: null });
+        const coordinator = { ...untagged, tags: ["coordinator"] };
+
+        const plain = yield* policy.resolve({ thread: untagged, modelSelection });
+        assert.isUndefined(plain.approvalPolicy);
+        assert.isUndefined(plain.sandboxPolicy);
+        const locked = yield* policy.resolve({ thread: coordinator, modelSelection });
+        assert.equal(locked.runtimeMode, "full-access");
+        assert.equal(locked.interactionMode, "default");
+        assert.equal(locked.approvalPolicy, "never");
+        assert.deepEqual(locked.sandboxPolicy, {
+          type: "readOnly",
+          access: { type: "fullAccess" },
+          networkAccess: false,
+        });
+        assert.equal(coordinator.runtimeMode, "full-access");
+        const write = {
+          sessionId: "session-1",
+          toolCall: { toolCallId: "edit-1", title: "Edit", kind: "edit" as const },
+          options: [{ optionId: "allow", name: "Allow", kind: "allow_once" as const }],
+        };
+        assert.equal(acpPermissionDisposition(locked, write), "deny");
+      }),
+  );
+});
+
+it("decides the coordinator lock for every built-in provider, and warns unless it is enforced", () => {
+  assert.sameMembers(
+    Object.keys(COORDINATOR_LOCK_BY_DRIVER),
+    BUILT_IN_DRIVERS.map((driver) => driver.driverKind),
+  );
+  assert.isNull(coordinatorProviderWarning("claudeAgent"));
+  assert.isNull(coordinatorProviderWarning("codex"));
+  assert.equal(coordinatorProviderWarning("grok"), COORDINATOR_UNLOCKED_WARNING);
+  assert.equal(coordinatorProviderWarning("pi"), COORDINATOR_UNLOCKED_WARNING);
+  assert.equal(coordinatorProviderWarning("someNewDriver"), COORDINATOR_UNLOCKED_WARNING);
+  assert.isNull(coordinatorProviderWarning(undefined));
 });
 
 it.layer(

@@ -3,6 +3,7 @@ import * as NodeOS from "node:os";
 
 import { defaultInclude, defineConfig } from "vite-plus";
 
+import { connectBrandPlugin } from "../../scripts/lib/connect-brand-plugin.ts";
 import { isDesktopRuntimeExternalDependency } from "../../scripts/lib/desktop-external-packages.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 
@@ -67,6 +68,7 @@ export default defineConfig({
   pack: [
     {
       format: "cjs",
+      plugins: [connectBrandPlugin()],
       outDir: "dist-electron",
       dts: false,
       sourcemap: true,
@@ -84,6 +86,7 @@ export default defineConfig({
     },
     {
       format: "cjs",
+      plugins: [connectBrandPlugin()],
       outDir: "dist-electron",
       dts: false,
       sourcemap: true,
@@ -105,6 +108,7 @@ export default defineConfig({
     {
       // boot.cjs requires the other two at runtime, so all three stay separate files.
       format: "cjs",
+      plugins: [connectBrandPlugin()],
       outDir: "dist-electron",
       dts: false,
       sourcemap: true,
@@ -117,6 +121,7 @@ export default defineConfig({
     },
     {
       format: "cjs",
+      plugins: [connectBrandPlugin()],
       outDir: "dist-electron",
       dts: false,
       sourcemap: true,
@@ -130,6 +135,7 @@ export default defineConfig({
     },
     {
       format: "cjs",
+      plugins: [connectBrandPlugin()],
       outDir: "dist-electron",
       dts: false,
       sourcemap: true,
@@ -144,6 +150,7 @@ export default defineConfig({
     },
     {
       format: "cjs",
+      plugins: [connectBrandPlugin()],
       outDir: "dist-electron",
       dts: false,
       sourcemap: true,
@@ -153,6 +160,7 @@ export default defineConfig({
     {
       // Sandboxed preloads must be self-contained, without shared runtime chunks.
       format: "cjs",
+      plugins: [connectBrandPlugin()],
       outDir: "dist-electron",
       dts: false,
       sourcemap: true,
@@ -177,6 +185,7 @@ export default defineConfig({
           setupFiles: [
             "../../packages/shared/src/testing/longTempDir.ts",
             "../../packages/shared/src/testing/providerEnv.ts",
+            "../../packages/shared/src/testing/gitEnv.ts",
           ],
         },
       },
@@ -187,7 +196,10 @@ export default defineConfig({
           include: domTests,
           // Guest preloads run in the page; these tests drive them against a DOM.
           environment: "jsdom",
-          setupFiles: ["../../packages/shared/src/testing/providerEnv.ts"],
+          setupFiles: [
+            "../../packages/shared/src/testing/providerEnv.ts",
+            "../../packages/shared/src/testing/gitEnv.ts",
+          ],
         },
       },
     ],

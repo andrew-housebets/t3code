@@ -184,6 +184,12 @@ describe("omitIdleSubagentShells", () => {
       row("background", "root", {
         pendingBackgroundTasks: [{ kind: "subagent" } as never],
       }),
+      row("reviewing", "root", {
+        pullRequests: [{ source: "agent", snapshot: { state: "open", isDraft: false } } as never],
+      }),
+      row("drafting", "root", {
+        pullRequests: [{ source: "agent", snapshot: { state: "open", isDraft: true } } as never],
+      }),
       // Idle, but a woken grandchild walks through it to reach the root's badge.
       row("middle", "root"),
       row("grandchild", "middle"),
@@ -194,6 +200,7 @@ describe("omitIdleSubagentShells", () => {
       "queued",
       "asking",
       "background",
+      "reviewing",
       "middle",
     ]);
   });

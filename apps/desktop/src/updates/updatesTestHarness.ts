@@ -44,6 +44,7 @@ export interface UpdatesHarnessOptions {
   readonly savedChannel?: DesktopAppSettings.DesktopSettings["updateChannel"];
   /** Adds a WSL backend beside the primary, as on a Windows host with WSL enabled. */
   readonly wslBackend?: boolean;
+  readonly forkIdentity?: DesktopEnvironment.DesktopForkIdentity;
 }
 
 export function makeHarness(options: UpdatesHarnessOptions = {}) {
@@ -189,6 +190,7 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     isPackaged: true,
     resourcesPath: "/missing/resources",
     runningUnderArm64Translation: false,
+    forkIdentity: Option.fromNullishOr(options.forkIdentity),
   }).pipe(
     Layer.provide(
       Layer.mergeAll(

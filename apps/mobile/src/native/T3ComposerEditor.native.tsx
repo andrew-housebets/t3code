@@ -28,7 +28,7 @@ import {
 import { contextChipIconUri, modelChipIcon, modelChipIconUri } from "../lib/contextChipIconSource";
 import { MOBILE_TYPOGRAPHY } from "../lib/typography";
 import { useNativePaste } from "../lib/useNativePaste";
-import { FONT_FAMILIES } from "../lib/fontFamilies";
+import { useFontFamilies } from "../lib/useClaudeLook";
 import { useAppearancePreferences } from "../features/settings/appearance/AppearancePreferencesProvider";
 import { useUniwindTheme } from "../lib/useUniwindTheme";
 import { createNativeComposerTheme } from "../lib/nativeComposerTheme";
@@ -201,7 +201,8 @@ export function ComposerEditor({
         );
         return {
           // Android taps only known token types; a model chip opens like a skill chip.
-          type: token.type === "model" ? "skill" : token.type,
+          type:
+            token.type === "model" ? "skill" : token.type === "citation" ? "context" : token.type,
           source: token.source,
           start: token.start,
           end: token.end,
@@ -217,7 +218,9 @@ export function ComposerEditor({
                 ? model.label
                 : token.type === "context"
                   ? `${token.label}${props.context?.records.some((record) => record.contextId === token.contextId) ? "" : " · unavailable"}`
-                  : basename(token.value),
+                  : token.type === "citation"
+                    ? token.value
+                    : basename(token.value),
           detail: token.type === "context" ? composerChipSizeSuffix(record) : "",
           iconUri: model ? modelChipIconUri(model) : contextChipIconUri(icon),
           tintsIcon: model ? modelChipIcon(model).tintsIcon : icon.kind === "chip",
@@ -307,12 +310,13 @@ export function ComposerEditor({
     [nativeEventSnapshotsRef],
   );
   const { systemColorsActive } = useAppearancePreferences();
+  const fontFamilies = useFontFamilies();
   const themeJson = JSON.stringify({
     ...createNativeComposerTheme(theme),
     selection: Platform.OS === "android" || systemColorsActive ? theme["--color-focus"] : null,
   });
   const resolvedTextStyle = StyleSheet.flatten(textStyle) ?? {};
-  const regularFontFamily = FONT_FAMILIES.regular;
+  const regularFontFamily = fontFamilies.regular;
   return (
     <TextInputWrapper onPaste={handlePaste} style={[{ minHeight: 0 }, style]}>
       <NativeView

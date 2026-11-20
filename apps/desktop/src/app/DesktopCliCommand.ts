@@ -418,7 +418,9 @@ export const make = Effect.gen(function* () {
 
   const installOnFirstLaunch: DesktopCliCommand["Service"]["installOnFirstLaunch"] = Effect.gen(
     function* () {
-      if (!environment.isPackaged || (yield* exists(firstLaunchMarker))) return;
+      // A fork build must not claim the shared `t3` name; its Settings can still install it.
+      if (!environment.isPackaged || Option.isSome(environment.forkIdentity)) return;
+      if (yield* exists(firstLaunchMarker)) return;
       // Mark first so a failed or removed install is never retried behind the user's back.
       yield* fs.writeFileString(firstLaunchMarker, "");
       if (!freshInstall) {

@@ -15,7 +15,13 @@ import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 
 const environmentFor = (
   path: Path.Path,
-  input: { home: string; baseDir: string; platform?: NodeJS.Platform; isPackaged?: boolean },
+  input: {
+    home: string;
+    baseDir: string;
+    platform?: NodeJS.Platform;
+    isPackaged?: boolean;
+    fork?: boolean;
+  },
 ) =>
   DesktopEnvironment.DesktopEnvironment.of({
     path,
@@ -27,6 +33,7 @@ const environmentFor = (
     desktopSettingsPath: path.join(input.baseDir, "userdata", "desktop-settings.json"),
     serverRoot: "/opt/T3 Code/resources/app.asar",
     appImagePath: Option.none(),
+    forkIdentity: input.fork ? Option.some({ appName: "Fork", dataName: "fork" }) : Option.none(),
   } as unknown as DesktopEnvironment.DesktopEnvironment["Service"]);
 
 const commandIn = (
@@ -35,6 +42,7 @@ const commandIn = (
     baseDir?: string;
     platform?: NodeJS.Platform;
     isPackaged?: boolean;
+    fork?: boolean;
     env?: NodeJS.ProcessEnv;
   },
   spawner?: ChildProcessSpawner.ChildProcessSpawner["Service"],
@@ -138,6 +146,17 @@ it.layer(NodeServices.layer)("DesktopCliCommand", (it) => {
       // Removed stays removed: first launch never installs again.
       yield* command.installOnFirstLaunch;
       expect(yield* fs.exists(link)).toBe(false);
+
+      // A fork build never claims the shared t3 name on first launch.
+      const forkHome = yield* fs.makeTempDirectoryScoped();
+      const fork = yield* commandIn({
+        home: forkHome,
+        baseDir: path.join(forkHome, ".fork"),
+        fork: true,
+        env,
+      });
+      yield* fork.installOnFirstLaunch;
+      expect(yield* fs.exists(path.join(forkHome, ".local", "bin", "t3"))).toBe(false);
 
       // Also when first launch was put off (no shell PATH yet) and the user removed it meanwhile.
       const laterHome = yield* fs.makeTempDirectoryScoped();

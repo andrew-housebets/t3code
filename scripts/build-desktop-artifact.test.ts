@@ -30,6 +30,8 @@ import {
   parseWslRuntimeArchiveMembers,
   readWorkspaceConfig,
   createBuildConfig,
+  resolveDesktopForkDefaultTheme,
+  resolveDesktopForkIdentity,
   DESKTOP_FILE_EXCLUSIONS,
   InvalidMacPasskeyRpDomainError,
   InvalidMacPasskeyPublishableKeyError,
@@ -39,6 +41,8 @@ import {
   packWindowsServerAsar,
   preflightWindowsDesktopBuild,
   renderMacPasskeyEntitlements,
+  renderMacRuntimeEntitlements,
+  resolveReproducibleRustEnv,
   resolveMacFileExclusions,
   resolveMacWebAuthnEntitlements,
   resolveMacPasskeySigningConfiguration,
@@ -552,6 +556,119 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         ),
       ),
     ),
+  );
+
+  it.effect("gives fork builds their own identity, their own scheme and no update feed", () =>
+    Effect.gen(function* () {
+      const config = yield* createBuildConfig(
+        "mac",
+        "dmg",
+        "0.0.33",
+        false,
+        false,
+        undefined,
+        undefined,
+      );
+      const mac = config.mac as { protocols: Array<{ schemes: string[] }> };
+
+      assert.equal(config.appId, "com.b4sed.code");
+      assert.equal(config.productName, "B4SED Code");
+      assert.isNull(config.publish);
+      const schemes = mac.protocols.flatMap((protocol) => protocol.schemes);
+      assert.notInclude(schemes, "t3code");
+      assert.include(schemes, "b4sed");
+    }).pipe(
+      Effect.provide(
+        ConfigProvider.layer(
+          ConfigProvider.fromEnv({
+            env: {
+              GITHUB_REPOSITORY: "pingdotgg/t3code",
+              T3CODE_DESKTOP_APP_ID: "com.b4sed.code",
+              T3CODE_APP_NAME: "B4SED Code",
+              T3CODE_DESKTOP_DATA_NAME: "b4sed",
+            },
+          }),
+        ),
+      ),
+    ),
+  );
+
+  it.effect("points a fork build's feed only at its own update repository", () =>
+    Effect.gen(function* () {
+      const config = yield* createBuildConfig(
+        "mac",
+        "dmg",
+        "0.1.9-b4sed.202611181200",
+        false,
+        false,
+        undefined,
+        undefined,
+      );
+      assert.deepStrictEqual(config.publish, [
+        {
+          provider: "github",
+          owner: "andrew-housebets",
+          repo: "b4sed-code-releases",
+          releaseType: "release",
+          channel: "latest",
+        },
+      ]);
+      const fork = yield* resolveDesktopForkIdentity();
+      assert.deepStrictEqual(fork?.updateRepository, {
+        owner: "andrew-housebets",
+        repo: "b4sed-code-releases",
+      });
+    }).pipe(
+      Effect.provide(
+        ConfigProvider.layer(
+          ConfigProvider.fromEnv({
+            env: {
+              GITHUB_REPOSITORY: "pingdotgg/t3code",
+              T3CODE_DESKTOP_APP_ID: "com.b4sed.code",
+              T3CODE_APP_NAME: "B4SED Code",
+              T3CODE_DESKTOP_DATA_NAME: "b4sed",
+              T3CODE_DESKTOP_UPDATE_REPOSITORY: "andrew-housebets/b4sed-code-releases",
+            },
+          }),
+        ),
+      ),
+    ),
+  );
+
+  it.effect("rejects a fork update repository that is not owner/repo", () =>
+    Effect.gen(function* () {
+      const error = yield* resolveDesktopForkIdentity().pipe(Effect.flip);
+      assert.equal(error._tag, "InvalidDesktopForkIdentityError");
+    }).pipe(
+      Effect.provide(
+        ConfigProvider.layer(
+          ConfigProvider.fromEnv({
+            env: {
+              T3CODE_DESKTOP_APP_ID: "com.b4sed.code",
+              T3CODE_APP_NAME: "B4SED Code",
+              T3CODE_DESKTOP_DATA_NAME: "b4sed",
+              T3CODE_DESKTOP_UPDATE_REPOSITORY: "https://github.com/andrew-housebets/x",
+            },
+          }),
+        ),
+      ),
+    ),
+  );
+
+  it.effect("turns a theme file into the stored custom theme fork builds select first", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const themePath = "themes/claude-desktop/t3-code-claude-desktop.json";
+      const file = JSON.parse(
+        yield* fs.readFileString(NodePath.join(import.meta.dirname, "..", themePath)),
+      );
+      const theme = resolveDesktopForkDefaultTheme(file, themePath);
+
+      assert.equal(theme.id, "t3-code-claude");
+      assert.equal(theme.appearance, "dark");
+      assert.deepStrictEqual(Object.keys(theme.variants ?? {}), ["light"]);
+      assert.throws(() => resolveDesktopForkDefaultTheme({ ...file, version: 2 }, themePath));
+    }).pipe(Effect.provide(NodeServices.layer)),
   );
 
   it.effect("names the Electron window class in the Linux desktop entry", () =>
@@ -1595,6 +1712,31 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     assert.match(entitlements, /<key>com\.apple\.security\.device\.audio-input<\/key>\s*<true\/>/u);
     assert.notInclude(entitlements, "keychain-access-groups");
     assert.notInclude(entitlements, "com.apple.developer.web-browser.public-key-credential");
+  });
+
+  it("keeps the builder's home and checkout paths out of Rust binaries", () => {
+    const env = resolveReproducibleRustEnv(
+      { RUSTFLAGS: "-C target-cpu=native", RUSTUP_TOOLCHAIN: "1.98.1" },
+      "/Users/builder",
+      "/Users/builder/src/t3code",
+    );
+    assert.equal(env.RUSTUP_TOOLCHAIN, "1.98.1");
+    assert.deepStrictEqual(env.CARGO_ENCODED_RUSTFLAGS?.split("\x1f"), [
+      "-C",
+      "target-cpu=native",
+      "--remap-path-prefix=/Users/builder=/home",
+      "--remap-path-prefix=/Users/builder/.cargo=/cargo",
+      "--remap-path-prefix=/Users/builder/src/t3code=/t3code",
+    ]);
+  });
+
+  it("signs fork builds with the runtime entitlements and no passkey identity", () => {
+    const entitlements = renderMacRuntimeEntitlements();
+    assert.include(entitlements, "<key>com.apple.security.cs.allow-jit</key>");
+    assert.match(entitlements, /<key>com\.apple\.security\.device\.camera<\/key>\s*<true\/>/u);
+    assert.match(entitlements, /<key>com\.apple\.security\.device\.audio-input<\/key>\s*<true\/>/u);
+    assert.notInclude(entitlements, "com.apple.application-identifier");
+    assert.notInclude(entitlements, "associated-domains");
   });
 
   it("grants in-app browser passkey entitlements only when the provisioning profile does", () => {

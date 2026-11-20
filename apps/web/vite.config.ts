@@ -20,6 +20,7 @@ import {
 
 import { loadRepoEnv } from "../../scripts/lib/public-config";
 import { resolveTaggedSourceVersion } from "../../scripts/lib/tagged-source-version";
+import { connectBrandPlugin } from "../../scripts/lib/connect-brand-plugin";
 import { thirdPartyLicensesPlugin } from "../../scripts/lib/third-party-licenses";
 import { tailwindPlugins } from "./vite/tailwind";
 import { warmBundledDevPlugin } from "./vite/warmBundledDev";
@@ -96,6 +97,7 @@ const unitTestProject = {
     setupFiles: [
       "../../packages/shared/src/testing/longTempDir.ts",
       "../../packages/shared/src/testing/providerEnv.ts",
+      "../../packages/shared/src/testing/gitEnv.ts",
     ],
   },
 } satisfies TestProjectInlineConfiguration;
@@ -123,7 +125,7 @@ const browserTestProject = {
       "fast-xml-parser",
       "entities",
       "dompurify",
-      "heic-to/next",
+      "heic-to/csp",
       "jszip",
       "pdfjs-dist",
       "sql.js",
@@ -316,6 +318,7 @@ export default defineConfig(({ command }) => {
     },
     assetsInclude: ["**/*.wasm"],
     plugins: [
+      connectBrandPlugin(),
       bootstrapTitlePlugin(),
       devCompressionPlugin(),
       chunkCycleGuardPlugin(),

@@ -8,6 +8,15 @@ import {
   CODEX_ADDITIONAL_CONTEXT_VALUE_MAX_BYTES,
 } from "./CodexDeveloperInstructions.ts";
 
+// Two capped files of multibyte text, and one line longer than an entry.
+const LARGE_PROJECT_CONTEXT = [
+  "## Standing instructions",
+  Array.from({ length: 400 }, (_, index) => `- Rule ${index}: résumé 🦊 naïve`).join("\n"),
+  "## Memory index",
+  "🦊".repeat(1_500),
+  "é".repeat(16_000),
+].join("\n\n");
+
 describe("buildCodexAdditionalContext", () => {
   describe.each([
     { model: "custom-model", modelName: "Custom 🦊 Model", reasoningEffort: "xhigh" },
@@ -15,7 +24,12 @@ describe("buildCodexAdditionalContext", () => {
     it.each([undefined, { browser: true, device: true }])(
       "keeps every entry within Codex's per-entry cap with tools %j",
       (availability) => {
-        const context = buildCodexAdditionalContext(runtime, availability);
+        const context = buildCodexAdditionalContext(
+          runtime,
+          availability,
+          true,
+          LARGE_PROJECT_CONTEXT,
+        );
 
         for (const [key, entry] of Object.entries(context)) {
           // Codex counts ceil(UTF-8 bytes / 4) tokens, excluding keys and wrappers.
@@ -28,6 +42,29 @@ describe("buildCodexAdditionalContext", () => {
         }
       },
     );
+  });
+});
+
+describe("Codex coordinator project context", () => {
+  it("carries the whole project context, in order, only for a coordinator", () => {
+    const pieces = (coordinator: boolean) =>
+      Object.entries(
+        buildCodexAdditionalContext(
+          { model: "gpt-6.1-sol" },
+          true,
+          coordinator,
+          LARGE_PROJECT_CONTEXT,
+        ),
+      ).filter(([key]) => key.startsWith("t3_code_project_context_"));
+
+    NodeAssert.ok(pieces(true).length > 1);
+    NodeAssert.equal(
+      pieces(true)
+        .map(([, entry]) => entry.value)
+        .join(""),
+      LARGE_PROJECT_CONTEXT,
+    );
+    NodeAssert.deepEqual(pieces(false), []);
   });
 });
 

@@ -8,6 +8,7 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import * as ProjectEnrichment from "../project/ProjectEnrichmentService.ts";
+import * as ProjectArtifactRecorder from "../projectSidecar/ProjectArtifactRecorder.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as PullRequestService from "../pullRequest/PullRequestService.ts";
 import * as VcsStatusBroadcaster from "../vcs/VcsStatusBroadcaster.ts";
@@ -57,11 +58,14 @@ const make = Effect.gen(function* () {
   const checkpointCapture = yield* CheckpointCapture.CheckpointCaptureServiceV2;
   const projections = yield* ProjectionStore.ProjectionStoreV2;
   const observer = yield* RunFinalizationObserver;
+  const artifactRecorder = yield* ProjectArtifactRecorder.ProjectArtifactRecorder;
   const refreshes = yield* FiberSet.make<void>();
 
   const finalize: RunFinalizationService["Service"]["finalize"] = Effect.fn(
     "RunFinalizationService.finalize",
   )(function* (input) {
+    // Before the capture, so the delegated task's completion follows the artifacts it produced.
+    yield* artifactRecorder.recordRun({ threadId: input.threadId, runId: input.runId });
     yield* checkpointCapture
       .execute(input)
       .pipe(
