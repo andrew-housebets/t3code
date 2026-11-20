@@ -7,6 +7,7 @@ import type {
   ProjectModelDefaults,
 } from "@t3tools/contracts";
 import { createModelSelection, pickModelSelection } from "@t3tools/shared/model";
+import { useGT } from "gt-react";
 
 import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { getCustomModelOptionsByInstance } from "../../modelSelection";
@@ -25,6 +26,7 @@ export function CoordinatorModelSettingsRow(props: {
   readonly environmentId: EnvironmentId;
   readonly projectId: ProjectId;
 }) {
+  const gt = useGT();
   const { environmentId, projectId } = props;
   const saved = useEnvironmentQuery(
     projectEnvironment.readModelDefaults({ environmentId, input: { projectId } }),
@@ -47,7 +49,7 @@ export function CoordinatorModelSettingsRow(props: {
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: "Default model not saved",
+          title: gt("Default model not saved"),
           description: error instanceof Error ? error.message : undefined,
         }),
       );
@@ -62,20 +64,20 @@ export function CoordinatorModelSettingsRow(props: {
     void save({ coordinatorModelSelection: value });
   return (
     <SettingsRow
-      title="Coordinator model"
+      title={gt("Coordinator model")}
       description={
         shown === null
-          ? "No providers available."
+          ? gt("No providers available.")
           : selection === null
-            ? "New coordinators start on the usual default model."
-            : "Model this project's coordinator starts on."
+            ? gt("New coordinators start on the usual default model.")
+            : gt("Model this project's coordinator starts on.")
       }
       control={
         shown === null ? null : (
           <div data-project-model-defaults className="flex min-w-0 flex-wrap items-center gap-1.5">
             {selection !== null && canWrite ? (
               <Button size="xs" variant="ghost-muted" onClick={() => setSelection(null)}>
-                Reset
+                {gt("Reset", { $context: "verb, returns to the default model" })}
               </Button>
             ) : null}
             <ProviderModelPicker
@@ -93,7 +95,9 @@ export function CoordinatorModelSettingsRow(props: {
               )}
               isComposerOwned={false}
               triggerClassName={SETTINGS_PICKER_TRIGGER_CLASSNAME}
-              {...(selection === null ? { triggerLabel: "Default" } : {})}
+              {...(selection === null
+                ? { triggerLabel: gt("Default", { $context: "no model chosen for this project" }) }
+                : {})}
               onInstanceModelChange={(instanceId, model) =>
                 setSelection(pickModelSelection(selection, instanceId, model))
               }

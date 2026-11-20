@@ -6,9 +6,11 @@ import {
   type ScopedThreadRef,
 } from "@t3tools/contracts";
 import { COORDINATOR_THREAD_TAG } from "@t3tools/shared/coordinatorThread";
+import { msg } from "gt-react";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { useRef } from "react";
 
+import { m } from "../../i18n/messages";
 import { newThreadId } from "../../lib/utils";
 import { resolveProjectDefaultProviderModelSelection } from "../../providerInstances";
 import { appAtomRegistry } from "../../rpc/atomRegistry";
@@ -49,6 +51,7 @@ export function useCreateProjectCoordinator() {
       input: {
         threadId,
         projectId,
+        // oxlint-disable-next-line t3code/no-untranslated-copy -- stored on the server as the thread title, shared by every viewer
         title: "Coordinator",
         modelSelection,
         runtimeMode: settings.defaultRuntimeMode,
@@ -66,8 +69,8 @@ export function useCreateProjectCoordinator() {
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: "Thread started without the coordinator role",
-          description: "Choose Make coordinator from the thread menu to try again.",
+          title: m(msg("Thread started without the coordinator role")),
+          description: m(msg("Choose Make coordinator from the thread menu to try again.")),
         }),
       );
     }

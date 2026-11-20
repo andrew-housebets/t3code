@@ -10,6 +10,8 @@ import {
 import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
 import { groupBy } from "effect/Array";
 import * as DateTime from "effect/DateTime";
+import { mFallback, msg } from "gt-i18n";
+import type { MFunctionType } from "gt-i18n/types";
 
 import { threadRuntimeIsActive, type EnvironmentThreadShell } from "./models.ts";
 import { isThreadWorking, threadHasUnseenCompletion } from "./threadInbox.ts";
@@ -27,12 +29,22 @@ export type ThreadOverviewGroup = (typeof THREAD_OVERVIEW_GROUPS)[number];
 
 /** What each client draws for a group; it maps the icon and tone to its own glyphs and colours. */
 export const THREAD_OVERVIEW_GROUP_PRESENTATION = {
-  waiting_on_you: { label: "Waiting on you", icon: "alert", tone: "warning" },
-  ready_for_review: { label: "Ready for review", icon: "pull-request", tone: "info" },
-  working: { label: "Working", icon: "in-progress", tone: "info" },
-  landing: { label: "Landing", icon: "pull-request", tone: "success" },
-  idle: { label: "Idle", icon: "idle", tone: "muted" },
-  resolved: { label: "Resolved", icon: "done", tone: "muted" },
+  waiting_on_you: { label: msg("Waiting on you"), icon: "alert", tone: "warning" },
+  ready_for_review: { label: msg("Ready for review"), icon: "pull-request", tone: "info" },
+  working: {
+    label: msg("Working", { $context: "thread status" }),
+    icon: "in-progress",
+    tone: "info",
+  },
+  landing: {
+    label: msg("Landing", {
+      $context: "thread status, its pull request is approved and about to merge",
+    }),
+    icon: "pull-request",
+    tone: "success",
+  },
+  idle: { label: msg("Idle", { $context: "thread status" }), icon: "idle", tone: "muted" },
+  resolved: { label: msg("Resolved", { $context: "thread status" }), icon: "done", tone: "muted" },
 } as const satisfies Record<
   ThreadOverviewGroup,
   {
@@ -126,14 +138,14 @@ export function groupThreadOverview(
 }
 
 const REQUEST_LINES = {
-  command: "Waiting for you to approve a command",
-  "file-read": "Waiting for you to approve a file read",
-  "file-change": "Waiting for you to approve a file change",
-  permission: "Waiting for your permission",
-  "mcp-elicitation": "A tool is asking you for input",
-  dynamic_tool_call: "Waiting for you to approve a tool call",
-  user_input: "Asked you a question",
-  auth_refresh: "Needs you to sign in again",
+  command: msg("Waiting for you to approve a command"),
+  "file-read": msg("Waiting for you to approve a file read"),
+  "file-change": msg("Waiting for you to approve a file change"),
+  permission: msg("Waiting for your permission"),
+  "mcp-elicitation": msg("A tool is asking you for input"),
+  dynamic_tool_call: msg("Waiting for you to approve a tool call"),
+  user_input: msg("Asked you a question"),
+  auth_refresh: msg("Needs you to sign in again"),
 } satisfies Record<OrchestrationV2PendingRuntimeRequestSummary["kind"], string>;
 
 const LEADING_MARKER = /^(?:#{1,6}\s+|>\s?|[-*+]\s+|\d+[.)]\s+|\[[ xX]\]\s+|(?:->|=>|[→•▸►⇒➜])\s*)/;
@@ -182,14 +194,16 @@ function pullRequestLine(number: number, snapshot: ThreadPullRequestSnapshot): s
 export function threadOverviewStatusLine(
   thread: EnvironmentThreadShell,
   subagent?: Pick<OrchestrationV2Subagent, "progress" | "result"> | undefined,
+  resolve: MFunctionType = mFallback,
 ): string | null {
   const request = thread.source.pendingRuntimeRequest;
-  if (request !== null) return REQUEST_LINES[request.kind];
-  if (thread.hasPendingUserInput) return REQUEST_LINES.user_input;
-  if (thread.hasPendingApprovals) return "Waiting for your approval";
+  if (request !== null) return resolve(REQUEST_LINES[request.kind]);
+  if (thread.hasPendingUserInput) return resolve(REQUEST_LINES.user_input);
+  if (thread.hasPendingApprovals) return resolve(msg("Waiting for your approval"));
   if (thread.pendingSubagentRequest === "approval")
-    return "A subagent is waiting for your approval";
-  if (thread.pendingSubagentRequest === "user_input") return "A subagent asked you a question";
+    return resolve(msg("A subagent is waiting for your approval"));
+  if (thread.pendingSubagentRequest === "user_input")
+    return resolve(msg("A subagent asked you a question"));
   if (thread.latestRun?.status === "failed") {
     const error = firstLine(thread.source.lastError);
     if (error !== null) return error;
@@ -198,7 +212,8 @@ export function threadOverviewStatusLine(
     (candidate) => candidate.snapshot !== null,
   );
   if (link?.snapshot) return pullRequestLine(link.number, link.snapshot);
-  if (thread.latestRun?.status === "interrupted") return "Stopped";
+  if (thread.latestRun?.status === "interrupted")
+    return resolve(msg("Stopped", { $context: "thread status, the run was interrupted" }));
   const latest = thread.source.latestVisibleMessage;
   return (
     firstLine(subagent?.result) ??

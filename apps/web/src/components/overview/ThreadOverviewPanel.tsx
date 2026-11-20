@@ -23,6 +23,7 @@ import {
 import { resolveThreadPullRequestBadge } from "@t3tools/client-runtime/thread-pull-requests";
 import type { OrchestrationV2Subagent, ScopedThreadRef } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
+import { msg, T, useGT, useMessages } from "gt-react";
 import {
   ChevronDownIcon,
   CircleAlertIcon,
@@ -76,9 +77,21 @@ const GROUP_TONES = {
 type RowAction = "resolve" | "reopen" | "stop";
 
 const ROW_ACTIONS = {
-  resolve: { label: "Mark resolved", Icon: CircleCheckIcon, failure: "Could not mark resolved" },
-  reopen: { label: "Reopen", Icon: RotateCcwIcon, failure: "Could not reopen" },
-  stop: { label: "Stop thread", Icon: SquareIcon, failure: "Could not stop the thread" },
+  resolve: {
+    label: msg("Mark resolved"),
+    Icon: CircleCheckIcon,
+    failure: msg("Could not mark resolved"),
+  },
+  reopen: {
+    label: msg("Reopen", { $context: "verb, reopens a resolved thread" }),
+    Icon: RotateCcwIcon,
+    failure: msg("Could not reopen"),
+  },
+  stop: {
+    label: msg("Stop thread"),
+    Icon: SquareIcon,
+    failure: msg("Could not stop the thread"),
+  },
 } satisfies Record<
   RowAction,
   { readonly label: string; readonly Icon: LucideIcon; readonly failure: string }
@@ -93,13 +106,17 @@ const rowActionsOf = (thread: EnvironmentThreadShell): ReadonlyArray<RowAction> 
       : ["resolve"];
 
 function PullRequestBadge({ thread }: { readonly thread: EnvironmentThreadShell }) {
+  const gt = useGT();
   const badge = resolveThreadPullRequestBadge(thread.pullRequests);
   if (badge === null) return null;
   const presentation = PULL_REQUEST_STATE_PRESENTATION[badge.state];
   const count = badge.kind === "stack" ? badge.layers : badge.others + 1;
   return (
     <span
-      aria-label={`${count} ${presentation.label.toLowerCase()} pull request${count === 1 ? "" : "s"}`}
+      aria-label={gt(
+        "{count, plural, one {{count} {state, select, open {open} draft {draft} closed {closed} other {merged}} pull request} other {{count} {state, select, open {open} draft {draft} closed {closed} other {merged}} pull requests}}",
+        { count, state: badge.state },
+      )}
       className={`inline-flex shrink-0 items-center gap-0.5 text-2xs tabular-nums ${presentation.toneClassName}`}
     >
       <presentation.Icon aria-hidden className="size-3" />
@@ -118,14 +135,16 @@ function OverviewRow(props: {
   readonly onOpenArtifacts: () => void;
   readonly onAction: (action: RowAction) => void;
 }) {
+  const gt = useGT();
+  const m = useMessages();
   const { thread, group } = props;
   const { label, icon, tone } = THREAD_OVERVIEW_GROUP_PRESENTATION[group];
   const Icon = GROUP_ICONS[icon];
   const status = thread.source.activityRunStatus ?? thread.source.status;
+  const pill = resolveThreadStatusPill({ thread });
   const line =
-    threadOverviewStatusLine(thread, props.subagent) ??
-    resolveThreadStatusPill({ thread })?.label ??
-    threadRelationshipStatusLabel(status);
+    threadOverviewStatusLine(thread, props.subagent, m) ??
+    (pill ? m(pill.label) : threadRelationshipStatusLabel(status, m));
   const age = formatRelativeTime(thread.updatedAt, props.nowMs)?.value;
   return (
     <li
@@ -138,7 +157,7 @@ function OverviewRow(props: {
         onClick={props.onOpen}
         className="flex w-full min-w-0 items-start gap-2 rounded-md px-3 py-1.5 text-left hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
       >
-        <Icon aria-label={label} className={cn("mt-0.5 size-3.5 shrink-0", GROUP_TONES[tone])} />
+        <Icon aria-label={m(label)} className={cn("mt-0.5 size-3.5 shrink-0", GROUP_TONES[tone])} />
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="flex min-w-0 items-center gap-1.5">
             <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
@@ -170,12 +189,15 @@ function OverviewRow(props: {
           className="mb-1 ml-8"
           onClick={props.onOpenArtifacts}
         >
-          {props.artifactCount} {props.artifactCount === 1 ? "artifact" : "artifacts"}
+          {gt("{count, plural, one {{count} artifact} other {{count} artifacts}}", {
+            count: props.artifactCount,
+          })}
         </Button>
       ) : null}
       <span className="invisible absolute top-1 right-2 flex items-center gap-0.5 group-hover/row:visible group-focus-within/row:visible">
         {rowActionsOf(thread).map((action) => {
-          const { label, Icon: ActionIcon } = ROW_ACTIONS[action];
+          const { Icon: ActionIcon } = ROW_ACTIONS[action];
+          const label = m(ROW_ACTIONS[action].label);
           return (
             <Tooltip key={action}>
               <TooltipTrigger
@@ -208,6 +230,7 @@ function OverviewMessage(props: { readonly children: ReactNode }) {
 }
 
 export function ThreadOverviewPanel({ threadRef }: { readonly threadRef: ScopedThreadRef }) {
+  const m = useMessages();
   const { environmentId, threadId } = threadRef;
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- keeps this thread's family in the shell rows while open, so idle children are listed
   useEffect(
@@ -251,13 +274,15 @@ export function ThreadOverviewPanel({ threadRef }: { readonly threadRef: ScopedT
     if (read === "failed") {
       return (
         <OverviewMessage>
-          <p className="text-xs text-muted-foreground">Could not load delegated threads.</p>
+          <p className="text-xs text-muted-foreground">
+            <T>Could not load delegated threads.</T>
+          </p>
           <Button
             size="sm"
             variant="outline"
             onClick={() => threadFamilies.refresh(appAtomRegistry, environmentId, threadId)}
           >
-            Retry
+            <T>Retry</T>
           </Button>
         </OverviewMessage>
       );
@@ -265,7 +290,7 @@ export function ThreadOverviewPanel({ threadRef }: { readonly threadRef: ScopedT
     return (
       <OverviewMessage>
         <p className="max-w-60 text-xs text-muted-foreground">
-          Threads this thread starts will appear here.
+          <T>Threads this thread starts will appear here.</T>
         </p>
       </OverviewMessage>
     );
@@ -308,7 +333,7 @@ export function ThreadOverviewPanel({ threadRef }: { readonly threadRef: ScopedT
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: ROW_ACTIONS[action].failure,
+          title: m(ROW_ACTIONS[action].failure),
           description: error instanceof Error ? error.message : undefined,
         }),
       );
@@ -340,7 +365,7 @@ export function ThreadOverviewPanel({ threadRef }: { readonly threadRef: ScopedT
                 className="flex w-full items-center gap-1 px-3 py-1.5 text-left text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
               >
                 <span>
-                  {THREAD_OVERVIEW_GROUP_PRESENTATION[group].label} ·{" "}
+                  {m(THREAD_OVERVIEW_GROUP_PRESENTATION[group].label)} ·{" "}
                   <span className="tabular-nums">{threads.length}</span>
                 </span>
                 <ChevronDownIcon

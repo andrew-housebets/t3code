@@ -5,10 +5,11 @@ import {
   withKey,
   type KeySet,
 } from "@t3tools/client-runtime/state/coordinator-ui";
+import { runAtomCommand } from "@t3tools/client-runtime/state/runtime";
 import { AsyncResult } from "effect/reactivity";
 
 import { appAtomRegistry } from "./atom-registry";
-import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "./preferences";
+import { mobilePreferencesAtom, saveMobilePreferences } from "./preferences";
 
 export const COORDINATOR_DRAFT_PLACEHOLDER = "Ask a question or start a task...";
 
@@ -30,7 +31,7 @@ export function isCoordinatorDraft(draftKey: string | null): boolean {
 // ponytail: keys of sent or discarded drafts stay until preferences are cleared; prune by live draft keys if it grows.
 export function setCoordinatorDraft(draftKey: string, coordinator: boolean) {
   if (isCoordinatorDraft(draftKey) === coordinator) return;
-  appAtomRegistry.set(updateMobilePreferencesAtom, {
+  void runAtomCommand(appAtomRegistry, saveMobilePreferences, {
     transform: (current) => ({
       coordinatorDraftKeys: withKey(
         persistedObjectOf(current.coordinatorDraftKeys),

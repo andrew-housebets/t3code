@@ -1,6 +1,7 @@
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { resolveAssetUrl } from "@t3tools/client-runtime/state/assets";
 import { runAttachmentUploadCycle } from "@t3tools/client-runtime/state/attachments";
+import { attachmentUploadError } from "@t3tools/client-runtime/state/attachment-uploads";
 import { runAtomCommand, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import {
   PROJECT_LIBRARY_UPLOAD_MAX_BYTES,
@@ -10,9 +11,12 @@ import {
   type ScopedThreadRef,
   type ThreadId,
 } from "@t3tools/contracts";
+import * as Effect from "effect/Effect";
+import { msg } from "gt-react";
 import { htmlRenderFileName } from "@t3tools/shared/htmlRender";
 
 import { requestConfirmDialog } from "../../confirmDialog";
+import { m } from "../../i18n/messages";
 import { appAtomRegistry } from "../../rpc/atomRegistry";
 import { attachmentEnvironment } from "../../state/attachments";
 import { readPreparedConnection } from "../../state/session";
@@ -67,20 +71,21 @@ const confirm = async (message: string) =>
 
 const failureMessage = (error: unknown) => (error instanceof Error ? error.message : undefined);
 
-const uploadBytes = (url: string, file: File) => {
-  const controller = new AbortController();
-  return {
-    done: fetch(url, {
-      method: "POST",
-      body: file,
-      headers: { "Content-Type": file.type || "application/octet-stream" },
-      signal: controller.signal,
-    }).then((response) => {
-      if (!response.ok) throw new Error(`Upload rejected (${response.status})`);
-    }),
-    abort: () => controller.abort(),
-  };
-};
+async function postFile(url: string, file: File, signal: AbortSignal): Promise<void> {
+  const response = await fetch(url, {
+    method: "POST",
+    body: file,
+    headers: { "Content-Type": file.type || "application/octet-stream" },
+    signal,
+  });
+  if (!response.ok) throw new Error(`Upload rejected (${response.status})`);
+}
+
+const uploadBytes = (url: string, file: File) =>
+  Effect.tryPromise({
+    try: (signal) => postFile(url, file, signal),
+    catch: attachmentUploadError,
+  });
 
 /** Uploads each file, then moves it into the Library; a name already there asks to replace it. */
 export async function addFilesToLibrary(
@@ -91,31 +96,41 @@ export async function addFilesToLibrary(
   for (const file of files) {
     const fail = (description?: string) =>
       toastManager.add(
-        stackedThreadToast({ type: "error", title: `Could not add ${file.name}`, description }),
+        stackedThreadToast({
+          type: "error",
+          title: m(msg("Could not add {fileName}", { fileName: file.name })),
+          description,
+        }),
       );
     if (file.size === 0) {
-      fail("The file is empty.");
+      fail(m(msg("The file is empty.")));
       continue;
     }
     if (file.size > PROJECT_LIBRARY_UPLOAD_MAX_BYTES) {
       fail(
-        `Files added to the Library can be at most ${PROJECT_LIBRARY_UPLOAD_MAX_BYTES / 1024 / 1024} MB.`,
+        m(
+          msg("Files added to the Library can be at most {size} MB.", {
+            size: PROJECT_LIBRARY_UPLOAD_MAX_BYTES / 1024 / 1024,
+          }),
+        ),
       );
       continue;
     }
     const mimeType = file.type || "application/octet-stream";
-    const uploaded = await runAttachmentUploadCycle({
-      registry: appAtomRegistry,
-      createUploadUrl: attachmentEnvironment.createUploadUrl,
-      remove: attachmentEnvironment.remove,
-      environmentId,
-      upload: { type: "file", name: file.name, mimeType, sizeBytes: file.size },
-      resolveUploadUrl: (relativeUrl) => {
-        const connection = readPreparedConnection(environmentId);
-        return connection ? resolveAssetUrl(connection.httpBaseUrl, relativeUrl) : null;
-      },
-      transport: (url) => uploadBytes(url, file),
-    });
+    const uploaded = await Effect.runPromise(
+      runAttachmentUploadCycle({
+        registry: appAtomRegistry,
+        createUploadUrl: attachmentEnvironment.createUploadUrl,
+        remove: attachmentEnvironment.remove,
+        environmentId,
+        upload: { type: "file", name: file.name, mimeType, sizeBytes: file.size },
+        resolveUploadUrl: (relativeUrl) => {
+          const connection = readPreparedConnection(environmentId);
+          return connection ? resolveAssetUrl(connection.httpBaseUrl, relativeUrl) : null;
+        },
+        transport: (url) => uploadBytes(url, file),
+      }),
+    );
     if (uploaded.status !== "uploaded") {
       if (uploaded.status === "failed") fail(failureMessage(uploaded.error));
       continue;
@@ -138,7 +153,10 @@ export async function addFilesToLibrary(
         error !== null &&
         "_tag" in error &&
         error._tag === "ProjectLibraryFileExistsError";
-      if (exists && (await confirm(`Replace ${file.name} in the Library?`)))
+      if (
+        exists &&
+        (await confirm(m(msg("Replace {fileName} in the Library?", { fileName: file.name }))))
+      )
         result = await add(true);
     }
     if (result._tag === "Failure") fail(failureMessage(squashAtomCommandFailure(result)));
@@ -150,7 +168,8 @@ export async function removeFromLibrary(
   projectId: ProjectId,
   path: string,
 ): Promise<boolean> {
-  if (!(await confirm(`Remove ${path} from the Library?\nThe file is deleted.`))) return false;
+  if (!(await confirm(m(msg("Remove {path} from the Library?\nThe file is deleted.", { path })))))
+    return false;
   const result = await runAtomCommand(
     appAtomRegistry,
     projectEnvironment.removeLibraryFile,
@@ -161,7 +180,7 @@ export async function removeFromLibrary(
   toastManager.add(
     stackedThreadToast({
       type: "error",
-      title: `Could not remove ${path}`,
+      title: m(msg("Could not remove {path}", { path })),
       description: failureMessage(squashAtomCommandFailure(result)),
     }),
   );

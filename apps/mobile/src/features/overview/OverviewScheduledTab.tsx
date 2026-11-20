@@ -1,5 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import { T, useGT, useLocale, useMessages } from "gt-react-native";
 import { ScrollView, View } from "react-native";
 
 import { SymbolView } from "../../components/ui/AppSymbol";
@@ -26,12 +27,15 @@ export function OverviewScheduledTab({ target }: { readonly target: OverviewTarg
     reportFailure: false,
   });
   const nowMs = useNowMinuteMs();
+  const gt = useGT();
+  const m = useMessages();
+  const locale = useLocale();
   const projectTasks = tasks.data?.tasks.filter((task) => task.projectId === target.projectId);
 
   if (projectTasks === undefined) {
     return (
       <Text className="px-8 pt-10 text-center text-sm text-foreground-muted">
-        {tasks.error ?? "Loading tasks…"}
+        {tasks.error ?? gt("Loading tasks…")}
       </Text>
     );
   }
@@ -42,10 +46,10 @@ export function OverviewScheduledTab({ target }: { readonly target: OverviewTarg
           <SymbolView name="clock" size={24} tintColorClassName="accent-icon-muted" />
         </View>
         <Text className="text-center text-base text-foreground-secondary">
-          No scheduled tasks yet
+          <T>No scheduled tasks yet</T>
         </Text>
         <Text className="text-center text-sm text-foreground-muted">
-          Ask in the project conversation to put recurring work on a schedule.
+          <T>Ask in the project conversation to put recurring work on a schedule.</T>
         </Text>
       </View>
     );
@@ -63,12 +67,16 @@ export function OverviewScheduledTab({ target }: { readonly target: OverviewTarg
               {task.title}
             </Text>
             <Text className="text-sm text-foreground-muted" numberOfLines={2}>
-              {describeSchedule(task, tasks.data?.timeZone)}
               {!task.enabled
-                ? " · Paused"
+                ? gt("{schedule} · Paused", {
+                    schedule: describeSchedule(task, tasks.data?.timeZone, m, locale),
+                  })
                 : task.nextRunAt
-                  ? ` · ${formatNextScheduledTaskRun(task.nextRunAt, nowMs)}`
-                  : ""}
+                  ? gt("{schedule} · {nextRun}", {
+                      schedule: describeSchedule(task, tasks.data?.timeZone, m, locale),
+                      nextRun: formatNextScheduledTaskRun(task.nextRunAt, nowMs, m),
+                    })
+                  : describeSchedule(task, tasks.data?.timeZone, m, locale)}
             </Text>
           </View>
           <ThemedSwitch
@@ -80,7 +88,7 @@ export function OverviewScheduledTab({ target }: { readonly target: OverviewTarg
                 if (result._tag === "Failure") {
                   const error = squashAtomCommandFailure(result);
                   Dialog.alert(
-                    "Could not update task",
+                    gt("Could not update task"),
                     error instanceof Error ? error.message : undefined,
                   );
                 }

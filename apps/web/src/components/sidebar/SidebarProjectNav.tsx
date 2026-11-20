@@ -1,5 +1,6 @@
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import type { PinnedProject } from "@t3tools/client-runtime/state/pinned-projects";
+import { useGT } from "gt-react";
 import { CalendarClockIcon, LibraryIcon, type LucideIcon } from "lucide-react";
 
 import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
@@ -27,19 +28,20 @@ export function SidebarNavRows(props: {
   onOpenArtifacts: (() => void) | null;
   onOpenScheduled: () => void;
 }) {
+  const gt = useGT();
   return (
-    <nav data-sidebar-nav aria-label="Project pages" className="mt-1 flex flex-col gap-px">
+    <nav data-sidebar-nav aria-label={gt("Project pages")} className="mt-1 flex flex-col gap-px">
       {props.onOpenArtifacts === null ? null : (
         <NavRow
           row="artifacts"
-          label="Artifacts"
+          label={gt("Artifacts")}
           Icon={LibraryIcon}
           onClick={props.onOpenArtifacts}
         />
       )}
       <NavRow
         row="scheduled"
-        label="Scheduled"
+        label={gt("Scheduled", { $context: "sidebar link to scheduled tasks" })}
         Icon={CalendarClockIcon}
         onClick={props.onOpenScheduled}
       />
@@ -53,6 +55,7 @@ export function SidebarPinnedProjects(props: {
   onOpen: (entry: PinnedProject<SidebarProjectSnapshot>) => void;
   onContextMenu: (group: SidebarProjectSnapshot, position: { x: number; y: number }) => void;
 }) {
+  const gt = useGT();
   if (props.entries.length === 0) return null;
   return (
     <section
@@ -65,7 +68,7 @@ export function SidebarPinnedProjects(props: {
         data-sidebar-pinned-projects-label
         className="px-2 pt-1 pb-1 text-xs font-medium text-sidebar-muted-foreground"
       >
-        Pinned
+        {gt("Pinned", { $context: "sidebar section" })}
       </h2>
       {props.entries.map((entry) => {
         const { group, coordinator, needsYou } = entry;
@@ -89,7 +92,9 @@ export function SidebarPinnedProjects(props: {
             <span className="min-w-0 flex-1 truncate">{group.displayName}</span>
             {needsYou ? (
               <span className="size-1.5 shrink-0 rounded-full bg-warning">
-                <span className="sr-only">, needs you</span>
+                <span className="sr-only">
+                  {gt(", needs you", { $context: "screen reader suffix after a project name" })}
+                </span>
               </span>
             ) : null}
           </button>

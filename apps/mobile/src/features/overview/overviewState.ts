@@ -25,11 +25,12 @@ import type {
   ThreadId,
 } from "@t3tools/contracts";
 import { isCoordinatorThread } from "@t3tools/shared/coordinatorThread";
+import { runAtomCommand } from "@t3tools/client-runtime/state/runtime";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { useEffect } from "react";
 
 import { appAtomRegistry } from "../../state/atom-registry";
-import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
+import { mobilePreferencesAtom, saveMobilePreferences } from "../../state/preferences";
 import {
   environmentThreadDetails,
   environmentThreadShells,
@@ -131,7 +132,7 @@ export function toggleThreadOverviewGroupCollapse(
   group: ThreadOverviewGroup,
 ) {
   const key = threadKey(ref);
-  appAtomRegistry.set(updateMobilePreferencesAtom, {
+  void runAtomCommand(appAtomRegistry, saveMobilePreferences, {
     transform: (current) => ({
       overviewCollapsedGroups: {
         ...current.overviewCollapsedGroups,

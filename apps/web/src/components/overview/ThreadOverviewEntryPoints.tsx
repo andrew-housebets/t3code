@@ -7,6 +7,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import { coordinatorToggleOf } from "@t3tools/shared/coordinatorThread";
+import { msg, T, useGT, Var } from "gt-react";
 import {
   BotIcon,
   CalendarClockIcon,
@@ -17,6 +18,7 @@ import {
 } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 
+import { m, type MessageResolver } from "../../i18n/messages";
 import { useRightPanelStore } from "../../rightPanelStore";
 import { appAtomRegistry } from "../../rpc/atomRegistry";
 import { threadFamilies } from "../../state/threads";
@@ -33,12 +35,13 @@ const openOverview = (threadRef: ScopedThreadRef) =>
 
 export function threadOverviewPaletteItem(
   thread: Pick<EnvironmentThreadShell, "environmentId" | "id">,
+  resolve: MessageResolver = m,
 ): CommandPaletteActionItem {
   return {
     kind: "action",
     value: "action:open-thread-overview",
     searchTerms: ["overview", "threads", "delegated", "subagents", "coordinator"],
-    title: "Show threads",
+    title: resolve(msg("Show threads")),
     icon: <BotIcon className={ITEM_ICON_CLASS} />,
     run: async () => openOverview(scopeThreadRef(thread.environmentId, thread.id)),
   };
@@ -48,32 +51,34 @@ const PROJECT_PANELS = {
   library: {
     value: "action:open-project-library",
     searchTerms: ["library", "files", "docs", "reports", "deliverables", "project"],
-    title: "Show project Library",
+    title: msg("Show project Library"),
     Icon: LibraryIcon,
   },
   scheduled: {
     value: "action:open-project-scheduled",
     searchTerms: ["scheduled", "tasks", "recurring", "automation", "cron", "project"],
-    title: "Show project scheduled tasks",
+    title: msg("Show project scheduled tasks"),
     Icon: CalendarClockIcon,
   },
   "project-instructions": {
     value: "action:open-project-instructions",
     searchTerms: ["project instructions", "memory", "standing", "context", "coordinator"],
-    title: "Edit project instructions",
+    title: msg("Edit project instructions"),
     Icon: ScrollTextIcon,
   },
 } as const;
 
 export function projectPanelPaletteItems(
   thread: Pick<EnvironmentThreadShell, "environmentId" | "id">,
+  resolve: MessageResolver = m,
 ): ReadonlyArray<CommandPaletteActionItem> {
   const ref = scopeThreadRef(thread.environmentId, thread.id);
   return (Object.keys(PROJECT_PANELS) as Array<keyof typeof PROJECT_PANELS>).map((kind) => {
-    const { Icon, ...item } = PROJECT_PANELS[kind];
+    const { Icon, title, ...item } = PROJECT_PANELS[kind];
     return {
       kind: "action",
       ...item,
+      title: resolve(title),
       icon: <Icon className={ITEM_ICON_CLASS} />,
       run: async () => useRightPanelStore.getState().open(ref, kind),
     };
@@ -84,13 +89,18 @@ export function newCoordinatorPaletteItem(
   projectTitle: ReactNode,
   searchTitle: string,
   run: () => Promise<void>,
+  resolve: MessageResolver = m,
 ): CommandPaletteActionItem {
   return {
     kind: "action",
     value: "action:new-coordinator",
     searchTerms: ["new coordinator", "coordinate", "delegate", "orchestrate", "project"],
-    title: <>New coordinator in {projectTitle}</>,
-    searchTitle: `New coordinator in ${searchTitle}`,
+    title: (
+      <T>
+        New coordinator in <Var>{projectTitle}</Var>
+      </T>
+    ),
+    searchTitle: resolve(msg("New coordinator in {project}", { project: searchTitle })),
     icon: <NetworkIcon className={ITEM_ICON_CLASS} />,
     run,
   };
@@ -102,6 +112,7 @@ export function coordinatorTogglePaletteItem(
     ref: ScopedThreadRef,
     coordinator: boolean,
   ) => Promise<AtomCommandResult<unknown, unknown>>,
+  resolve: MessageResolver = m,
 ): CommandPaletteActionItem | null {
   const toggle = coordinatorToggleOf(thread.source);
   if (toggle === undefined) return null;
@@ -110,7 +121,7 @@ export function coordinatorTogglePaletteItem(
     kind: "action",
     value: make ? "action:make-coordinator" : "action:stop-coordinating",
     searchTerms: ["coordinator", "coordinate", "delegate", "orchestrate"],
-    title: make ? "Make coordinator" : "Stop coordinating",
+    title: make ? resolve(msg("Make coordinator")) : resolve(msg("Stop coordinating")),
     icon: <NetworkIcon className={ITEM_ICON_CLASS} />,
     run: async () => {
       const result = await setCoordinator(scopeThreadRef(thread.environmentId, thread.id), make);
@@ -119,8 +130,8 @@ export function coordinatorTogglePaletteItem(
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Failed to change coordinator",
-            description: error instanceof Error ? error.message : "An error occurred.",
+            title: m(msg("Failed to change coordinator")),
+            description: error instanceof Error ? error.message : m(msg("An error occurred.")),
           }),
         );
       }
@@ -129,6 +140,7 @@ export function coordinatorTogglePaletteItem(
 }
 
 export function ThreadOverviewHeaderButton({ threadRef }: { readonly threadRef: ScopedThreadRef }) {
+  const gt = useGT();
   const state = useThreadOverviewHeaderState(threadRef);
   const coordinator = useIsCoordinatorThread(threadRef);
   const { environmentId, threadId } = threadRef;
@@ -151,19 +163,19 @@ export function ThreadOverviewHeaderButton({ threadRef }: { readonly threadRef: 
             <Button
               size="xs"
               variant="ghost-muted"
-              aria-label={waiting ? "Threads, needs you" : "Threads"}
+              aria-label={waiting ? gt("Threads, needs you") : gt("Threads")}
               onClick={() => openOverview(threadRef)}
             />
           }
         >
           <BotIcon aria-hidden />
-          <span className="@max-[48rem]/chat-header:sr-only">Threads</span>
+          <span className="@max-[48rem]/chat-header:sr-only">{gt("Threads")}</span>
           {waiting ? <span aria-hidden className="size-1.5 rounded-full bg-warning" /> : null}
         </TooltipTrigger>
         <TooltipPopup side="top">
           {waiting
-            ? "Something here needs you: a question, a failure or a review"
-            : "Threads this thread started"}
+            ? gt("Something here needs you: a question, a failure or a review")
+            : gt("Threads this thread started")}
         </TooltipPopup>
       </Tooltip>
       <Tooltip>
@@ -172,32 +184,40 @@ export function ThreadOverviewHeaderButton({ threadRef }: { readonly threadRef: 
             <Button
               size="xs"
               variant="ghost-muted"
-              aria-label="Library"
+              aria-label={gt("Library", {
+                $context: "panel of files a project's threads produced",
+              })}
               onClick={() => useRightPanelStore.getState().open(threadRef, "library")}
             />
           }
         >
           <LibraryIcon aria-hidden />
-          <span className="@max-[48rem]/chat-header:sr-only">Library</span>
+          <span className="@max-[48rem]/chat-header:sr-only">
+            {gt("Library", { $context: "panel of files a project's threads produced" })}
+          </span>
         </TooltipTrigger>
-        <TooltipPopup side="top">Files and docs this project's threads produced</TooltipPopup>
+        <TooltipPopup side="top">
+          <T>Files and docs this project's threads produced</T>
+        </TooltipPopup>
       </Tooltip>
       <Menu>
         <MenuTrigger
-          render={<Button size="icon-xs" variant="ghost-muted" aria-label="More project panels" />}
+          render={
+            <Button size="icon-xs" variant="ghost-muted" aria-label={gt("More project panels")} />
+          }
         >
           <EllipsisIcon aria-hidden />
         </MenuTrigger>
         <MenuPopup align="end">
           <MenuItem onClick={() => useRightPanelStore.getState().open(threadRef, "scheduled")}>
             <CalendarClockIcon />
-            Scheduled tasks
+            <T>Scheduled tasks</T>
           </MenuItem>
           <MenuItem
             onClick={() => useRightPanelStore.getState().open(threadRef, "project-instructions")}
           >
             <ScrollTextIcon />
-            Project instructions
+            <T>Project instructions</T>
           </MenuItem>
         </MenuPopup>
       </Menu>

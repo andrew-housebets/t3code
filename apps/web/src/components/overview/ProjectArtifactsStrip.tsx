@@ -1,4 +1,5 @@
 import type { ProjectArtifact } from "@t3tools/contracts";
+import { T } from "gt-react";
 import { FileTextIcon, GlobeIcon } from "lucide-react";
 
 import { formatRelativeTime } from "../../timestampFormat";
@@ -18,7 +19,7 @@ export function ProjectArtifactsStrip(props: {
         id="thread-overview-artifacts"
         className="m-0 py-1.5 text-xs font-medium text-muted-foreground"
       >
-        Artifacts
+        <T>Artifacts</T>
       </h3>
       <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] gap-2 p-0">
         {props.artifacts.map((artifact) => {
@@ -57,7 +58,7 @@ export function ProjectArtifactsStrip(props: {
             onClick={props.onViewAll}
             className={`${TILE} w-full items-center justify-center text-xs text-muted-foreground`}
           >
-            View all
+            <T>View all</T>
           </button>
         </li>
       </ul>

@@ -1,6 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { ProjectArtifact, ScopedThreadRef } from "@t3tools/contracts";
+import { T, useGT } from "gt-react";
 import { ChevronRightIcon, GlobeIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { useRef, useState } from "react";
 
@@ -30,13 +31,17 @@ function ArtifactOwner(props: {
   readonly threadRef: ScopedThreadRef;
   readonly artifact: ProjectArtifact | undefined;
 }) {
+  const gt = useGT();
   const { artifact } = props;
   const owner = useQuietThreadShell(
     artifact?.threadId == null
       ? null
       : scopeThreadRef(props.threadRef.environmentId, artifact.threadId),
   );
-  const label = artifact?.source === "upload" ? "You" : (owner?.title ?? "");
+  const label =
+    artifact?.source === "upload"
+      ? gt("You", { $context: "owner of a file the user added" })
+      : (owner?.title ?? "");
   return <span className="block max-w-40 truncate text-muted-foreground">{label}</span>;
 }
 
@@ -49,6 +54,7 @@ function PanelMessage(props: { readonly children: React.ReactNode }) {
 }
 
 export function ProjectLibraryPanel({ threadRef }: { readonly threadRef: ScopedThreadRef }) {
+  const gt = useGT();
   const library = useProjectArtifacts(threadRef);
   const projectId = useQuietThreadShell(threadRef)?.projectId ?? null;
   const { environmentId } = threadRef;
@@ -72,7 +78,9 @@ export function ProjectLibraryPanel({ threadRef }: { readonly threadRef: ScopedT
   };
   const header = (
     <div className="flex items-center gap-2 border-b px-3 py-1.5">
-      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">Library</span>
+      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+        {gt("Library", { $context: "panel of files a project's threads produced" })}
+      </span>
       <input
         ref={fileInput}
         type="file"
@@ -91,7 +99,7 @@ export function ProjectLibraryPanel({ threadRef }: { readonly threadRef: ScopedT
         onClick={() => fileInput.current?.click()}
       >
         {adding ? <Spinner size="sm" /> : <PlusIcon aria-hidden />}
-        Add
+        {gt("Add", { $context: "verb, adds files to the Library" })}
       </Button>
     </div>
   );
@@ -116,7 +124,7 @@ export function ProjectLibraryPanel({ threadRef }: { readonly threadRef: ScopedT
           <>
             <p className="text-xs text-muted-foreground">{library.error}</p>
             <Button size="sm" variant="outline" onClick={() => library.refresh()}>
-              Retry
+              <T>Retry</T>
             </Button>
           </>
         )}
@@ -165,7 +173,7 @@ export function ProjectLibraryPanel({ threadRef }: { readonly threadRef: ScopedT
           <Button
             size="icon-xs"
             variant="ghost-muted"
-            aria-label={`Remove ${artifact.path} from Library`}
+            aria-label={gt("Remove {path} from Library", { path: artifact.path })}
             onClick={() => void removeFile(artifact.path)}
           >
             <Trash2Icon aria-hidden />
@@ -181,7 +189,7 @@ export function ProjectLibraryPanel({ threadRef }: { readonly threadRef: ScopedT
         {header}
         <PanelMessage>
           <p className="max-w-60 text-xs text-muted-foreground">
-            Files and docs this project's threads produce appear here. Add your own with Add.
+            <T>Files and docs this project's threads produce appear here. Add your own with Add.</T>
           </p>
         </PanelMessage>
       </div>
@@ -202,11 +210,18 @@ export function ProjectLibraryPanel({ threadRef }: { readonly threadRef: ScopedT
       {shown === null ? null : (
         <div className="flex items-center gap-2 border-b px-3 py-1.5 text-xs text-muted-foreground">
           <span className="min-w-0 flex-1 truncate">
-            From {filterTitle ?? "one thread"}: {shown.length}{" "}
-            {shown.length === 1 ? "artifact" : "artifacts"}
+            {filterTitle === undefined
+              ? gt(
+                  "{count, plural, one {From one thread: {count} artifact} other {From one thread: {count} artifacts}}",
+                  { count: shown.length },
+                )
+              : gt(
+                  "{count, plural, one {From {title}: {count} artifact} other {From {title}: {count} artifacts}}",
+                  { title: filterTitle, count: shown.length },
+                )}
           </span>
           <Button size="xs" variant="ghost-muted" onClick={() => setLibraryFilter(threadKey, null)}>
-            Show all
+            {gt("Show all")}
           </Button>
         </div>
       )}
@@ -214,12 +229,12 @@ export function ProjectLibraryPanel({ threadRef }: { readonly threadRef: ScopedT
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Owner</TableHead>
-              <TableHead>Date modified</TableHead>
-              <TableHead>Size</TableHead>
+              <TableHead>{gt("Name")}</TableHead>
+              <TableHead>{gt("Owner", { $context: "column heading, who made a file" })}</TableHead>
+              <TableHead>{gt("Date modified")}</TableHead>
+              <TableHead>{gt("Size", { $context: "column heading, file size" })}</TableHead>
               <TableHead>
-                <span className="sr-only">Actions</span>
+                <span className="sr-only">{gt("Actions")}</span>
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -285,7 +300,7 @@ export function ProjectLibraryPanel({ threadRef }: { readonly threadRef: ScopedT
                           <Button
                             size="icon-xs"
                             variant="ghost-muted"
-                            aria-label={`Remove ${entry.path} from Library`}
+                            aria-label={gt("Remove {path} from Library", { path: entry.path })}
                             onClick={() => void removeFile(entry.path)}
                           >
                             <Trash2Icon aria-hidden />
@@ -300,8 +315,12 @@ export function ProjectLibraryPanel({ threadRef }: { readonly threadRef: ScopedT
         </Table>
       </div>
       <p className="m-0 border-t px-3 py-2 text-xs text-muted-foreground">
-        {fileCount} {fileCount === 1 ? "file" : "files"}
-        {listing.truncated ? ", more not shown" : ""}
+        {listing.truncated
+          ? gt(
+              "{count, plural, one {{count} file, more not shown} other {{count} files, more not shown}}",
+              { count: fileCount },
+            )
+          : gt("{count, plural, one {{count} file} other {{count} files}}", { count: fileCount })}
       </p>
     </div>
   );

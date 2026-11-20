@@ -14,6 +14,7 @@ import {
 import type { StaticScreenProps } from "@react-navigation/native";
 import { isReasoningSelect } from "@t3tools/client-runtime/model-traits";
 import { createModelSelection } from "@t3tools/shared/model";
+import { msg, T, useGT, useMessages } from "gt-react-native";
 import { useState, type ComponentProps } from "react";
 import { Platform, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -40,19 +41,23 @@ import { SettingsSection } from "../settings/components/SettingsSection";
 const FIELDS = [
   {
     key: "instructions",
-    label: "Instructions",
-    placeholder: "How work in this project should be done: conventions, commands, review rules.",
+    label: msg("Instructions", { $context: "section title, guidance given to agents" }),
+    placeholder: msg(
+      "How work in this project should be done: conventions, commands, review rules.",
+    ),
   },
   {
     key: "memory",
-    label: "Memory",
-    placeholder: "What threads should know going in: decisions, links, where things live.",
+    label: msg("Memory", { $context: "section title, notes agents start with" }),
+    placeholder: msg("What threads should know going in: decisions, links, where things live."),
   },
   {
     key: "folders",
-    label: "Supplementary folders",
-    placeholder:
-      "Other folders or repositories threads may read, one absolute path per line.\n/home/me/code/api # the backend this app calls",
+    label: msg("Supplementary folders"),
+    placeholder: msg(
+      "Other folders or repositories threads may read, one absolute path per line.\n{examplePath} # the backend this app calls",
+      { examplePath: "/home/me/code/api" },
+    ),
   },
 ] as const satisfies ReadonlyArray<{
   readonly key: keyof ProjectContextFiles;
@@ -63,8 +68,8 @@ const FIELDS = [
 const MODEL_ROWS = [
   {
     key: "coordinatorModelSelection",
-    label: "Coordinator model",
-    unset: "New coordinators start on the usual default model.",
+    label: msg("Coordinator model"),
+    unset: msg("New coordinators start on the usual default model."),
   },
 ] as const satisfies ReadonlyArray<{
   readonly key: keyof ProjectModelDefaults;
@@ -84,8 +89,9 @@ export function ProjectInstructionsRouteScreen({
   const environmentId = EnvironmentId.make(route.params.environmentId);
   const projectId = ProjectId.make(route.params.projectId);
   const insets = useSafeAreaInsets();
+  const gt = useGT();
   return (
-    <SettingsScreen title="Project instructions">
+    <SettingsScreen title={gt("Project instructions")}>
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
@@ -118,6 +124,8 @@ export function ProjectModelDefaultRows(props: {
   );
   const write = useAtomCommand(projectEnvironment.writeModelDefaults, { reportFailure: false });
   const config = useEnvironmentServerConfig(environmentId);
+  const gt = useGT();
+  const m = useMessages();
   const options = buildModelOptions(config, null, undefined, projectId);
   const defaults = saved.data;
   if (defaults === null) return null;
@@ -125,7 +133,7 @@ export function ProjectModelDefaultRows(props: {
   const save = async (next: ProjectModelDefaults) => {
     const result = await write({ environmentId, input: { projectId, defaults: next } });
     if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-      Dialog.alert("Default model not saved", errorMessage(squashAtomCommandFailure(result)));
+      Dialog.alert(gt("Default model not saved"), errorMessage(squashAtomCommandFailure(result)));
     }
     saved.refresh();
   };
@@ -141,21 +149,27 @@ export function ProjectModelDefaultRows(props: {
   };
 
   return (
-    <SettingsSection title="Coordinator">
+    <SettingsSection
+      title={gt("Coordinator", { $context: "thread that coordinates other threads" })}
+    >
       {MODEL_ROWS.flatMap(({ key, label, unset }, index) => {
         const selection = defaults[key];
         const modelRow = (
           <MenuRow
             key={key}
-            label={label}
-            value={selection === null ? "Default" : labelOf(selection)}
-            detail={selection === null ? unset : labelOf(selection)}
+            label={m(label)}
+            value={
+              selection === null
+                ? gt("Default", { $context: "no model chosen, the usual default applies" })
+                : labelOf(selection)
+            }
+            detail={selection === null ? m(unset) : labelOf(selection)}
             canWrite={canWrite}
             first={index === 0}
             actions={[
               {
                 id: DEFAULT_MODEL_ACTION,
-                title: "Default",
+                title: gt("Default", { $context: "no model chosen, the usual default applies" }),
                 state: selection === null ? "on" : "off",
               },
               ...groupByProvider(options).map((group) => ({
@@ -196,7 +210,9 @@ export function ProjectModelDefaultRows(props: {
           (choice) => !effort.promptInjectedValues?.includes(choice.id),
         );
         const chosenChoice = choices.find((choice) => choice.id === chosen);
-        const chosenLabel = chosenChoice?.label ?? "Default";
+        const chosenLabel =
+          chosenChoice?.label ??
+          gt("Default", { $context: "no reasoning effort chosen, the usual default applies" });
         return [
           modelRow,
           <MenuRow
@@ -209,7 +225,9 @@ export function ProjectModelDefaultRows(props: {
             actions={[
               {
                 id: DEFAULT_EFFORT_ACTION,
-                title: "Default",
+                title: gt("Default", {
+                  $context: "no reasoning effort chosen, the usual default applies",
+                }),
                 state: chosenChoice === undefined ? "on" : "off",
               },
               ...choices.map((choice) => ({
@@ -292,6 +310,8 @@ function ProjectContextFields(props: {
   const write = useAtomCommand(projectEnvironment.writeContext, { reportFailure: false });
   const [draft, setDraft] = useState<ProjectContextFiles | null>(null);
   const [saving, setSaving] = useState(false);
+  const gt = useGT();
+  const m = useMessages();
 
   if (saved.data === null) {
     return (
@@ -320,7 +340,7 @@ function ProjectContextFields(props: {
     }
     if (!isAtomCommandInterrupted(result)) {
       Dialog.alert(
-        "Could not save project instructions",
+        gt("Could not save project instructions"),
         errorMessage(squashAtomCommandFailure(result)),
       );
     }
@@ -331,13 +351,13 @@ function ProjectContextFields(props: {
       {FIELDS.map(({ key, label, placeholder }) => {
         const length = shown[key].length;
         return (
-          <SettingsSection key={key} title={label}>
+          <SettingsSection key={key} title={m(label)}>
             <View className="gap-2 px-4 py-3">
               <AppTextInput
-                accessibilityLabel={label}
+                accessibilityLabel={m(label)}
                 value={shown[key]}
                 onChangeText={(text) => setDraft({ ...shown, [key]: text })}
-                placeholder={placeholder}
+                placeholder={m(placeholder)}
                 placeholderTextColorClassName="accent-foreground-muted"
                 editable={canWrite && !saving}
                 autoCapitalize={key === "folders" ? "none" : undefined}
@@ -362,18 +382,18 @@ function ProjectContextFields(props: {
       })}
       <View className="gap-3 px-2">
         <Text className="text-sm text-foreground-muted">
-          Changes apply to threads started afterwards.
+          <T>Changes apply to threads started afterwards.</T>
         </Text>
         {dirty ? (
           <View className="flex-row justify-end gap-2">
             <Button
-              label="Discard"
+              label={gt("Discard", { $context: "verb, discards unsaved edits" })}
               tone="secondary"
               disabled={saving}
               onPress={() => setDraft(null)}
             />
             <Button
-              label="Save"
+              label={gt("Save")}
               disabled={saving || overLimit}
               loading={saving}
               onPress={() => void save()}

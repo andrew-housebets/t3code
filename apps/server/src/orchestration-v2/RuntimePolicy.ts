@@ -95,7 +95,7 @@ const COORDINATOR_RUNTIME_POLICY = {
   sandboxPolicy: { type: "readOnly", access: { type: "fullAccess" }, networkAccess: false },
 } as const;
 
-function providerRuntimeMode(
+export function providerRuntimeMode(
   runtimeMode: RuntimeMode,
   supportedRuntimeModes: ReadonlyArray<RuntimeMode> | undefined,
 ): RuntimeMode {

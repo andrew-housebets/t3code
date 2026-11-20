@@ -13,6 +13,8 @@ import {
 } from "@t3tools/contracts";
 import { htmlRenderFileName } from "@t3tools/shared/htmlRender";
 import { useNavigation } from "@react-navigation/native";
+import * as Effect from "effect/Effect";
+import { msg, T, useGT } from "gt-react-native";
 import { useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 
@@ -21,10 +23,12 @@ import { AppText as Text } from "../../components/ui/AppText";
 import { Button } from "../../components/ui/Button";
 import * as Dialog from "../../components/ui/Dialog";
 import { Menu } from "../../components/ui/Menu";
+import { m } from "../../i18n/messages";
 import { prepareTurnAttachments } from "../../lib/attachmentUpload";
 import { useNowMinuteMs } from "../../lib/clock";
 import { pickComposerFiles, type DraftComposerAttachment } from "../../lib/composerImages";
 import { relativeTime } from "../../lib/time";
+import { uploadComposerAttachmentShared } from "../../state/composer-attachment-uploads";
 import { useThreadShell } from "../../state/entities";
 import { projectEnvironment } from "../../state/projects";
 import type { EnvironmentQueryView } from "../../state/query";
@@ -51,23 +55,27 @@ async function addLibraryFile(
   file: DraftComposerAttachment,
   add: AddLibraryFile,
 ) {
-  const fail = (detail?: string) => Dialog.alert(`Could not add ${file.name}`, detail);
+  const fail = (detail?: string) =>
+    Dialog.alert(m(msg("Could not add {fileName}", { fileName: file.name })), detail);
   try {
-    const prepared = await prepareTurnAttachments({
-      environmentId,
-      attachments: [file],
-      supportsImageUploads: true,
-    });
+    const prepared = await Effect.runPromise(
+      prepareTurnAttachments({
+        environmentId,
+        attachments: [file],
+        supportsImageUploads: true,
+        uploadAttachment: (attachment) => uploadComposerAttachmentShared(environmentId, attachment),
+      }),
+    );
     const attachmentId = prepared.status === "ready" ? prepared.pendingAttachmentIds[0] : undefined;
-    if (attachmentId === undefined) return fail("The upload did not finish.");
+    if (attachmentId === undefined) return fail(m(msg("The upload did not finish.")));
     let result = await add(attachmentId, file.name, false);
     if (
       result._tag === "Failure" &&
       errorTag(squashAtomCommandFailure(result)) === "ProjectLibraryFileExistsError" &&
       (await confirm({
-        title: `Replace ${file.name}?`,
-        message: "A file with this name is already in the Library.",
-        confirmText: "Replace",
+        title: m(msg("Replace {fileName}?", { fileName: file.name })),
+        message: m(msg("A file with this name is already in the Library.")),
+        confirmText: m(msg("Replace", { $context: "verb, replaces a file of the same name" })),
         destructive: true,
       }))
     ) {
@@ -90,7 +98,7 @@ export function useAddLibraryFiles(target: OverviewTarget, onAdded: () => void) 
       existingCount: 0,
       maxBytes: PROJECT_LIBRARY_UPLOAD_MAX_BYTES,
     });
-    if (picked.error !== null) Dialog.alert("Could not add files", picked.error);
+    if (picked.error !== null) Dialog.alert(m(msg("Could not add files")), picked.error);
     if (picked.files.length === 0) return;
     setAdding(true);
     for (const file of picked.files) {
@@ -141,6 +149,7 @@ export function OverviewLibraryTab(props: {
   readonly onClearOwner: () => void;
 }) {
   const { target, listing } = props;
+  const gt = useGT();
   const open = useOpenProjectArtifact(target);
   const nowMs = useNowMinuteMs();
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
@@ -157,10 +166,10 @@ export function OverviewLibraryTab(props: {
     return (
       <View className="flex-1 items-center justify-center gap-3 px-8">
         <Text className="text-center text-sm text-foreground-muted">
-          {listing.error ?? "Loading the Library…"}
+          {listing.error ?? gt("Loading the Library…")}
         </Text>
         {listing.error === null ? null : (
-          <Button label="Retry" size="compact" onPress={listing.refresh} />
+          <Button label={gt("Retry")} size="compact" onPress={listing.refresh} />
         )}
       </View>
     );
@@ -178,9 +187,9 @@ export function OverviewLibraryTab(props: {
   const openArtifact = (artifact: ProjectArtifact) => open(library.path, artifact);
   const confirmRemove = (path: string) =>
     Dialog.confirm({
-      title: `Remove ${path}?`,
-      message: "The file is deleted from the Library.",
-      confirmText: "Remove",
+      title: gt("Remove {path}?", { path }),
+      message: gt("The file is deleted from the Library."),
+      confirmText: gt("Remove"),
       destructive: true,
       onConfirm: () =>
         void removeFile({
@@ -189,7 +198,7 @@ export function OverviewLibraryTab(props: {
         }).then((result) => {
           if (result._tag === "Failure") {
             Dialog.alert(
-              `Could not remove ${path}`,
+              gt("Could not remove {path}", { path }),
               errorMessage(squashAtomCommandFailure(result)),
             );
           }
@@ -231,15 +240,22 @@ export function OverviewLibraryTab(props: {
       {shown === null ? null : (
         <View className="flex-row items-center gap-2 px-4 pb-2">
           <Text className="min-w-0 flex-1 text-sm text-foreground-muted" numberOfLines={1}>
-            From {ownerTitle ?? "one thread"}: {shown.length}{" "}
-            {shown.length === 1 ? "artifact" : "artifacts"}
+            {ownerTitle === undefined
+              ? gt(
+                  "From one thread: {count, plural, one {{count} artifact} other {{count} artifacts}}",
+                  { count: shown.length },
+                )
+              : gt(
+                  "From {title}: {count, plural, one {{count} artifact} other {{count} artifacts}}",
+                  { title: ownerTitle, count: shown.length },
+                )}
           </Text>
-          <Button label="Show all" size="compact" onPress={props.onClearOwner} />
+          <Button label={gt("Show all")} size="compact" onPress={props.onClearOwner} />
         </View>
       )}
       {empty ? (
         <Text className="px-8 pt-10 text-center text-sm text-foreground-muted">
-          Files and docs this project's threads produce appear here. Add your own with +.
+          <T>Files and docs this project's threads produce appear here. Add your own with +.</T>
         </Text>
       ) : null}
       {shown?.map(artifactRow)}
@@ -264,7 +280,9 @@ export function OverviewLibraryTab(props: {
           })}
       {shown === null ? renders.map(artifactRow) : null}
       {library.truncated ? (
-        <Text className="px-4 pt-3 text-xs text-foreground-muted">More files not shown.</Text>
+        <Text className="px-4 pt-3 text-xs text-foreground-muted">
+          <T>More files not shown.</T>
+        </Text>
       ) : null}
     </ScrollView>
   );
@@ -281,12 +299,16 @@ function LibraryRow(props: {
   readonly onPress: () => void;
   readonly onRemove: (() => void) | undefined;
 }) {
+  const gt = useGT();
   const owner = useThreadShell(
     props.artifact?.threadId == null
       ? null
       : scopeThreadRef(props.target.environmentId, props.artifact.threadId),
   );
-  const ownerLabel = props.artifact?.source === "upload" ? "You" : (owner?.title ?? null);
+  const ownerLabel =
+    props.artifact?.source === "upload"
+      ? gt("You", { $context: "the user added this file themselves" })
+      : (owner?.title ?? null);
   const detail = [ownerLabel, props.age].filter(Boolean).join(" · ");
   const row = (
     <Pressable
@@ -324,7 +346,9 @@ function LibraryRow(props: {
     <Menu
       shouldOpenOnLongPress
       title={props.name}
-      actions={[{ id: "remove", title: "Remove from Library", attributes: { destructive: true } }]}
+      actions={[
+        { id: "remove", title: gt("Remove from Library"), attributes: { destructive: true } },
+      ]}
       onPressAction={({ nativeEvent }) => {
         if (nativeEvent.event === "remove") onRemove();
       }}

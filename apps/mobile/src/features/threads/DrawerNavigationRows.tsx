@@ -6,6 +6,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import { AuthOrchestrationOperateScope } from "@t3tools/contracts";
 import { useNavigation } from "@react-navigation/native";
+import { useGT } from "gt-react-native";
 import { useMemo, type ReactNode } from "react";
 import { Pressable, View } from "react-native";
 
@@ -37,10 +38,13 @@ function DrawerRow(props: {
   readonly accessibilityHint?: string;
 }) {
   const claudeLook = useClaudeLook();
+  const gt = useGT();
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={props.attention ? `${props.label}, needs you` : props.label}
+      accessibilityLabel={
+        props.attention ? gt("{label}, needs you", { label: props.label }) : props.label
+      }
       accessibilityHint={props.accessibilityHint}
       onPress={props.onPress}
       className={cn(
@@ -57,19 +61,18 @@ function DrawerRow(props: {
   );
 }
 
-const PINNED_PROJECT_ACTIONS = [{ id: "unpin", title: "Unpin project", image: "pin.slash" }];
-
 /** Writes to every checkout of the project, stopping at the first failure, as Settings does. */
 function useUnpinProject() {
   const updateProject = useAtomCommand(projectEnvironment.update, {
     label: "project update",
     reportFailure: false,
   });
+  const gt = useGT();
   return async (scope: HomeProjectScope) => {
     for (const project of scope.projects) {
       if (project.pinnedAt === null) continue;
       if (!readEnvironmentScope(project.environmentId, AuthOrchestrationOperateScope)) {
-        Dialog.alert("Failed to unpin project", "This connection cannot change it.");
+        Dialog.alert(gt("Failed to unpin project"), gt("This connection cannot change it."));
         return;
       }
       const result = await updateProject({
@@ -80,8 +83,8 @@ function useUnpinProject() {
         if (!isAtomCommandInterrupted(result)) {
           const error = squashAtomCommandFailure(result);
           Dialog.alert(
-            "Failed to unpin project",
-            error instanceof Error ? error.message : "An error occurred.",
+            gt("Failed to unpin project"),
+            error instanceof Error ? error.message : gt("An error occurred."),
           );
         }
         return;
@@ -191,20 +194,25 @@ function DrawerNavigationRows(props: {
   readonly onSelectPinnedProject: (entry: DrawerPinnedProject) => void;
   readonly onUnpinProject: (entry: DrawerPinnedProject) => void;
 }) {
+  const gt = useGT();
   return (
     <View className="pb-1">
-      <DrawerRow label="Projects" icon={glyph("folder")} onPress={props.onOpenProjects} />
+      <DrawerRow label={gt("Projects")} icon={glyph("folder")} onPress={props.onOpenProjects} />
       {props.onOpenArtifacts === null ? null : (
         <DrawerRow
-          label="Artifacts"
+          label={gt("Artifacts", { $context: "files and pages a project's threads produced" })}
           icon={glyph("square.on.square")}
           onPress={props.onOpenArtifacts}
         />
       )}
-      <DrawerRow label="Scheduled" icon={glyph("clock")} onPress={props.onOpenScheduled} />
+      <DrawerRow
+        label={gt("Scheduled", { $context: "navigation row, scheduled tasks" })}
+        icon={glyph("clock")}
+        onPress={props.onOpenScheduled}
+      />
       {props.pinnedProjects.length === 0 && !props.hasPinnedThreads ? null : (
         <>
-          <DrawerSectionLabel label="Pinned" />
+          <DrawerSectionLabel label={gt("Pinned", { $context: "thread list section" })} />
           {props.pinnedProjects.map((entry) => {
             const project = entry.group.representative;
             return (
@@ -212,7 +220,7 @@ function DrawerNavigationRows(props: {
                 key={entry.group.key}
                 shouldOpenOnLongPress
                 title={entry.group.title}
-                actions={PINNED_PROJECT_ACTIONS}
+                actions={[{ id: "unpin", title: gt("Unpin project"), image: "pin.slash" }]}
                 onPressAction={({ nativeEvent }) => {
                   if (nativeEvent.event === "unpin") props.onUnpinProject(entry);
                 }}
@@ -220,7 +228,7 @@ function DrawerNavigationRows(props: {
                 <DrawerRow
                   label={entry.group.title}
                   attention={entry.needsYou}
-                  accessibilityHint="Long press to unpin."
+                  accessibilityHint={gt("Long press to unpin.")}
                   icon={
                     <ProjectFavicon
                       environmentId={project.environmentId}

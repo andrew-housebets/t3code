@@ -29,6 +29,7 @@ import {
   type ScopedThreadRef,
 } from "@t3tools/contracts";
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
+import { msg, T, useGT, useMessages } from "gt-react-native";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 
@@ -89,9 +90,12 @@ const TONE_TINTS = {
 type RowAction = "resolve" | "reopen" | "stop";
 
 const ROW_ACTIONS = {
-  resolve: { label: "Mark resolved", failure: "Could not mark resolved" },
-  reopen: { label: "Reopen", failure: "Could not reopen" },
-  stop: { label: "Stop thread", failure: "Could not stop the thread" },
+  resolve: { label: msg("Mark resolved"), failure: msg("Could not mark resolved") },
+  reopen: {
+    label: msg("Reopen", { $context: "verb, makes a resolved thread active again" }),
+    failure: msg("Could not reopen"),
+  },
+  stop: { label: msg("Stop thread"), failure: msg("Could not stop the thread") },
 } satisfies Record<RowAction, { readonly label: string; readonly failure: string }>;
 
 /** Settling refuses an active or blocked run, so a thread with a live run offers Stop instead. */
@@ -103,9 +107,9 @@ const rowActionsOf = (thread: EnvironmentThreadShell): ReadonlyArray<RowAction> 
       : ["resolve"];
 
 const TAB_OPTIONS = [
-  { value: "threads", label: "Threads" },
-  { value: "library", label: "Library" },
-  { value: "scheduled", label: "Scheduled" },
+  { value: "threads", label: msg("Threads") },
+  { value: "library", label: msg("Library", { $context: "tab, files a project keeps" }) },
+  { value: "scheduled", label: msg("Scheduled", { $context: "tab, scheduled tasks" }) },
 ] as const;
 
 export function ThreadOverviewRouteScreen({
@@ -138,7 +142,12 @@ export function ThreadOverview(props: {
   readonly onBack?: () => void;
 }) {
   const { target } = props;
-  const tabs = target.threadId === null ? TAB_OPTIONS.slice(1) : TAB_OPTIONS;
+  const gt = useGT();
+  const m = useMessages();
+  const tabs = (target.threadId === null ? TAB_OPTIONS.slice(1) : TAB_OPTIONS).map((option) => ({
+    ...option,
+    label: m(option.label),
+  }));
   const [tab, setTab] = useState<OverviewTab>(
     props.initialTab ?? (target.threadId === null ? "library" : "threads"),
   );
@@ -154,7 +163,7 @@ export function ThreadOverview(props: {
     tab === "library" && addFiles.allowed
       ? [
           {
-            accessibilityLabel: "Add files to the Library",
+            accessibilityLabel: gt("Add files to the Library"),
             icon: "plus",
             loading: addFiles.adding,
             disabled: addFiles.adding,
@@ -172,18 +181,18 @@ export function ThreadOverview(props: {
   return (
     <SheetPane surface="screen">
       <AppBar
-        title="Overview"
+        title={gt("Overview")}
         onBack={props.onBack}
         onBackToList={props.onBack}
         actions={actions}
         menus={[
           {
-            title: "Project",
+            title: gt("Project"),
             icon: "ellipsis",
             items: [
               {
                 id: "project-instructions",
-                title: "Project instructions",
+                title: gt("Project instructions"),
                 icon: "doc.text",
                 onPress: () =>
                   navigation.navigate("ProjectInstructions", {
@@ -240,6 +249,8 @@ function OverviewThreadsTab(props: {
   readonly onOpenLibrary: (ownerThreadId: ThreadId | null) => void;
 }) {
   const { threadRef } = props;
+  const gt = useGT();
+  const m = useMessages();
   useMountedThreadFamily(threadRef);
   const read = threadFamilyRead(
     useAtomValue(threadFamilies.familyAtom(threadRef.environmentId, threadRef.threadId)),
@@ -293,7 +304,7 @@ function OverviewThreadsTab(props: {
     });
     if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
       const error = squashAtomCommandFailure(result);
-      Dialog.alert(ROW_ACTIONS.stop.failure, error instanceof Error ? error.message : undefined);
+      Dialog.alert(m(ROW_ACTIONS.stop.failure), error instanceof Error ? error.message : undefined);
     }
     props.onRefreshArtifacts();
   };
@@ -304,10 +315,10 @@ function OverviewThreadsTab(props: {
         {read === "failed" ? (
           <>
             <Text className="text-center text-sm text-foreground-muted">
-              Could not load delegated threads.
+              <T>Could not load delegated threads.</T>
             </Text>
             <Button
-              label="Retry"
+              label={gt("Retry")}
               size="compact"
               onPress={() =>
                 threadFamilies.refresh(appAtomRegistry, threadRef.environmentId, threadRef.threadId)
@@ -317,8 +328,8 @@ function OverviewThreadsTab(props: {
         ) : (
           <Text className="text-center text-sm text-foreground-muted">
             {read === "pending"
-              ? "Loading threads…"
-              : "Threads this thread starts will appear here."}
+              ? gt("Loading threads…")
+              : gt("Threads this thread starts will appear here.")}
           </Text>
         )}
       </View>
@@ -335,11 +346,13 @@ function OverviewThreadsTab(props: {
         <View className="pb-4">
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Open all artifacts in the Library"
+            accessibilityLabel={gt("Open all artifacts in the Library")}
             onPress={() => props.onOpenLibrary(null)}
             className="flex-row items-center gap-1 px-4 pb-2 active:opacity-70"
           >
-            <Text className="text-sm text-foreground-muted">Artifacts</Text>
+            <Text className="text-sm text-foreground-muted">
+              {gt("Artifacts", { $context: "files and pages a project's threads produced" })}
+            </Text>
             <SymbolView name="chevron.right" size={11} tintColorClassName="accent-icon-muted" />
           </Pressable>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -348,7 +361,7 @@ function OverviewThreadsTab(props: {
                 <Pressable
                   key={artifact.id}
                   accessibilityRole="button"
-                  accessibilityLabel={`Open ${artifact.title}`}
+                  accessibilityLabel={gt("Open {title}", { title: artifact.title })}
                   onPress={() =>
                     props.libraryPath === null
                       ? props.onOpenLibrary(artifact.threadId)
@@ -388,7 +401,7 @@ function OverviewThreadsTab(props: {
               className="flex-row items-center gap-1 px-4 py-2 active:opacity-70"
             >
               <Text className="text-sm text-foreground-muted">
-                {THREAD_OVERVIEW_GROUP_PRESENTATION[group].label} · {threads.length}
+                {m(THREAD_OVERVIEW_GROUP_PRESENTATION[group].label)} · {threads.length}
               </Text>
               <SymbolView
                 name={folded ? "chevron.right" : "chevron.down"}
@@ -429,8 +442,11 @@ function OverviewRow(props: {
   readonly onAction: (action: RowAction) => void;
 }) {
   const { thread, group } = props;
-  const { label, icon, tone } = THREAD_OVERVIEW_GROUP_PRESENTATION[group];
-  const line = threadOverviewStatusLine(thread, props.subagent) ?? label;
+  const gt = useGT();
+  const m = useMessages();
+  const { icon, tone } = THREAD_OVERVIEW_GROUP_PRESENTATION[group];
+  const label = m(THREAD_OVERVIEW_GROUP_PRESENTATION[group].label);
+  const line = threadOverviewStatusLine(thread, props.subagent, m) ?? label;
   const actions = rowActionsOf(thread);
   return (
     <Menu
@@ -438,7 +454,7 @@ function OverviewRow(props: {
       title={thread.title}
       actions={actions.map((action) => ({
         id: action,
-        title: ROW_ACTIONS[action].label,
+        title: m(ROW_ACTIONS[action].label),
         ...(action === "stop" ? { attributes: { destructive: true } } : {}),
       }))}
       onPressAction={({ nativeEvent }) => {
@@ -449,7 +465,7 @@ function OverviewRow(props: {
       <Pressable
         accessibilityRole="link"
         accessibilityLabel={`${thread.title}, ${label}`}
-        accessibilityHint="Opens the thread. Long press for actions."
+        accessibilityHint={gt("Opens the thread. Long press for actions.")}
         onPress={props.onOpen}
         className="flex-row gap-3 px-4 py-2.5 active:bg-subtle"
       >
@@ -487,7 +503,9 @@ function OverviewRow(props: {
                 tintColorClassName="accent-icon-muted"
               />
               <Text className="text-sm text-foreground-secondary">
-                {props.artifactCount} {props.artifactCount === 1 ? "artifact" : "artifacts"}
+                {gt("{count, plural, one {{count} artifact} other {{count} artifacts}}", {
+                  count: props.artifactCount,
+                })}
               </Text>
             </Pressable>
           ) : null}

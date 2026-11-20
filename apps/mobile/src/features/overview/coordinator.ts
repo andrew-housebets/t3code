@@ -23,9 +23,11 @@ import {
 } from "@t3tools/contracts";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import * as Effect from "effect/Effect";
+import { msg } from "gt-react-native";
 import { AtomRegistry } from "effect/reactivity";
 
 import * as Dialog from "../../components/ui/Dialog";
+import { m } from "../../i18n/messages";
 import { uuidv4 } from "../../lib/uuid";
 import { scheduledTaskDefaultModel } from "../settings/scheduledTaskDraft";
 import { appAtomRegistry } from "../../state/atom-registry";
@@ -37,12 +39,12 @@ import { updateComposerDraftSettings } from "../../state/use-composer-drafts";
 
 const MAKE_COORDINATOR_ITEM = {
   id: "make-coordinator",
-  title: "Make coordinator",
+  title: msg("Make coordinator"),
   image: "checklist",
 };
 const STOP_COORDINATING_ITEM = {
   id: "stop-coordinating",
-  title: "Stop coordinating",
+  title: msg("Stop coordinating"),
   image: "checklist",
 };
 
@@ -66,7 +68,7 @@ async function setCoordinatorTag(thread: EnvironmentThreadShell, tagged: boolean
   if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
     const error = squashAtomCommandFailure(result);
     Dialog.alert(
-      tagged ? "Could not make a coordinator" : "Could not stop coordinating",
+      tagged ? m(msg("Could not make a coordinator")) : m(msg("Could not stop coordinating")),
       error instanceof Error ? error.message : undefined,
     );
   }
@@ -83,9 +85,9 @@ export function runCoordinatorMenuAction(
   const warning = coordinatorProviderWarning(driver);
   if (warning === null) return void setCoordinatorTag(thread, true);
   Dialog.confirm({
-    title: "Make coordinator?",
+    title: m(msg("Make coordinator?")),
     message: warning,
-    confirmText: "Make coordinator",
+    confirmText: m(msg("Make coordinator")),
     destructive: true,
     onConfirm: () => void setCoordinatorTag(thread, true),
   });
@@ -133,7 +135,7 @@ export async function startCoordinatorDraft(input: {
           ?.providers.find((provider) => provider.instanceId === selection.instanceId)?.driver ??
         input.driver);
   const warning = coordinatorProviderWarning(driver);
-  if (warning !== null) Dialog.alert("Not read-only", warning);
+  if (warning !== null) Dialog.alert(m(msg("Not read-only")), warning);
 }
 
 const coordinatorsStarting = new Map<string, Promise<ScopedThreadRef | null>>();
@@ -159,6 +161,7 @@ async function createProjectCoordinator(
         creationSource: "mobile",
         threadId,
         projectId,
+        // oxlint-disable-next-line t3code/no-untranslated-copy -- thread title stored on the server and shown to every client
         title: "Coordinator",
         modelSelection,
         runtimeMode: settings.defaultRuntimeMode,
@@ -178,8 +181,8 @@ async function createProjectCoordinator(
   );
   if (tagged._tag === "Failure" && !isAtomCommandInterrupted(tagged)) {
     Dialog.alert(
-      "Thread started without the coordinator role",
-      "Choose Make coordinator from the thread menu to try again.",
+      m(msg("Thread started without the coordinator role")),
+      m(msg("Choose Make coordinator from the thread menu to try again.")),
     );
   }
   return { environmentId, threadId };

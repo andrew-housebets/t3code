@@ -2,6 +2,7 @@ import { useNavigation } from "@react-navigation/native";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { isCoordinatorThread } from "@t3tools/shared/coordinatorThread";
+import { useGT, useMessages } from "gt-react-native";
 
 import { AppBar } from "../../components/ui/AppBar";
 import type { AppBarAction, AppBarMenu } from "../../components/ui/AppBar.types";
@@ -31,6 +32,8 @@ export function ThreadHeader(props: {
   readonly onOpenOverviewInspector?: () => void;
   readonly draftActions?: ReadonlyArray<AppBarAction>;
 }) {
+  const gt = useGT();
+  const m = useMessages();
   const goBack = useWorkspaceBackNavigation();
   const { toggleAuxiliaryPane, startNewTask } = useAdaptiveWorkspaceLayout();
   const { panes, fileInspector } = useWorkspacePaneState();
@@ -48,7 +51,8 @@ export function ThreadHeader(props: {
     overviewState === "hidden" || thread === null || props.onOpenOverviewInspector === undefined
       ? null
       : {
-          accessibilityLabel: overviewState === "waiting" ? "Overview, needs you" : "Overview",
+          accessibilityLabel:
+            overviewState === "waiting" ? gt("Overview, needs you") : gt("Overview"),
           icon: "checklist",
           selected: overviewVisible,
           attention: overviewState === "waiting",
@@ -64,12 +68,12 @@ export function ThreadHeader(props: {
                   }),
         };
   const gitMenu = useThreadGitMenuDefinition(props.gitControls);
-  const terminalMenu = threadTerminalMenu(props.gitControls);
+  const terminalMenu = threadTerminalMenu(props.gitControls, m);
   const filesVisible = props.inspectorMode === "files" && panes.auxiliaryPaneVisible;
   const fileActions: AppBarAction[] = props.hasThreadCwd
     ? [
         {
-          accessibilityLabel: filesVisible ? "Close files" : "Open files",
+          accessibilityLabel: filesVisible ? gt("Close files") : gt("Open files"),
           icon: "folder",
           selected: filesVisible,
           disabled: !props.gitControls.canOpenFiles,
@@ -91,8 +95,8 @@ export function ThreadHeader(props: {
       subtitle={
         coordinator
           ? props.subtitle
-            ? `Coordinator · ${props.subtitle}`
-            : "Coordinator"
+            ? gt("Coordinator · {subtitle}", { subtitle: props.subtitle })
+            : gt("Coordinator", { $context: "thread that coordinates other threads" })
           : props.subtitle
       }
       onBackToList={goBack}
@@ -100,7 +104,7 @@ export function ThreadHeader(props: {
       backInSplitView={
         props.onReturnToThread
           ? {
-              accessibilityLabel: "Return to chat",
+              accessibilityLabel: gt("Return to chat"),
               icon: "chevron.left",
               onPress: props.onReturnToThread,
             }

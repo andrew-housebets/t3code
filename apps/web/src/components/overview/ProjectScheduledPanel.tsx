@@ -5,6 +5,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import type { ScheduledTask, ScopedThreadRef } from "@t3tools/contracts";
 import { Link } from "@tanstack/react-router";
+import { T, useGT, useMessages } from "gt-react";
 
 import { useClientSettings } from "../../hooks/useSettings";
 import { useNowMinute } from "../../hooks/useNowMinute";
@@ -33,6 +34,8 @@ function ScheduledTaskRow(props: {
   readonly timeZone: string | undefined;
   readonly nowMs: number;
 }) {
+  const gt = useGT();
+  const m = useMessages();
   const { task, threadRef } = props;
   const { environmentId } = threadRef;
   const canOperate = useAtomValue(
@@ -52,7 +55,7 @@ function ScheduledTaskRow(props: {
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: "Could not update scheduled task",
+          title: gt("Could not update scheduled task"),
           description: error instanceof Error ? error.message : undefined,
         }),
       );
@@ -61,12 +64,19 @@ function ScheduledTaskRow(props: {
   const next =
     task.blockedByPolicy ??
     (!task.enabled
-      ? "Paused"
+      ? gt("Paused")
       : task.schedule.type === "webhook"
-        ? "Listening"
+        ? gt("Listening")
         : task.nextRunAt === null
-          ? "Not scheduled"
-          : `Next ${formatUpcomingTimestamp(task.nextRunAt, timestampFormat, props.nowMs, props.timeZone)}`);
+          ? gt("Not scheduled")
+          : gt("Next {time}", {
+              time: formatUpcomingTimestamp(
+                task.nextRunAt,
+                timestampFormat,
+                props.nowMs,
+                props.timeZone,
+              ),
+            }));
   return (
     <li data-project-scheduled-row className="flex items-center gap-3 px-3 py-2">
       <span className="flex min-w-0 flex-1 flex-col">
@@ -78,13 +88,17 @@ function ScheduledTaskRow(props: {
           {task.title}
         </Link>
         <span className="truncate text-xs text-muted-foreground">
-          {scheduleLabel(task.schedule, props.timeZone, task.nextRunAt)} · {next}
+          {scheduleLabel(task.schedule, props.timeZone, task.nextRunAt, m)} · {next}
         </span>
       </span>
       <Switch
         checked={task.enabled}
         disabled={!canOperate}
-        aria-label={`${task.enabled ? "Pause" : "Resume"} ${task.title}`}
+        aria-label={
+          task.enabled
+            ? gt("Pause {title}", { title: task.title })
+            : gt("Resume {title}", { title: task.title })
+        }
         onCheckedChange={() => void toggle()}
       />
     </li>
@@ -108,7 +122,7 @@ export function ProjectScheduledPanel({ threadRef }: { readonly threadRef: Scope
           <>
             <p className="text-xs text-muted-foreground">{tasksQuery.error}</p>
             <Button size="sm" variant="outline" onClick={() => tasksQuery.refresh()}>
-              Retry
+              <T>Retry</T>
             </Button>
           </>
         )}
@@ -120,7 +134,7 @@ export function ProjectScheduledPanel({ threadRef }: { readonly threadRef: Scope
     return (
       <PanelMessage>
         <p className="max-w-60 text-xs text-muted-foreground">
-          Ask in the project conversation to put recurring work on a schedule.
+          <T>Ask in the project conversation to put recurring work on a schedule.</T>
         </p>
       </PanelMessage>
     );

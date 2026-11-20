@@ -10,6 +10,7 @@ import {
   type ProjectId,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
+import { msg, T, useGT, useMessages } from "gt-react";
 import { useId, useState } from "react";
 
 import { cn } from "../../lib/utils";
@@ -26,22 +27,25 @@ import { stackedThreadToast, toastManager } from "../ui/toast";
 const FIELDS = [
   {
     key: "instructions",
-    label: "Instructions",
+    label: msg("Instructions", { $context: "how work in a project should be done" }),
     rows: 8,
-    placeholder: "How work in this project should be done: conventions, commands, review rules.",
+    placeholder: msg(
+      "How work in this project should be done: conventions, commands, review rules.",
+    ),
   },
   {
     key: "memory",
-    label: "Memory",
+    label: msg("Memory", { $context: "notes a project's threads start with" }),
     rows: 8,
-    placeholder: "What threads should know going in: decisions, links, where things live.",
+    placeholder: msg("What threads should know going in: decisions, links, where things live."),
   },
   {
     key: "folders",
-    label: "Supplementary folders",
+    label: msg("Supplementary folders"),
     rows: 3,
-    placeholder:
+    placeholder: msg(
       "Other folders or repositories threads may read, one absolute path per line.\n/home/me/code/api # the backend this app calls",
+    ),
   },
 ] as const satisfies ReadonlyArray<{
   readonly key: keyof ProjectContextFiles;
@@ -64,6 +68,8 @@ export function ProjectInstructionsEditor(props: {
   const [draft, setDraft] = useState<ProjectContextFiles | null>(null);
   const [saving, setSaving] = useState(false);
   const idPrefix = useId();
+  const gt = useGT();
+  const m = useMessages();
 
   if (saved.data === null) {
     return (
@@ -95,7 +101,7 @@ export function ProjectInstructionsEditor(props: {
     toastManager.add(
       stackedThreadToast({
         type: "error",
-        title: "Could not save project instructions",
+        title: gt("Could not save project instructions"),
         description: error instanceof Error ? error.message : undefined,
       }),
     );
@@ -108,7 +114,7 @@ export function ProjectInstructionsEditor(props: {
         return (
           <div key={key} className="flex flex-col gap-1.5">
             <div className="flex items-baseline justify-between gap-2">
-              <Label htmlFor={`${idPrefix}-${key}`}>{label}</Label>
+              <Label htmlFor={`${idPrefix}-${key}`}>{m(label)}</Label>
               <span
                 className={cn(
                   "text-xs tabular-nums",
@@ -122,7 +128,7 @@ export function ProjectInstructionsEditor(props: {
               id={`${idPrefix}-${key}`}
               rows={rows}
               value={shown[key]}
-              placeholder={placeholder}
+              placeholder={m(placeholder)}
               disabled={!canWrite || saving}
               onChange={(event) => setDraft({ ...shown, [key]: event.target.value })}
             />
@@ -131,15 +137,15 @@ export function ProjectInstructionsEditor(props: {
       })}
       <div className="flex items-center justify-between gap-2">
         <p className="m-0 text-xs text-muted-foreground">
-          Changes apply to threads started afterwards.
+          <T>Changes apply to threads started afterwards.</T>
         </p>
         {dirty ? (
           <div className="flex shrink-0 gap-2">
             <Button size="sm" variant="outline" disabled={saving} onClick={() => setDraft(null)}>
-              Discard
+              <T>Discard</T>
             </Button>
             <Button size="sm" disabled={saving || overLimit} onClick={() => void save()}>
-              Save
+              {gt("Save")}
             </Button>
           </div>
         ) : null}
