@@ -83,11 +83,19 @@ it("renames the command where the text is about this machine's own CLI", () => {
   const own = "/repo/apps/server/src/cli/service.ts";
   assert.strictEqual(
     renameBrand(
-      '"Run `t3 service install`. The t3 command, or t3." + "t3.cmd" + t3Home',
+      '"Run `t3 service install`, \\`which -a t3\\`. The t3 commands, or t3." + "t3.cmd" + t3Home',
       names,
       own,
     ),
-    '"Run `acme service install`. The acme command, or acme." + "t3.cmd" + t3Home',
+    '"Run `acme service install`, \\`which -a acme\\`. The acme commands, or acme." + "t3.cmd" + t3Home',
+  );
+  assert.strictEqual(
+    renameBrand(
+      '"t3 command", "tunnel t3 connect"',
+      names,
+      "/repo/apps/web/src/components/settings/settingsSearch.ts",
+    ),
+    '"acme command", "tunnel t3 connect"',
   );
   const remote = "/repo/apps/web/src/components/settings/SavedEnvironmentRows.tsx";
   assert.strictEqual(

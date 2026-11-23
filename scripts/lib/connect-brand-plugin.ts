@@ -27,7 +27,10 @@ const UPSTREAM_CLI_COMMAND = "t3";
 const CLI_COMMAND_MODULE = "/packages/shared/src/cliCommand.ts";
 /** Modules whose command hints are about this machine's own CLI, not a remote host's. */
 const OWN_CLI_TEXT_MODULES =
-  /\/apps\/server\/src\/(?:cli|cloud)\/|\/apps\/server\/src\/(?:binCli|serviceLauncher|serverOwnership)\.ts|\/apps\/desktop\/src\/(?:app\/DesktopCli|app\/DesktopApp\.ts|backend\/DesktopHomeOwner)|\/apps\/web\/src\/(?:components\/settings\/(?:CliCommandSettingsRow|settingsSearch)|state\/desktopCliCommand|components\/onboarding\/WelcomePage)/;
+  /\/apps\/server\/src\/(?:cli|cloud|persistence)\/|\/apps\/server\/src\/(?:binCli|serviceLauncher|serverOwnership)\.ts|\/apps\/desktop\/src\/(?:app\/DesktopCli|app\/DesktopApp\.ts|backend\/DesktopHomeOwner)|\/apps\/web\/src\/(?:components\/settings\/CliCommandSettingsRow|state\/desktopCliCommand|components\/onboarding\/WelcomePage)/;
+
+/** A keyword list, where only the row title names the command. */
+const OWN_CLI_PHRASE_MODULES = /\/apps\/web\/src\/components\/settings\/settingsSearch/;
 
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -38,18 +41,28 @@ const APP_ALTERNATIVES = [
   "\\bT3(?='s\\b| (?!extends\\b)[a-z])",
   "(?<=[a-z] )T3\\b(?!\\s+(?:Chat|Connect|Account))",
 ];
-const CLI_ALTERNATIVE =
-  "(?<cli>(?<=[ `])t3(?=[ `]|[.,;:!?](?:\\s|[\"'`]|$))|\\bt3(?= (?:command|launcher|CLI)\\b))";
-const patternFor = (app: boolean, cli: boolean) =>
-  new RegExp(
-    [KEPT_ALTERNATIVE, ...(app ? APP_ALTERNATIVES : []), ...(cli ? [CLI_ALTERNATIVE] : [])].join(
-      "|",
-    ),
+const CLI_PHRASE = "\\bt3(?= (?:commands?|launcher|CLI)\\b)";
+const CLI_ALTERNATIVES = {
+  phrase: `(?<cli>${CLI_PHRASE})`,
+  text: `(?<cli>(?<=[ \`])t3(?=[ \`\\\\]|[.,;:!?](?:\\s|["'\`]|$))|${CLI_PHRASE})`,
+};
+type CliScope = keyof typeof CLI_ALTERNATIVES | undefined;
+const patterns = new Map<string, RegExp>();
+const patternFor = (app: boolean, cli: CliScope) => {
+  const key = `${app}:${cli}`;
+  const cached = patterns.get(key);
+  if (cached) return cached;
+  const pattern = new RegExp(
+    [
+      KEPT_ALTERNATIVE,
+      ...(app ? APP_ALTERNATIVES : []),
+      ...(cli ? [CLI_ALTERNATIVES[cli]] : []),
+    ].join("|"),
     "g",
   );
-const APP_PATTERN = patternFor(true, false);
-const CLI_PATTERN = patternFor(false, true);
-const APP_AND_CLI_PATTERN = patternFor(true, true);
+  patterns.set(key, pattern);
+  return pattern;
+};
 
 export interface BrandNames {
   readonly connect?: string | undefined;
@@ -86,11 +99,17 @@ export function renameBrand(text: string, names: BrandNames, moduleId = "") {
     ? ownApp.replaceAll(UPSTREAM_CONNECT_NAME, names.connect)
     : ownApp;
   const app = KEPT_UPSTREAM_MODULES.test(moduleId) ? undefined : names.app;
-  const cli = OWN_CLI_TEXT_MODULES.test(moduleId) ? names.cli : undefined;
+  const cliScope: CliScope = !names.cli
+    ? undefined
+    : OWN_CLI_TEXT_MODULES.test(moduleId)
+      ? "text"
+      : OWN_CLI_PHRASE_MODULES.test(moduleId)
+        ? "phrase"
+        : undefined;
+  const cli = cliScope ? names.cli : undefined;
   if (!app && !cli) return connected;
   const lead = app?.split(" ")[0];
-  const pattern = app && cli ? APP_AND_CLI_PATTERN : app ? APP_PATTERN : CLI_PATTERN;
-  return connected.replace(pattern, (match, ...rest) => {
+  return connected.replace(patternFor(app !== undefined, cliScope), (match, ...rest) => {
     const groups = rest.at(-1) as Record<string, string | undefined>;
     if (groups.kept) return match;
     if (groups.cli) return cli ?? match;
