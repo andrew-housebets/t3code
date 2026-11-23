@@ -49,7 +49,7 @@ export function getDesktopScheme(isDevelopment: boolean): string {
   return packagedScheme;
 }
 
-function getDesktopOrigin(isDevelopment: boolean): string {
+export function getDesktopOrigin(isDevelopment: boolean): string {
   return `${getDesktopScheme(isDevelopment)}://${DESKTOP_HOST}`;
 }
 

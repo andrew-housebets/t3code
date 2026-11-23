@@ -528,7 +528,7 @@ export function HomeScreen(props: HomeScreenProps) {
     }
     onSelectThread(thread);
   };
-  useThreadJumpShortcuts(threadListV2Items, selectThread);
+  useThreadJumpShortcuts(threadListV2Items, selectThread, props.onSelectPendingTask);
   // The top rows sit above the list, so the threads under them get a label, as in the sidebar.
   const recentsIndex = workspace && !hasSearchQuery ? drawerRecentsIndex(threadListV2Items) : null;
   const listItems: ReadonlyArray<HomeListItem> =

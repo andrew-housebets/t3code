@@ -88,7 +88,8 @@ function ScheduledTaskRow(props: {
           {task.title}
         </Link>
         <span className="truncate text-xs text-muted-foreground">
-          {scheduleLabel(task.schedule, props.timeZone, task.nextRunAt, m)} · {next}
+          {scheduleLabel(task.schedule, timestampFormat, props.timeZone, task.nextRunAt, m)} ·{" "}
+          {next}
         </span>
       </span>
       <Switch

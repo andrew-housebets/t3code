@@ -56,6 +56,7 @@ import { ProjectActionsSettings } from "./ProjectActionsSettings";
 import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
 import { ProjectInstructionsEditor } from "../overview/ProjectInstructionsEditor";
 import { CoordinatorModelSettingsRow } from "../overview/ProjectModelDefaults";
+import { ProjectRepositoriesSettings } from "./ProjectRepositoriesSettings";
 import {
   defaultProjectIcon,
   hasDefaultProjectIcon,
@@ -708,6 +709,7 @@ function ProjectDetail({
           </div>
         </SettingsSection>
         <ProjectActionsSettings />
+        <ProjectRepositoriesSettings members={group.memberProjects} />
         {checkoutChoices}
         <SettingsSection title={gt("Danger")}>
           <SettingsRow
