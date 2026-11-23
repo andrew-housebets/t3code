@@ -90,6 +90,14 @@ it("renames the command where the text is about this machine's own CLI", () => {
     '"Run `acme service install`, \\`which -a acme\\`. The acme commands, or acme." + "t3.cmd" + t3Home',
   );
   assert.strictEqual(
+    renameBrand('"Could not install t3" + `npx t3 serve` + { t3: Schema.String }', names, own),
+    '"Could not install acme" + `npx t3 serve` + { t3: Schema.String }',
+  );
+  assert.strictEqual(
+    renameBrand('"Download a newer t3"', names, "/repo/apps/server/src/cli/update.ts"),
+    '"Download a newer t3"',
+  );
+  assert.strictEqual(
     renameBrand(
       '"t3 command", "tunnel t3 connect"',
       names,

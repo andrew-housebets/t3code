@@ -25,9 +25,9 @@ const FORK_WORDMARK_SOURCE = 'export { MessagesSquareIcon as T3Wordmark } from "
 
 const UPSTREAM_CLI_COMMAND = "t3";
 const CLI_COMMAND_MODULE = "/packages/shared/src/cliCommand.ts";
-/** Modules whose command hints are about this machine's own CLI, not a remote host's. */
+/** Modules whose command hints are about this machine's own CLI, not a remote host's or upstream's standalone releases. */
 const OWN_CLI_TEXT_MODULES =
-  /\/apps\/server\/src\/(?:cli|cloud|persistence)\/|\/apps\/server\/src\/(?:binCli|serviceLauncher|serverOwnership)\.ts|\/apps\/desktop\/src\/(?:app\/DesktopCli|app\/DesktopApp\.ts|backend\/DesktopHomeOwner)|\/apps\/web\/src\/(?:components\/settings\/CliCommandSettingsRow|state\/desktopCliCommand|components\/onboarding\/WelcomePage)/;
+  /\/apps\/server\/src\/(?:cli|cloud|persistence)\/(?!install|uninstall|update|pinnedRuntime|selfUpdate)|\/apps\/server\/src\/(?:binCli|serviceLauncher|serverOwnership)\.ts|\/apps\/desktop\/src\/(?:app\/DesktopCli|app\/DesktopApp\.ts|backend\/DesktopHomeOwner)|\/apps\/web\/src\/(?:components\/settings\/CliCommandSettingsRow|state\/desktopCliCommand|components\/onboarding\/WelcomePage)/;
 
 /** A keyword list, where only the row title names the command. */
 const OWN_CLI_PHRASE_MODULES = /\/apps\/web\/src\/components\/settings\/settingsSearch/;
@@ -44,7 +44,7 @@ const APP_ALTERNATIVES = [
 const CLI_PHRASE = "\\bt3(?= (?:commands?|launcher|CLI)\\b)";
 const CLI_ALTERNATIVES = {
   phrase: `(?<cli>${CLI_PHRASE})`,
-  text: `(?<cli>(?<=[ \`])t3(?=[ \`\\\\]|[.,;:!?](?:\\s|["'\`]|$))|${CLI_PHRASE})`,
+  text: `(?<cli>(?<=[ \`])(?<!npx )t3(?=[ \`\\\\"']|[.,!?](?:\\s|["'\`]|$))|${CLI_PHRASE})`,
 };
 type CliScope = keyof typeof CLI_ALTERNATIVES | undefined;
 const patterns = new Map<string, RegExp>();
