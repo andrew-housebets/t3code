@@ -1022,14 +1022,14 @@ describe("EnvironmentThreads", () => {
         Stream.runHead,
       );
       yield* Queue.offer(harness.inputs, titleUpdated("Replayed", CACHED_SNAPSHOT_SEQUENCE + 1));
-      const replayed = yield* awaitThreadState(
-        harness.observed,
-        (value) => Option.isSome(value.data) && value.data.value.thread.title === "Replayed",
-      );
-      expect(replayed.status).toBe("synchronizing");
+      expect((yield* Ref.get(harness.latest)).status).toBe("synchronizing");
 
       yield* Queue.offer(harness.inputs, synchronized());
-      yield* awaitThreadState(harness.observed, (value) => value.status === "live");
+      const caughtUp = yield* awaitThreadState(
+        harness.observed,
+        (value) => value.status === "live",
+      );
+      expect(Option.getOrThrow(caughtUp.data).thread.title).toBe("Replayed");
     }),
   );
 
