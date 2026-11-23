@@ -2,6 +2,7 @@
 import * as NodeFSP from "node:fs/promises";
 
 import type { DesktopCliCommandState } from "@t3tools/contracts";
+import { CliCommandNames } from "@t3tools/shared/cliCommand";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -87,6 +88,8 @@ export const make = Effect.gen(function* () {
   const path = environment.path;
   const windows = environment.platform === "win32";
   const launcher = DesktopCliShim.launcherPath(environment);
+  const names = yield* CliCommandNames;
+  const linkIn = (directory: string) => path.join(directory, names.command);
   const binDirectory = path.dirname(launcher);
   const ownedPathMarker = path.join(environment.stateDir, "cli-command-path-entry");
   const firstLaunchMarker = path.join(environment.stateDir, "cli-command-first-launch");
@@ -172,7 +175,7 @@ export const make = Effect.gen(function* () {
 
   const firstOnPath = Effect.gen(function* () {
     for (const directory of pathEntries(env.PATH, ":")) {
-      const candidate = path.join(directory, "t3");
+      const candidate = linkIn(directory);
       if (yield* isExecutableFile(candidate)) return Option.some(candidate);
     }
     return Option.none<string>();
@@ -201,7 +204,7 @@ export const make = Effect.gen(function* () {
         : Option.none<string>();
     }
     for (const directory of knownLocations(environment.homeDirectory, environment.platform)) {
-      const link = path.join(directory, "t3");
+      const link = linkIn(directory);
       if (yield* isOurLink(link)) return Option.some(link);
     }
     return Option.none<string>();
@@ -332,7 +335,7 @@ export const make = Effect.gen(function* () {
       ...candidates.filter((candidate) => onPath.includes(candidate)),
       ...candidates.filter((candidate) => !onPath.includes(candidate)),
     ])) {
-      const link = path.join(directory, "t3");
+      const link = linkIn(directory);
       const created = (yield* exists(directory))
         ? yield* writableDirectory(directory)
         : yield* fs.makeDirectory(directory, { recursive: true }).pipe(
@@ -362,6 +365,10 @@ export const make = Effect.gen(function* () {
       if (replaced !== undefined && replaced !== link) {
         yield* fs.remove(replaced).pipe(Effect.ignore);
       }
+      // An alias never replaces what is already at its path.
+      for (const alias of names.aliases) {
+        yield* fs.symlink(launcher, path.join(directory, alias)).pipe(Effect.ignore);
+      }
       return yield* state;
     }
     return yield* fail(
@@ -382,9 +389,15 @@ export const make = Effect.gen(function* () {
       return yield* state;
     }
     for (const directory of knownLocations(environment.homeDirectory, environment.platform)) {
-      const link = path.join(directory, "t3");
+      const link = linkIn(directory);
       if (yield* isOurLink(link)) {
         yield* fs.remove(link).pipe(Effect.mapError(() => fail(`Could not remove ${link}.`)));
+      }
+      for (const alias of names.aliases) {
+        const aliasLink = path.join(directory, alias);
+        if ((yield* isOurLink(aliasLink)) && (yield* leadsHere(aliasLink))) {
+          yield* fs.remove(aliasLink).pipe(Effect.ignore);
+        }
       }
     }
     return yield* state;
@@ -418,6 +431,15 @@ export const make = Effect.gen(function* () {
 
   const installOnFirstLaunch: DesktopCliCommand["Service"]["installOnFirstLaunch"] = Effect.gen(
     function* () {
+      // A link this app made under an alias name gets the command's own name beside it.
+      for (const directory of knownLocations(environment.homeDirectory, environment.platform)) {
+        for (const alias of names.aliases) {
+          const aliasLink = path.join(directory, alias);
+          if ((yield* isOurLink(aliasLink)) && (yield* leadsHere(aliasLink))) {
+            yield* fs.symlink(launcher, linkIn(directory)).pipe(Effect.ignore);
+          }
+        }
+      }
       // A fork build must not claim the shared `t3` name; its Settings can still install it.
       if (!environment.isPackaged || Option.isSome(environment.forkIdentity)) return;
       if (yield* exists(firstLaunchMarker)) return;

@@ -77,3 +77,25 @@ it("gives fork shims their own marker and still reads the upstream one", () => {
     `const UPSTREAM_MARKER = "Written by T3 Code: runs the desktop app's bundled t3 CLI.";`,
   );
 });
+
+it("renames the command where the text is about this machine's own CLI", () => {
+  const names = { ...fork, cli: "acme" };
+  const own = "/repo/apps/server/src/cli/service.ts";
+  assert.strictEqual(
+    renameBrand(
+      '"Run `t3 service install`. The t3 command, or t3." + "t3.cmd" + t3Home',
+      names,
+      own,
+    ),
+    '"Run `acme service install`. The acme command, or acme." + "t3.cmd" + t3Home',
+  );
+  const remote = "/repo/apps/web/src/components/settings/SavedEnvironmentRows.tsx";
+  assert.strictEqual(
+    renameBrand('"Run `t3 connect link` on the host"', names, remote),
+    '"Run `t3 connect link` on the host"',
+  );
+  const module = NodePath.resolve(import.meta.dirname, "../../packages/shared/src/cliCommand.ts");
+  const renamed = connectBrandPlugin(names).transform(NodeFS.readFileSync(module, "utf8"), module);
+  assert.include(renamed?.code, 'CLI_COMMAND = "acme"');
+  assert.include(renamed?.code, 'ReadonlyArray<string> = ["t3"]');
+});
