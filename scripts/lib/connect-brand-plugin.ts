@@ -7,7 +7,7 @@ export const KEPT_UPSTREAM_SNIPPETS = [
   'legacy: "T3 Code (Dev)"',
   'legacy: "T3 Code (Alpha)"',
   '["T3 Code (Alpha)", "t3code"]',
-  '"Written by T3 Code: runs',
+  `UPSTREAM_MARKER = "Written by T3 Code: runs the desktop app's bundled t3 CLI."`,
   'CODEX_CLIENT_NAME = "T3 Code"',
   'agent_name_hint: "T3 Code"',
   'resource_name: "T3 Code"',

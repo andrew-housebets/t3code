@@ -110,7 +110,7 @@ export const make = Effect.gen(function* () {
       const info = yield* fs.stat(link);
       if (info.type !== "File" || Number(info.size) > 16_384) return false;
       const content = yield* fs.readFileString(link);
-      return content.includes(DesktopCliShim.MARKER);
+      return DesktopCliShim.isMarked(content);
     },
     Effect.orElseSucceed(() => false),
   );
@@ -123,7 +123,7 @@ export const make = Effect.gen(function* () {
       if (resolved !== ours) return false;
       const info = yield* fs.stat(candidate);
       if (info.type !== "File" || Number(info.size) > 16_384) return false;
-      return (yield* fs.readFileString(candidate)).includes(DesktopCliShim.MARKER);
+      return DesktopCliShim.isMarked(yield* fs.readFileString(candidate));
     },
     Effect.orElseSucceed(() => false),
   );

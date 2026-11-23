@@ -1,5 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeChildProcess from "node:child_process";
+import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
 import { assert, it } from "@effect/vitest";
@@ -62,4 +63,17 @@ it("still finds every kept snippet in the source it protects", () => {
     );
     assert.notStrictEqual(found.stdout.trim(), "", `no source line contains ${snippet}`);
   }
+});
+
+it("gives fork shims their own marker and still reads the upstream one", () => {
+  const shim = NodePath.resolve(
+    import.meta.dirname,
+    "../../apps/desktop/src/app/DesktopCliShim.ts",
+  );
+  const renamed = renameBrand(NodeFS.readFileSync(shim, "utf8"), fork, shim);
+  assert.include(renamed, 'export const MARKER = "Written by Acme Code: runs');
+  assert.include(
+    renamed,
+    `const UPSTREAM_MARKER = "Written by T3 Code: runs the desktop app's bundled t3 CLI.";`,
+  );
 });
