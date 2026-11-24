@@ -3,14 +3,13 @@ const names = {
   connect: fromEnv("T3CODE_CONNECT_NAME"),
   app: fromEnv("T3CODE_APP_NAME"),
   githubApp: fromEnv("T3CODE_GITHUB_APP_NAME"),
+  account: fromEnv("T3CODE_ACCOUNT_NAME"),
 };
-const accountName = fromEnv("T3CODE_ACCOUNT_NAME");
-const isRenaming = Boolean(names.connect || names.app || names.githubApp || accountName);
+const isRenaming = Object.values(names).some(Boolean);
 const renameBrand = isRenaming
   ? require("../../scripts/lib/connect-brand-plugin.ts").renameBrand
   : (value) => value;
-const rename = (value, moduleId) =>
-  renameBrand(accountName ? value.replaceAll("T3 Account", accountName) : value, names, moduleId);
+const rename = (value, moduleId) => renameBrand(value, names, moduleId);
 
 // Forks rename the app and its relay service in every bundled string.
 const brandPlugin = () => ({

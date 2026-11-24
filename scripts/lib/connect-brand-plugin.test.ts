@@ -5,7 +5,12 @@ import * as NodePath from "node:path";
 
 import { assert, it } from "@effect/vitest";
 
-import { connectBrandPlugin, KEPT_UPSTREAM_SNIPPETS, renameBrand } from "./connect-brand-plugin.ts";
+import {
+  connectBrandPlugin,
+  KEPT_UPSTREAM_SNIPPETS,
+  renameBrand,
+  renameBrandCatalogFile,
+} from "./connect-brand-plugin.ts";
 
 const fork = { app: "Acme Code", connect: "Acme Connect" };
 
@@ -36,6 +41,14 @@ it("renames the app in prose and leaves identifiers, other products and model-fa
     '"T3 Code on Acme Connect"',
   );
   assert.strictEqual(rename("`T3 Code · ${self.label}`"), "`Acme Code · ${self.label}`");
+  assert.strictEqual(
+    rename(String.raw`"List\nListed\nT3 threads"`),
+    String.raw`"List\nListed\nAcme threads"`,
+  );
+  assert.strictEqual(
+    rename("<T>through T3\n  Connect at ?name=T3%20Code</T>"),
+    "<T>through Acme Connect at ?name=Acme%20Code</T>",
+  );
   assert.strictEqual(
     renameBrand(
       '"T3 Code for GitHub" at https://github.com/apps/t3-code-for-github/installations/new',
@@ -114,4 +127,72 @@ it("renames the command where the text is about this machine's own CLI", () => {
   const renamed = connectBrandPlugin(names).transform(NodeFS.readFileSync(module, "utf8"), module);
   assert.include(renamed?.code, 'CLI_COMMAND = "acme"');
   assert.include(renamed?.code, 'ReadonlyArray<string> = ["t3"]');
+});
+
+const catalogApps = ["web", "mobile", "desktop"].map((app) =>
+  NodePath.resolve(import.meta.dirname, "../../apps", app, "src/i18n/translations"),
+);
+const readCatalog = (path: string) =>
+  JSON.parse(NodeFS.readFileSync(path, "utf8")) as Record<string, unknown>;
+
+it("gives renamed text the key GT looks up, with the renamed translation", () => {
+  const [web = ""] = catalogApps;
+  const english = readCatalog(NodePath.join(web, "en.json"));
+  const german = readCatalog(NodePath.join(web, "de.json"));
+  const committedKey = Object.keys(english).find((key) => english[key] === "Sign in to T3 Connect");
+  assert.isDefined(committedKey);
+  const names = { ...fork, cli: "acme" };
+  const renamedEnglish = JSON.parse(
+    renameBrandCatalogFile(NodePath.join(web, "en.json"), names),
+  ) as Record<string, unknown>;
+  const renamedGerman = JSON.parse(
+    renameBrandCatalogFile(NodePath.join(web, "de.json"), names),
+  ) as Record<string, unknown>;
+  const renamedKey = Object.keys(renamedEnglish).find(
+    (key) => renamedEnglish[key] === "Sign in to Acme Connect",
+  );
+  assert.isDefined(renamedKey);
+  assert.notStrictEqual(renamedKey, committedKey);
+  assert.strictEqual(
+    renamedGerman[renamedKey ?? ""],
+    String(german[committedKey ?? ""]).replaceAll("T3 Connect", "Acme Connect"),
+  );
+  assert.notProperty(renamedGerman, committedKey ?? "");
+});
+
+it("leaves no upstream name in a catalog entry whose English lost it", () => {
+  const upstreamName = /(?<![A-Za-z0-9])T3(?![A-Za-z0-9])(?![ -]?Chat)/;
+  const names = { ...fork, cli: "acme", account: "Acme Account" };
+  for (const directory of catalogApps) {
+    const english = readCatalog(NodePath.join(directory, "en.json"));
+    const renamedEnglish = JSON.parse(
+      renameBrandCatalogFile(NodePath.join(directory, "en.json"), names),
+    ) as Record<string, unknown>;
+    const cleanKeys = Object.keys(renamedEnglish).filter(
+      (key) => !(key in english) && !upstreamName.test(JSON.stringify(renamedEnglish[key])),
+    );
+    assert.isAbove(cleanKeys.length, 0);
+    for (const file of NodeFS.readdirSync(directory)) {
+      const renamed = JSON.parse(
+        renameBrandCatalogFile(NodePath.join(directory, file), names),
+      ) as Record<string, unknown>;
+      for (const key of cleanKeys) {
+        assert.notMatch(JSON.stringify(renamed[key] ?? ""), upstreamName, `${file} ${key}`);
+      }
+    }
+  }
+});
+
+it("names the app in every English catalog string outside the kept upstream names", () => {
+  const upstreamName = /(?<![A-Za-z0-9])T3(?![A-Za-z0-9])(?! Chat| team)/;
+  for (const directory of catalogApps) {
+    for (const [key, source] of Object.entries(readCatalog(NodePath.join(directory, "en.json")))) {
+      const renamed = renameBrand(
+        JSON.stringify(source),
+        { ...fork, account: "Acme Account" },
+        "/repo/apps/web/src/a.tsx",
+      );
+      assert.notMatch(renamed, upstreamName, `${directory} ${key}`);
+    }
+  }
 });
