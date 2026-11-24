@@ -23,11 +23,12 @@ export const KEPT_UPSTREAM_SNIPPETS = [
   '=== "T3 Code"',
   "the T3 server WebSocket",
   "T3 team",
+  "-Namespace T3",
 ];
 
 /** Text a model reads, and managed-policy names an administrator matches against upstream's keys. */
 const KEPT_UPSTREAM_MODULES =
-  /\/node_modules\/|\/src\/mcp\/|\/orchestration-v2\/(?!UserFacingErrors|Orchestrator\.ts)|\/triage\/|\/policy\/|Instructions\.ts|[tT]extGeneration|orchestratorMcp\.ts|mcpExtensionSource\.ts|htmlRender\.ts|managedPolicyFile\.ts/;
+  /\/node_modules\/|\/src\/mcp\/|\/orchestration-v2\/(?!UserFacingErrors|Orchestrator\.ts)|\/triage\/|\/policy\/|Instructions\.ts|[tT]extGeneration|orchestratorMcp\.ts|\/contracts\/src\/orchestrationV2\.ts|mcpExtensionSource\.ts|htmlRender\.ts|managedPolicyFile\.ts/;
 
 const UPSTREAM_WORDMARK_MODULE = "/apps/web/src/components/T3Wordmark.tsx";
 const FORK_WORDMARK_SOURCE = 'export { MessagesSquareIcon as T3Wordmark } from "lucide-react";\n';

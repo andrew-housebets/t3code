@@ -41,6 +41,11 @@ it("renames the app in prose and leaves identifiers, other products and model-fa
     '"T3 Code on Acme Connect"',
   );
   assert.strictEqual(rename("`T3 Code · ${self.label}`"), "`Acme Code · ${self.label}`");
+  const provenance = '"[T3 Code: the agent in T3 thread sent this message, not the user.]"';
+  assert.strictEqual(
+    rename(provenance, "/repo/packages/contracts/src/orchestrationV2.ts"),
+    provenance,
+  );
   assert.strictEqual(
     rename(String.raw`"List\nListed\nT3 threads"`),
     String.raw`"List\nListed\nAcme threads"`,
