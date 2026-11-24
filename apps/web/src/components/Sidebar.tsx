@@ -1320,7 +1320,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         }),
       });
       const target = entry?.targetProject ?? group;
-      void handleNewThread(scopeProjectRef(target.environmentId, target.id), options);
+      const projectRef = scopeProjectRef(target.environmentId, target.id);
+      void (options ? handleNewThread(projectRef, options) : handleNewThread(projectRef));
     },
   );
   const handleProjectFolderContextMenu = useStableCallback(
