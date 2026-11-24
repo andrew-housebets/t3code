@@ -387,6 +387,10 @@
       "types": "./src/FeatureFlags.ts",
       "import": "./src/FeatureFlags.ts"
     },
+    "./cliCommand": {
+      "types": "./src/cliCommand.ts",
+      "import": "./src/cliCommand.ts"
+    },
     "./HostProcess": {
       "types": "./src/HostProcess.ts",
       "import": "./src/HostProcess.ts"
