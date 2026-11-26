@@ -112,6 +112,14 @@ it("renames the command where the text is about this machine's own CLI", () => {
     '"Could not install acme" + `npx t3 serve` + { t3: Schema.String }',
   );
   assert.strictEqual(
+    renameBrand(
+      'Use <code className="font-mono">t3</code> + jsx("code", { children: "t3" }) + key("t3")',
+      names,
+      own,
+    ),
+    'Use <code className="font-mono">acme</code> + jsx("code", { children: "acme" }) + key("t3")',
+  );
+  assert.strictEqual(
     renameBrand('"Download a newer t3"', names, "/repo/apps/server/src/cli/update.ts"),
     '"Download a newer t3"',
   );

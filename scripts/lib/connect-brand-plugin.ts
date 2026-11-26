@@ -52,9 +52,10 @@ const APP_ALTERNATIVES = [
   "(?<=[a-z] )T3\\b(?!\\s+(?:Chat|Connect|Account))",
 ];
 const CLI_PHRASE = "\\bt3(?= (?:commands?|launcher|CLI)\\b)";
+const CLI_CODE_ELEMENT = '(?<=>)t3(?=</code>)|(?<=children: ")t3(?=")';
 const CLI_ALTERNATIVES = {
   phrase: `(?<cli>${CLI_PHRASE})`,
-  text: `(?<cli>(?<=[ \`])(?<!npx )t3(?=[ \`\\\\"']|[.,!?](?:\\s|["'\`]|$))|${CLI_PHRASE})`,
+  text: `(?<cli>(?<=[ \`])(?<!npx )t3(?=[ \`\\\\"']|[.,!?](?:\\s|["'\`]|$))|${CLI_PHRASE}|${CLI_CODE_ELEMENT})`,
 };
 type CliScope = keyof typeof CLI_ALTERNATIVES | undefined;
 const patterns = new Map<string, RegExp>();
