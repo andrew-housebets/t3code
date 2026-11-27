@@ -32,7 +32,6 @@ import type { SelectableMarkdownTextProps } from "./SelectableMarkdownText.types
 import { useAppearancePreferences } from "../features/settings/appearance/AppearancePreferencesProvider";
 import { Menu } from "../components/ui/Menu";
 import { useEnrichedLinkVariants } from "./useEnrichedLinkVariants";
-import { SYSTEM_FONT_FAMILY } from "../lib/fontFamilies";
 import { useRetryingImageSource } from "./useRetryingImageSource";
 import * as Dialog from "../components/ui/Dialog";
 import { copyTextWithHaptic } from "../lib/copyTextWithHaptic";
@@ -50,9 +49,9 @@ function enrichedStyle(
   dark: boolean,
   fontScale: number,
 ): MarkdownStyle {
-  const monospace = Platform.OS === "ios" ? "Menlo" : "monospace";
-  // Android only bolds fallback glyphs when the bold family is asked for at a bold weight (app.config.ts).
-  const boldFontWeight = Platform.OS === "android" ? "bold" : undefined;
+  const monospace = style.monoFontFamily;
+  // The system family bolds only by weight, and Android bolds fallback glyphs only at a bold weight (app.config.ts).
+  const boldFontWeight = "bold";
   // Keep the radius modest: iOS clips square table-cell borders without stroking the corner arcs.
   const block = {
     marginTop: 4,
@@ -101,8 +100,7 @@ function enrichedStyle(
     strong: {
       color: style.strongColor,
       fontFamily: style.boldFontFamily,
-      fontWeight:
-        boldFontWeight ?? (style.boldFontFamily === SYSTEM_FONT_FAMILY ? "bold" : "normal"),
+      fontWeight: boldFontWeight,
     },
     link: { color: style.linkColor, underline: false },
     code: {

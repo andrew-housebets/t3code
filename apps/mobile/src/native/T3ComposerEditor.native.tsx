@@ -29,7 +29,6 @@ import {
 import { contextChipIconUri, modelChipIcon, modelChipIconUri } from "../lib/contextChipIconSource";
 import { MOBILE_TYPOGRAPHY } from "../lib/typography";
 import { useNativePaste } from "../lib/useNativePaste";
-import { useFontFamilies } from "../lib/useClaudeLook";
 import { useAppearancePreferences } from "../features/settings/appearance/AppearancePreferencesProvider";
 import { useUniwindTheme } from "../lib/useUniwindTheme";
 import { createNativeComposerTheme } from "../lib/nativeComposerTheme";
@@ -311,8 +310,7 @@ export function ComposerEditor({
     },
     [nativeEventSnapshotsRef],
   );
-  const { systemColorsActive } = useAppearancePreferences();
-  const fontFamilies = useFontFamilies();
+  const { systemColorsActive, fontFamilies } = useAppearancePreferences();
   const themeJson = JSON.stringify({
     ...createNativeComposerTheme(theme),
     selection: Platform.OS === "android" || systemColorsActive ? theme["--color-focus"] : null,

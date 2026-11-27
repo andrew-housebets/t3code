@@ -9,7 +9,7 @@ import type { LinkPillContent, MarkdownStyle } from "react-native-enriched-markd
 import type { ComposerContextRecord } from "@t3tools/contracts";
 import { contextChipAccent, contextChipPresentation } from "../lib/composerChipPresentation";
 import { CONTEXT_CHIP_ICON_SOURCES } from "../lib/contextChipIcons.generated";
-import { useFontFamilies } from "../lib/useClaudeLook";
+import { useAppearancePreferences } from "../features/settings/appearance/AppearancePreferencesProvider";
 import { contextChipIconSource } from "../lib/contextChipIconSource";
 import { markdownFileIconSource } from "../lib/markdownFileIcons";
 import { markdownLinkIcon } from "../lib/markdownLinkIcons";
@@ -121,7 +121,7 @@ export function useEnrichedLinkVariants(
 ) {
   const { linkCustomization, skills, models, textStyle, fileEmbedLabel } = props;
   const theme = useUniwindTheme();
-  const mediumFontFamily = useFontFamilies().medium;
+  const { fontFamilies } = useAppearancePreferences();
   const links = useMemo(() => {
     const byUrl = new Map<string, MarkdownLinkCustomization>();
     for (const url of urls) {
@@ -186,7 +186,7 @@ export function useEnrichedLinkVariants(
                       paddingVertical: 2,
                     },
                   }),
-              fontFamily: chipForeground ? mediumFontFamily : textStyle.fontFamily,
+              fontFamily: chipForeground ? fontFamilies.medium : textStyle.fontFamily,
               color: chipForeground ?? link.color ?? textStyle.fileTextColor,
               underline: false,
               backgroundColor: "transparent",
@@ -194,7 +194,7 @@ export function useEnrichedLinkVariants(
           ];
         }),
       ),
-    [chipForegrounds, icons, links, mediumFontFamily, textStyle],
+    [chipForegrounds, fontFamilies, icons, links, textStyle],
   );
   const linkPillContent = useMemo<Record<string, LinkPillContent>>(
     () =>
