@@ -182,6 +182,7 @@ export function ComposerSurface(props: {
   readonly style: ViewStyle;
   readonly animateLayout?: boolean;
   readonly focused?: boolean;
+  readonly tone?: "warning";
 }) {
   const colors = useUniwindTheme();
   const { themeId, themeAppearance } = useAppearancePreferences();
@@ -256,6 +257,7 @@ export function ComposerSurface(props: {
       )}
       <Animated.View
         collapsable={false}
+        className={props.tone === "warning" ? "bg-warning" : undefined}
         layout={layoutTransition}
         style={[props.style, animatedShapeStyle]}
       >

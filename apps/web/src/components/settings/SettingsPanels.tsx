@@ -2593,9 +2593,12 @@ export function AboutSettingsPanel() {
           {...setting("privacy-policy")}
           description={
             telemetryOff === undefined
-              ? gt("How we handle your data, including the anonymous usage data {app} collects.", {
-                  app: APP_BASE_NAME,
-                })
+              ? gt(
+                  "How we handle your data, including the pseudonymous product usage data {app} collects.",
+                  {
+                    app: APP_BASE_NAME,
+                  },
+                )
               : gt("How we handle your data. {telemetryOff}", { telemetryOff })
           }
           control={
