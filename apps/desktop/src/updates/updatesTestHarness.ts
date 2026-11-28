@@ -44,6 +44,7 @@ export interface UpdatesHarnessOptions {
   readonly savedChannel?: DesktopAppSettings.DesktopSettings["updateChannel"];
   /** Adds a WSL backend beside the primary, as on a Windows host with WSL enabled. */
   readonly wslBackend?: boolean;
+  readonly forkIdentity?: DesktopEnvironment.DesktopForkIdentity;
 }
 
 export function makeHarness(options: UpdatesHarnessOptions = {}) {
@@ -189,6 +190,7 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     isPackaged: true,
     resourcesPath: "/missing/resources",
     runningUnderArm64Translation: false,
+    forkIdentity: Option.fromNullishOr(options.forkIdentity),
   }).pipe(
     Layer.provide(
       Layer.mergeAll(
@@ -246,6 +248,7 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
   const updateRestartMarkers = new Set<string>();
   const updateMarkerContents = new Map<string, string>();
   const installRecords = new Map<string, string>();
+  const deletedFiles = new Set<string>();
   let previousInstallRecord = options.installRecord;
   const isInstallRecord = (path: string) =>
     path.endsWith(DesktopUpdates.DESKTOP_UPDATE_INSTALL_RECORD_FILE);
@@ -266,6 +269,7 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
             }),
           );
     },
+    exists: (path) => Effect.succeed(!deletedFiles.has(path)),
     makeDirectory: () => Effect.void,
     writeFileString: (path, data) =>
       Effect.sync(() => {
@@ -320,6 +324,8 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     updateInProgressMarker: () =>
       [...updateMarkerContents].find(([path]) => path.endsWith("/desktop-update-in-progress"))?.[1],
     installRecords,
+    /** Paths removed behind the app's back, as by a cache cleaner. */
+    deletedFiles,
     previousInstallRecord: () => previousInstallRecord,
     downloadCount: () => downloadCount,
     feedUrls: (): ElectronUpdater.ElectronUpdaterFeedUrl[] => feedUrls,

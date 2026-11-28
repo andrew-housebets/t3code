@@ -13,6 +13,8 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import * as Sink from "effect/Sink";
+import * as Stream from "effect/Stream";
 import { McpSchema, McpServer, Tool, Toolkit } from "effect/ai";
 
 import { OrchestratorProjectionError } from "../orchestration-v2/Orchestrator.ts";
@@ -39,7 +41,24 @@ const backgroundShell = (threadId: ThreadId, providerInstanceId: ProviderInstanc
   ],
 });
 
+const coordinatorThreadId = ThreadId.make("thread:coordinator");
+const delegatedThreadId = ThreadId.make("thread:delegated");
+const nestedThreadId = ThreadId.make("thread:delegated-by-delegated");
+const forkedThreadId = ThreadId.make("thread:coordinator-fork");
+const childOf = (
+  threadId: ThreadId,
+  parentThreadId: ThreadId,
+  relationshipToParent: "subagent" | "fork" = "subagent",
+) => ({
+  ...liveThreadShell(threadId),
+  lineage: { rootThreadId: coordinatorThreadId, parentThreadId, relationshipToParent },
+});
+
 const shells = new Map([
+  [coordinatorThreadId, { ...liveThreadShell(coordinatorThreadId), tags: ["coordinator"] }],
+  [delegatedThreadId, childOf(delegatedThreadId, coordinatorThreadId)],
+  [nestedThreadId, childOf(nestedThreadId, delegatedThreadId)],
+  [forkedThreadId, childOf(forkedThreadId, coordinatorThreadId, "fork")],
   [supervisedThreadId, liveThreadShell(supervisedThreadId, { runtimeMode: "approval-required" })],
   [
     planThreadId,
@@ -113,8 +132,14 @@ const probe = {
 };
 const ProbeToolkit = Toolkit.make(
   Tool.make("reads", probe),
-  Tool.make("reads_as_caller", probe),
-  Tool.make("acts_as_caller", probe),
+  Tool.make("reads_as_caller", probe).annotate(
+    McpSchema.EnabledWhen,
+    McpInvocationContext.hiddenFromOutsideClients,
+  ),
+  Tool.make("acts_as_caller", probe).annotate(
+    McpSchema.EnabledWhen,
+    McpInvocationContext.hiddenFromOutsideClients,
+  ),
   Tool.make("writes", probe),
   Tool.make("writes_with_capability", probe),
   Tool.make("writes_threads", {
@@ -129,6 +154,7 @@ const ProbeToolkit = Toolkit.make(
     }),
   }),
   Tool.make("writes_environment", probe),
+  Tool.make("writes_owner_work", probe),
 );
 const ran = Effect.succeed({ ran: "ran" });
 const probeHandlers: McpToolAccess.Handlers<typeof ProbeToolkit.tools> = {
@@ -147,6 +173,7 @@ const probeHandlers: McpToolAccess.Handlers<typeof ProbeToolkit.tools> = {
     "stamped",
   ),
   writes_environment: McpToolAccess.writesEnvironment(() => ran),
+  writes_owner_work: McpToolAccess.writesOwnerWork("drive owner work", () => ran),
 };
 const layerProbeHandlers = McpToolAccess.toLayer(ProbeToolkit, probeHandlers);
 
@@ -186,6 +213,7 @@ export const refusedAtCompileTime = () => {
       writes_threads: unchecked,
       starts_threads: unchecked,
       writes_environment: unchecked,
+      writes_owner_work: unchecked,
     }),
   );
 };
@@ -218,6 +246,7 @@ const call = (
   );
 
 const supervised = threadCaller(supervisedThreadId);
+const coordinator = threadCaller(coordinatorThreadId);
 const plan = threadCaller(planThreadId);
 const fullAccess = threadCaller(fullAccessThreadId);
 const ended = threadCaller(endedThreadId);
@@ -241,6 +270,15 @@ const fullAccessLinkedClient: McpInvocationContext.McpInvocationScope = {
   ...fullAccessClient,
   client: { ...fullAccessClient.client!, linked: true },
 };
+// An administrator's ceiling narrows every client to it.
+const atCeilingClient: McpInvocationContext.McpInvocationScope = {
+  ...fullAccessClient,
+  runtimeModeCeiling: "auto",
+  client: {
+    ...fullAccessClient.client!,
+    narrowedTo: { runtimeMode: "auto", interactionMode: "default" },
+  },
+};
 const previewOnly = { ...fullAccess, capabilities: new Set(["preview"] as const) };
 
 it.effect.each([
@@ -254,7 +292,6 @@ it.effect.each([
   ["writes_environment", readOnlyClient, {}, "capability_denied"],
 
   ["reads_as_caller", ended, {}, "ran"],
-  ["reads_as_caller", fullAccessClient, {}, "thread_credential_required"],
   ["acts_as_caller", supervised, {}, "ran"],
   ["acts_as_caller", ended, {}, "parent_not_active"],
   ["acts_as_caller", background, {}, "ran"],
@@ -262,7 +299,6 @@ it.effect.each([
   ["acts_as_caller", mismatchedProvider, {}, "parent_not_active"],
   ["acts_as_caller", archivedBackground, {}, "parent_not_active"],
   ["acts_as_caller", unknownOwnerBackground, {}, "parent_not_active"],
-  ["acts_as_caller", fullAccessClient, {}, "thread_credential_required"],
 
   ["writes", supervised, {}, "ran"],
   ["writes", ended, {}, "parent_not_active"],
@@ -299,6 +335,12 @@ it.effect.each([
     "runtime_mode_escalation_denied",
   ],
   ["writes_threads", supervised, { threadId: "thread:missing" }, "ran"],
+  ["writes_threads", coordinator, {}, "ran"],
+  ["writes_threads", coordinator, { threadId: delegatedThreadId }, "ran"],
+  ["writes_threads", coordinator, { threadId: nestedThreadId }, "ran"],
+  ["writes_threads", coordinator, { threadId: fullAccessThreadId }, "capability_denied"],
+  ["writes_threads", coordinator, { threadId: forkedThreadId }, "capability_denied"],
+  ["writes_threads", fullAccess, { threadId: delegatedThreadId }, "ran"],
 
   ["starts_threads", supervised, {}, "approval-required/default"],
   ["starts_threads", supervised, { runtimeMode: "full-access" }, "runtime_mode_escalation_denied"],
@@ -315,6 +357,18 @@ it.effect.each([
   ["writes_environment", plan, {}, "capability_denied"],
   ["writes_environment", fullAccessClient, {}, "ran"],
   ["writes_environment", supervisedClient, {}, "capability_denied"],
+
+  ["writes_owner_work", fullAccess, {}, "ran"],
+  ["writes_owner_work", supervised, {}, "capability_denied"],
+  ["writes_owner_work", plan, {}, "capability_denied"],
+  ["writes_owner_work", ended, {}, "parent_not_active"],
+  ["writes_owner_work", fullAccessClient, {}, "ran"],
+  ["writes_owner_work", supervisedClient, {}, "capability_denied"],
+  ["writes_owner_work", readOnlyClient, {}, "capability_denied"],
+  ["writes_owner_work", linkedClient, {}, "capability_denied"],
+  ["writes_owner_work", fullAccessLinkedClient, {}, "ran"],
+  ["writes_owner_work", atCeilingClient, {}, "ran"],
+  ["writes_environment", atCeilingClient, {}, "capability_denied"],
 ] as const)("%s from %o with %o: %s", ([tool, scope, args, expected]) =>
   call(tool, scope, args).pipe(
     Effect.map((outcome) => expect(outcome).toBe(expected)),
@@ -359,6 +413,7 @@ it.effect("refuses a change when the calling thread cannot be read", () =>
 );
 
 const box = EnvironmentId.make("environment-box");
+const remoteChildThreadId = ThreadId.make("thread:delegated-on-box");
 const here = EnvironmentId.make("environment");
 const linkedProbe = {
   ...probe,
@@ -396,6 +451,13 @@ const linkedProbeServer = McpHttpServer.toolkitRegistration(
   Layer.provideMerge(
     Layer.mock(ThreadManagement.ThreadManagementService)({
       getThreadShell: (threadId) => Effect.succeed(shells.get(threadId) ?? null),
+      getThreadRecords: (threadId) =>
+        Effect.succeed({
+          subagents:
+            threadId === coordinatorThreadId
+              ? [{ remoteChild: { environmentId: box, threadId: remoteChildThreadId } }]
+              : [],
+        } as never),
     }),
   ),
   // Stands in for the linked environment, answering with where the call went.
@@ -446,6 +508,19 @@ it.effect.each([
     { environmentId: here, threadId: fullAccessThreadId },
     "runtime_mode_escalation_denied",
   ],
+  // A coordinator there may only name a thread it delegated there.
+  [
+    "writes_threads",
+    coordinator,
+    { environmentId: box, threadId: remoteChildThreadId },
+    "writes_threads in environment-box",
+  ],
+  [
+    "writes_threads",
+    coordinator,
+    { environmentId: box, threadId: fullAccessThreadId },
+    "capability_denied",
+  ],
 ] as const)("a linked %s from %o with %o: %s", ([tool, scope, args, expected]) =>
   call(tool, scope, args).pipe(
     Effect.map((outcome) => expect(outcome).toBe(expected)),
@@ -455,7 +530,12 @@ it.effect.each([
 
 it.effect("refuses a linked environment to a tool that acts as its calling thread", () =>
   Effect.gen(function* () {
-    const CallerToolkit = Toolkit.make(Tool.make("acts_as_caller", linkedProbe));
+    const CallerToolkit = Toolkit.make(
+      Tool.make("acts_as_caller", linkedProbe).annotate(
+        McpSchema.EnabledWhen,
+        McpInvocationContext.hiddenFromOutsideClients,
+      ),
+    );
     const built = yield* Layer.build(
       McpToolAccess.HandlersLayer.layer(
         McpToolAccess.toLayer(CallerToolkit, {
@@ -464,5 +544,38 @@ it.effect("refuses a linked environment to a tool that acts as its calling threa
       ),
     ).pipe(Effect.scoped, Effect.exit);
     expect(Exit.isFailure(built) && Cause.hasDies(built.cause)).toBe(true);
+  }),
+);
+
+// Discovery hides these tools. The handler must refuse on its own if that ever changes.
+it.effect.each(["reads_as_caller", "acts_as_caller"] as const)(
+  "%s refuses an outside client behind discovery",
+  (tool) =>
+    Effect.gen(function* () {
+      const built = yield* ProbeToolkit;
+      const { result } = yield* built
+        .handle(tool, {})
+        .pipe(Stream.unwrap, Stream.run(Sink.last()), Effect.flatMap(Effect.fromOption));
+      expect(result).toMatchObject({ code: "thread_credential_required" });
+    }).pipe(
+      Effect.provide(McpToolAccess.HandlersLayer.layer(layerProbeHandlers)),
+      Effect.provideService(McpInvocationContext.McpInvocationContext, fullAccessClient),
+      Effect.provide(Layer.mock(ThreadManagement.ThreadManagementService)({})),
+    ),
+);
+
+it.effect("refuses to build a thread-bound tool that outside clients would be offered", () =>
+  Effect.gen(function* () {
+    const CallerToolkit = Toolkit.make(Tool.make("reads_as_caller", probe));
+    const built = yield* Layer.build(
+      McpToolAccess.HandlersLayer.layer(
+        McpToolAccess.toLayer(CallerToolkit, {
+          reads_as_caller: McpToolAccess.readsAsCaller(() => ran),
+        }),
+      ),
+    ).pipe(Effect.scoped, Effect.exit);
+    expect(Exit.isFailure(built) && Cause.pretty(built.cause)).toContain(
+      "reads_as_caller acts as its calling thread",
+    );
   }),
 );

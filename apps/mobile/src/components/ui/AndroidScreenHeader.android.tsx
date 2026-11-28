@@ -1,5 +1,6 @@
 import { AppActivityIndicator } from "./AppActivityIndicator";
 import { Column, Text as NativeText, RNHostView } from "@expo/ui/jetpack-compose";
+import { useGT } from "gt-react-native";
 import { use, useState, type ReactNode } from "react";
 import { View } from "react-native";
 
@@ -22,7 +23,9 @@ export interface AndroidHeaderAction {
   readonly selected?: boolean;
   readonly subtitle?: string;
   readonly destructive?: boolean;
+  readonly iconScale?: number;
   readonly overflowOnly?: boolean;
+  readonly attention?: boolean;
 }
 
 export function AndroidHeaderIconButton(props: {
@@ -31,6 +34,7 @@ export function AndroidHeaderIconButton(props: {
   readonly onPress?: () => void;
   readonly disabled?: boolean;
   readonly selected?: boolean;
+  readonly iconScale?: number;
 }) {
   return <IconButton {...props} tintColorClassName="accent-header-foreground" />;
 }
@@ -46,6 +50,7 @@ export function AndroidScreenHeader(props: {
   readonly embedded?: boolean;
   readonly hideBottomBorder?: boolean;
 }) {
+  const gt = useGT();
   const { colors } = useControlTheme();
   const titleTypography = useScaledTextRole("title");
   const subtitleTypography = useScaledTextRole("label");
@@ -79,7 +84,7 @@ export function AndroidScreenHeader(props: {
             <View collapsable={false} className="flex-row items-center">
               {props.onBack ? (
                 <IconButton
-                  accessibilityLabel="Navigate up"
+                  accessibilityLabel={gt("Navigate up")}
                   icon="arrow.left"
                   tintColorClassName="accent-header-foreground"
                   onPress={props.onBack}
@@ -140,14 +145,22 @@ export function AndroidScreenHeader(props: {
                     <AppActivityIndicator colorClassName="accent-header-foreground" />
                   </View>
                 ) : (
-                  <AndroidHeaderIconButton
-                    key={action.accessibilityLabel}
-                    accessibilityLabel={action.accessibilityLabel}
-                    disabled={action.disabled}
-                    selected={action.selected}
-                    icon={action.icon}
-                    onPress={action.onPress}
-                  />
+                  <View key={action.accessibilityLabel}>
+                    <AndroidHeaderIconButton
+                      accessibilityLabel={action.accessibilityLabel}
+                      disabled={action.disabled}
+                      selected={action.selected}
+                      icon={action.icon}
+                      iconScale={action.iconScale}
+                      onPress={action.onPress}
+                    />
+                    {action.attention ? (
+                      <View
+                        pointerEvents="none"
+                        className="absolute right-2.5 top-2.5 size-2 rounded-full bg-warning-foreground"
+                      />
+                    ) : null}
+                  </View>
                 ),
               )}
               {overflowActions.length > 0 ? (
@@ -168,7 +181,7 @@ export function AndroidScreenHeader(props: {
                 >
                   {(open) => (
                     <IconButton
-                      accessibilityLabel="More actions"
+                      accessibilityLabel={gt("More actions")}
                       icon="ellipsis"
                       tintColorClassName="accent-header-foreground"
                       onPress={open}

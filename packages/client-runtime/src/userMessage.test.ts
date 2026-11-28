@@ -1,3 +1,4 @@
+import { formatProjectContextBlock } from "@t3tools/shared/projectContextBlock";
 import { describe, expect, it } from "vite-plus/test";
 
 import { ComposerContextId, GuestMessageId, ScheduledTaskId } from "@t3tools/contracts";
@@ -215,6 +216,28 @@ describe("resolveUserMessagePresentation", () => {
         resolveUserMessagePresentation({ role: "user", createdBy: "agent", creationSource, text }),
       ).toMatchObject({ attribution: "agent" });
     }
+  });
+
+  it("shows a delegated task with the project context set apart, but not a user's own block", () => {
+    const text = formatProjectContextBlock("Use pnpm.", "Fix the flaky test.");
+    expect(
+      resolveUserMessagePresentation({
+        role: "user",
+        createdBy: "agent",
+        creationSource: "mcp",
+        text,
+      }),
+    ).toEqual({
+      text: "Fix the flaky test.",
+      attribution: "agent",
+      scheduledTaskId: undefined,
+      projectContext: "Use pnpm.",
+    });
+    expect(resolveUserMessagePresentation({ role: "user", createdBy: "user", text })).toEqual({
+      text,
+      attribution: null,
+      scheduledTaskId: undefined,
+    });
   });
 
   it("recovers the triggering automation from older scheduler message ids", () => {

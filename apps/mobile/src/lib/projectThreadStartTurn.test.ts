@@ -5,6 +5,8 @@ import { serializeComposerMessageForServer } from "./composerContext";
 
 import {
   buildProjectThreadStartTurnInput,
+  launchDroppedCoordinatorTag,
+  deriveThreadTitleFromPrompt,
   type ProjectThreadStartTurnSpec,
 } from "./projectThreadStartTurn";
 
@@ -68,5 +70,92 @@ describe("project thread title", () => {
     expect(relaunched.titleSeed).toBe(title);
     expect(relaunched.message.text).toBe(wire.text);
     expect(relaunched.message.attachments).toEqual(uploadedAttachments);
+  });
+
+  it("commits a coordinator's tag with the thread it creates", () => {
+    const spec = {
+      projectId: ProjectId.make("project"),
+      projectCwd: "/workspace",
+      threadId: "coordinator-thread",
+      commandId: "coordinator-command",
+      messageId: "coordinator-message",
+      createdAt: "2026-09-04T00:00:00Z",
+      text: "Plan the release",
+      uploadedAttachments: [],
+      modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.6-sol" },
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      workspaceMode: "local",
+      branch: null,
+      worktreePath: null,
+      startFromOrigin: false,
+      worktreeBranchName: "unused",
+    } satisfies ProjectThreadStartTurnSpec;
+
+    expect(
+      buildProjectThreadStartTurnInput({ ...spec, tags: ["coordinator"] }).bootstrap,
+    ).toMatchObject({
+      tags: ["coordinator"],
+    });
+    expect(buildProjectThreadStartTurnInput(spec).bootstrap).not.toHaveProperty("tags");
+  });
+
+  it.each([
+    { name: "a plain launch", tags: undefined, launched: { sequence: 1 }, dropped: false },
+    {
+      name: "a server that kept the tag",
+      tags: ["coordinator"],
+      launched: { projection: { thread: { tags: ["coordinator"] } } },
+      dropped: false,
+    },
+    {
+      name: "a server that dropped the tag",
+      tags: ["coordinator"],
+      launched: { projection: { thread: { tags: [] } } },
+      dropped: true,
+    },
+    {
+      name: "a server without a projection",
+      tags: ["coordinator"],
+      launched: { sequence: 1 },
+      dropped: true,
+    },
+  ])("tags after launch for $name: $dropped", ({ tags, launched, dropped }) => {
+    expect(launchDroppedCoordinatorTag(tags, launched)).toBe(dropped);
+  });
+
+  it("starts a worktree of a plain project folder from each repository's default branch", () => {
+    const input = buildProjectThreadStartTurnInput({
+      projectId: ProjectId.make("project"),
+      projectCwd: "/workspace",
+      threadId: "thread",
+      commandId: "command",
+      messageId: "message",
+      createdAt: "2026-09-04T00:00:00Z",
+      text: "Fix the build",
+      uploadedAttachments: [],
+      modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.6-sol" },
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      workspaceMode: "worktree",
+      branch: null,
+      worktreePath: null,
+      startFromOrigin: false,
+      worktreeRepositories: ["/workspace/api"],
+      worktreeBranchName: "t3/new",
+    });
+
+    expect(input.bootstrap.prepareWorktree).toEqual({
+      projectCwd: "/workspace",
+      baseBranch: "HEAD",
+      branch: "t3/new",
+      repositories: [{ path: "/workspace/api" }],
+    });
+  });
+
+  it("shortens a long prompt without splitting an emoji", () => {
+    expect(deriveThreadTitleFromPrompt(`${"a".repeat(68)}😀 and the rest of the prompt`)).toBe(
+      `${"a".repeat(68)}...`,
+    );
   });
 });

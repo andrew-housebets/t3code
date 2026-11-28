@@ -2,6 +2,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
 
@@ -40,6 +41,25 @@ it.effect.each(["t3code", "T3 Code (Alpha)"])(
         "existing V2 state",
       );
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+it.effect("gives fork builds their own profile without copying upstream credential keys", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const directory = yield* fs.makeTempDirectoryScoped({ prefix: "t3-fork-profile-" });
+    yield* fs.makeDirectory(path.join(directory, "t3code"), { recursive: true });
+    yield* fs.writeFileString(path.join(directory, "t3code", "Local State"), "upstream state");
+    const userDataPath = yield* resolveUserDataPath({
+      appDataDirectory: directory,
+      isDevelopment: false,
+      platform: "win32",
+      forkIdentity: Option.some({ dataName: "b4sed" }),
+    });
+    assert.equal(userDataPath, path.join(directory, "b4sed"));
+    assert.isFalse(yield* fs.exists(userDataPath));
+    assert.isFalse(yield* fs.exists(path.join(directory, "t3code-v2")));
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
 
 const gpuCacheDirectories = [

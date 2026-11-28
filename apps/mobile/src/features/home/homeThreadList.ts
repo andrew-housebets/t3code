@@ -20,8 +20,10 @@ import type {
 import * as Arr from "effect/Array";
 import * as Order from "effect/Order";
 
+import { m, type MessageResolver } from "../../i18n/messages";
 import { scopedProjectKey } from "../../lib/scopedEntities";
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
+import type { ThreadListV2ProjectGroup } from "../threads/threadListV2";
 
 export type HomeProjectSortOrder = Exclude<SidebarProjectSortOrder, "manual">;
 
@@ -46,22 +48,28 @@ function getProjectSortTimestamp(
         Number.NEGATIVE_INFINITY);
 }
 
-export function buildHomeProjectScopes(input: {
-  readonly projects: ReadonlyArray<EnvironmentProject>;
-  readonly environmentId: EnvironmentId | null;
-  readonly projectGroupingMode: SidebarProjectGroupingMode;
-}): ReadonlyArray<HomeProjectScope> {
+export function buildHomeProjectScopes(
+  input: {
+    readonly projects: ReadonlyArray<EnvironmentProject>;
+    readonly environmentId: EnvironmentId | null;
+    readonly projectGroupingMode: SidebarProjectGroupingMode;
+  },
+  resolve: MessageResolver = m,
+): ReadonlyArray<HomeProjectScope> {
   const projects = input.projects.filter(
     (project) => input.environmentId === null || project.environmentId === input.environmentId,
   );
-  return buildProjectGroups({
-    projects,
-    groupScratchProjects: true,
-    settings: {
-      sidebarProjectGroupingMode: input.projectGroupingMode,
-      sidebarProjectGroupingOverrides: {},
+  return buildProjectGroups(
+    {
+      projects,
+      groupScratchProjects: true,
+      settings: {
+        sidebarProjectGroupingMode: input.projectGroupingMode,
+        sidebarProjectGroupingOverrides: {},
+      },
     },
-  }).map((group) => {
+    resolve,
+  ).map((group) => {
     return {
       key: group.key,
       title: group.label,
@@ -72,6 +80,28 @@ export function buildHomeProjectScopes(input: {
       archived: group.archived,
     };
   });
+}
+
+/** The project group each thread's list row sits under when the list is grouped by project. */
+export function resolveHomeProjectGroupOf(
+  scopes: ReadonlyArray<HomeProjectScope>,
+): (
+  thread: Pick<EnvironmentThreadShell, "environmentId" | "projectId">,
+) => ThreadListV2ProjectGroup | null {
+  const groupByProjectKey = new Map<string, ThreadListV2ProjectGroup>();
+  for (const scope of scopes) {
+    const group: ThreadListV2ProjectGroup = {
+      key: scope.key,
+      title: scope.title,
+      environmentId: scope.representative.environmentId,
+      projectId: scope.representative.id,
+    };
+    for (const ref of scope.projectRefs) {
+      groupByProjectKey.set(scopedProjectKey(ref.environmentId, ref.projectId), group);
+    }
+  }
+  return (thread) =>
+    groupByProjectKey.get(scopedProjectKey(thread.environmentId, thread.projectId)) ?? null;
 }
 
 /** The scope the thread list's project filter shows; an archived or unknown key shows all projects. */

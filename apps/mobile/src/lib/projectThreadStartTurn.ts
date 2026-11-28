@@ -13,7 +13,12 @@ import {
   deriveThreadTitleSeed,
   threadTitleTextFromPrompt,
 } from "@t3tools/client-runtime/operations";
+import { splitsSurrogatePair } from "@t3tools/shared/assistantCitations";
+import { msg } from "gt-react-native";
 
+import { COORDINATOR_THREAD_TAG, isCoordinatorThread } from "@t3tools/shared/coordinatorThread";
+
+import { m, type MessageResolver } from "../i18n/messages";
 import type { UploadedMobileAttachment } from "./attachmentUpload";
 
 export interface ProjectThreadStartTurnSpec {
@@ -34,14 +39,30 @@ export interface ProjectThreadStartTurnSpec {
   readonly branch: string | null;
   readonly worktreePath: string | null;
   readonly startFromOrigin: boolean;
+  /** Tracked repositories a new worktree takes, by path; absent leaves the choice to the server. */
+  readonly worktreeRepositories?: ReadonlyArray<string>;
   readonly worktreeBranchName: string;
+  readonly tags?: ReadonlyArray<string> | undefined;
+}
+
+/** A server that predates launch tags starts the thread untagged; the client then tags it itself. */
+export function launchDroppedCoordinatorTag(
+  requestedTags: ReadonlyArray<string> | undefined,
+  launched:
+    | { readonly sequence: number }
+    | { readonly projection: { readonly thread: { readonly tags?: ReadonlyArray<string> } } },
+): boolean {
+  return (
+    requestedTags?.includes(COORDINATOR_THREAD_TAG) === true &&
+    !("projection" in launched && isCoordinatorThread(launched.projection.thread))
+  );
 }
 
 export function buildProjectThreadStartTurnInput(spec: ProjectThreadStartTurnSpec) {
-  const title = deriveThreadTitleSeed({
-    text: spec.titleText ?? spec.text,
-    attachments: spec.uploadedAttachments,
-  });
+  const title = deriveThreadTitleSeed(
+    { text: spec.titleText ?? spec.text, attachments: spec.uploadedAttachments },
+    m,
+  );
   const isWorktree = spec.workspaceMode === "worktree";
   return {
     commandId: CommandId.make(spec.commandId),
@@ -59,6 +80,7 @@ export function buildProjectThreadStartTurnInput(spec: ProjectThreadStartTurnSpe
     runtimeMode: spec.runtimeMode,
     interactionMode: spec.interactionMode,
     bootstrap: {
+      ...(spec.tags !== undefined && spec.tags.length > 0 ? { tags: [...spec.tags] } : {}),
       createThread: {
         projectId: spec.projectId,
         title,
@@ -73,9 +95,13 @@ export function buildProjectThreadStartTurnInput(spec: ProjectThreadStartTurnSpe
         ? {
             prepareWorktree: {
               projectCwd: spec.projectCwd,
-              baseBranch: spec.branch!,
+              // The launch needs a base ref; the server ignores it for a plain project folder.
+              baseBranch: spec.branch ?? "HEAD",
               branch: spec.worktreeBranchName,
               ...(spec.startFromOrigin ? { startFromOrigin: true } : {}),
+              ...(spec.worktreeRepositories === undefined
+                ? {}
+                : { repositories: spec.worktreeRepositories.map((path) => ({ path })) }),
             },
             runSetupScript: true,
           }
@@ -85,7 +111,24 @@ export function buildProjectThreadStartTurnInput(spec: ProjectThreadStartTurnSpe
   };
 }
 
-export function deriveThreadTitleFromPrompt(value: string): string {
-  const title = threadTitleTextFromPrompt(value) || "New thread";
-  return title.length <= 72 ? title : `${title.slice(0, 69).trimEnd()}...`;
+export function deriveThreadTitleFromPrompt(value: string, resolve: MessageResolver = m): string {
+  const title = threadTitleTextFromPrompt(value, resolve) || resolve(msg("New thread"));
+  if (title.length <= 72) return title;
+  const end = splitsSurrogatePair(title, 69) ? 68 : 69;
+  return `${title.slice(0, end).trimEnd()}...`;
+}
+
+/** Titles a new task the server has not created yet; one with only attachments shows their count. */
+export function deriveUnsentThreadTitle(
+  input: { readonly text: string; readonly attachments: ReadonlyArray<unknown> },
+  resolve: MessageResolver = m,
+): string {
+  if (input.text.trim().length > 0 || input.attachments.length === 0) {
+    return deriveThreadTitleFromPrompt(input.text, resolve);
+  }
+  return resolve(
+    msg("{count, plural, one {{count} attachment} other {{count} attachments}}", {
+      count: input.attachments.length,
+    }),
+  );
 }

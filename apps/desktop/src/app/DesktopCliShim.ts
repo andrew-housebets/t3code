@@ -11,6 +11,9 @@ import { makeComponentLogger } from "./DesktopObservability.ts";
 const { logInfo, logWarning } = makeComponentLogger("desktop-cli-shim");
 
 export const MARKER = "Written by T3 Code: runs the desktop app's bundled t3 CLI.";
+const UPSTREAM_MARKER = "Written by T3 Code: runs the desktop app's bundled t3 CLI.";
+export const isMarked = (content: string) =>
+  content.includes(MARKER) || content.includes(UPSTREAM_MARKER);
 
 const SERVER_ENTRY = "apps/server/dist/bin.mjs";
 
@@ -91,11 +94,15 @@ export const renderCliShim = (input: {
     // Extract-and-run would make the runtime start the app instead of mounting it.
     "unset APPIMAGE_EXTRACT_AND_RUN",
     // Its own session keeps a group signal (Ctrl-C, SSH hangup) from unmounting it under the
-    // running server; the traps unmount it after. Without setsid the extract fallback runs.
+    // running server, and ignoring TERM survives a stop sent to every process (systemd's default).
+    // Without setsid the extract fallback runs.
     "work=$(mktemp -d) || exit 1",
+    "trap '' TERM",
     'setsid "$app" --appimage-mount >"$work/mount" 2>/dev/null &',
     "mounter=$!",
-    `trap 'kill "$mounter" 2>/dev/null; rm -rf "$work"' EXIT`,
+    // It unmounts itself on TERM, which it now ignores, so the trap unmounts it. Lazily, like the
+    // runtime: the server's own children may still be exiting.
+    `trap '[ -z "$mount" ] || fusermount3 -uz "$mount" 2>/dev/null || fusermount -uz "$mount" 2>/dev/null; kill -HUP "$mounter" 2>/dev/null; rm -rf "$work"' EXIT`,
     "trap 'exit 130' INT TERM HUP",
     "mount=",
     'while kill -0 "$mounter" 2>/dev/null; do',
@@ -111,7 +118,27 @@ export const renderCliShim = (input: {
     "fi",
     // The runtime sets this when it launches the app; the CLI skips its path-keyed compile cache on it.
     'export APPIMAGE="$app"',
-    run("$mount"),
+    // The shell must outlive the CLI to unmount, so it forwards TERM and HUP; the terminal sends
+    // Ctrl-C to the CLI directly. A background child would read /dev/null, so pass stdin on fd 9.
+    // With stdin closed, `exec 9<&0` would end the shell; `command` makes it a normal error.
+    // Forwarding starts before the CLI does: a signal in between must not unmount under it.
+    "{ command exec 9<&0; } 2>/dev/null || exec 9</dev/null",
+    "cli= pending=",
+    `trap 'if [ -n "$cli" ]; then kill -TERM "$cli" 2>/dev/null; else pending=TERM; fi' TERM`,
+    `trap 'if [ -n "$cli" ]; then kill -HUP "$cli" 2>/dev/null; else pending=HUP; fi' HUP`,
+    "trap '' INT",
+    `${run("$mount")} <&9 9<&- &`,
+    "cli=$!",
+    '[ -z "$pending" ] || kill -"$pending" "$cli" 2>/dev/null',
+    "exec 9<&-",
+    "status=0",
+    'wait "$cli" || status=$?',
+    // A trapped signal interrupts wait; wait again for the CLI's own exit status.
+    'while kill -0 "$cli" 2>/dev/null; do',
+    "  status=0",
+    '  wait "$cli" || status=$?',
+    "done",
+    'exit "$status"',
     "",
   ].join("\n");
 };
@@ -145,7 +172,7 @@ export const install = Effect.gen(function* () {
 
   return yield* Effect.gen(function* () {
     const existing = yield* fs.readFileString(shimPath).pipe(Effect.option);
-    if (Option.isSome(existing) && !existing.value.includes(MARKER)) {
+    if (Option.isSome(existing) && !isMarked(existing.value)) {
       yield* logWarning("leaving a t3 launcher the app did not write", { shimPath });
       return Option.none<string>();
     }

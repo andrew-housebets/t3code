@@ -1,5 +1,10 @@
 import { resolveTextScaleVariables } from "./appearancePreferences";
-import { BUILT_IN_THEME_IDS, type BuiltInThemeId } from "@t3tools/shared/themePalettes";
+import {
+  resolveFontFamilyVariables,
+  type MobileFontId,
+  type MobileMonoFontId,
+} from "./fontFamilies";
+import { MOBILE_PALETTE_THEME_IDS, type MobilePaletteThemeId } from "@t3tools/shared/themePalettes";
 import {
   DEFAULT_MOBILE_THEME_ID,
   type MobileThemeAppearance,
@@ -9,10 +14,12 @@ import {
 
 export type MobileUniwindThemeName =
   | MobileThemeAppearance
-  | `${BuiltInThemeId}-${MobileThemeAppearance}`;
+  | `${MobilePaletteThemeId}-${MobileThemeAppearance}`;
 
 export interface MobileThemeRuntimeState {
   readonly baseFontSize: number;
+  readonly fontId: MobileFontId;
+  readonly monoFontId: MobileMonoFontId;
   readonly themeAppearance: MobileThemeAppearance;
   readonly themeMode: MobileThemeMode;
 }
@@ -21,7 +28,7 @@ export type MobileThemeRuntimeOperation =
   | {
       readonly kind: "update-text-variables";
       readonly themeName: "light" | "dark" | MobileUniwindThemeName;
-      readonly variables: Readonly<Record<string, number>>;
+      readonly variables: Readonly<Record<string, string | number>>;
     }
   | {
       readonly kind: "set-appearance-mode";
@@ -32,7 +39,7 @@ export type MobileThemeRuntimeOperation =
 const UNIWIND_THEME_NAMES: ReadonlyArray<"light" | "dark" | MobileUniwindThemeName> = [
   "light",
   "dark",
-  ...BUILT_IN_THEME_IDS.flatMap((themeId) => [
+  ...MOBILE_PALETTE_THEME_IDS.flatMap((themeId) => [
     `${themeId}-light` as const,
     `${themeId}-dark` as const,
   ]),
@@ -53,8 +60,16 @@ export function createMobileThemeRuntimeOperations(
 ): ReadonlyArray<MobileThemeRuntimeOperation> {
   const operations: MobileThemeRuntimeOperation[] = [];
 
-  if (previous === null || previous.baseFontSize !== next.baseFontSize) {
-    const variables = resolveTextScaleVariables(next.baseFontSize);
+  if (
+    previous === null ||
+    previous.baseFontSize !== next.baseFontSize ||
+    previous.fontId !== next.fontId ||
+    previous.monoFontId !== next.monoFontId
+  ) {
+    const variables = {
+      ...resolveTextScaleVariables(next.baseFontSize),
+      ...resolveFontFamilyVariables(next.fontId, next.monoFontId),
+    };
     for (const themeName of UNIWIND_THEME_NAMES) {
       operations.push({ kind: "update-text-variables", themeName, variables });
     }

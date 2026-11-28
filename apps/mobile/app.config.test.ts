@@ -6,7 +6,17 @@ import assetLinks from "../web/public/.well-known/assetlinks.json";
 
 // Keep config parsing independent of local env files and build credentials.
 vi.mock("../../scripts/lib/public-config.ts", () => ({
-  loadRepoEnv: () => ({ APP_VARIANT: process.env.APP_VARIANT }),
+  // app.config.ts copies this into process.env, where an undefined value becomes "undefined".
+  loadRepoEnv: () =>
+    Object.fromEntries(
+      [
+        "APP_VARIANT",
+        "T3CODE_IOS_TEAM_ID",
+        "T3CODE_IOS_BUNDLE_ID",
+        "T3CODE_APP_ICON",
+        "T3CODE_APP_NAME",
+      ].flatMap((key) => (process.env[key] === undefined ? [] : [[key, process.env[key]]])),
+    ),
 }));
 
 afterEach(() => {
@@ -44,4 +54,32 @@ it.each([
     { scheme: "https", host, pathPrefix: "/threads/" },
   ]);
   expect(assetLinks.map((link) => link.target.package_name)).toContain(identifier);
+  expect(config.ios?.infoPlist?.NSPhotoLibraryAddUsageDescription).toBe(
+    "Allow T3 Code to save images to your photo library.",
+  );
+});
+
+it("signs fork builds with their own identity and no upstream Expo project", async () => {
+  vi.stubEnv("T3CODE_IOS_TEAM_ID", "TEAM123456");
+  vi.stubEnv("T3CODE_IOS_BUNDLE_ID", "com.example.fork");
+  vi.stubEnv("T3CODE_APP_ICON", "./assets/fork/icon.png");
+  vi.stubEnv("T3CODE_APP_NAME", "Fork Code");
+  const config = await loadConfig("production");
+  expect(config.ios?.appleTeamId).toBe("TEAM123456");
+  expect(config.ios?.bundleIdentifier).toBe("com.example.fork");
+  expect(config.ios?.icon).toBe("./assets/fork/icon.png");
+  expect(config.ios?.entitlements?.["keychain-access-groups"]).toEqual([
+    "$(AppIdentifierPrefix)com.example.fork",
+  ]);
+  expect(config.owner).toBeUndefined();
+  expect(config.extra?.eas?.projectId).toBeUndefined();
+  expect(config.updates?.enabled).toBe(false);
+  expect(config.name).toBe("Fork Code");
+  expect(config.ios?.infoPlist?.NSPhotoLibraryAddUsageDescription).toBe(
+    "Allow Fork Code to save images to your photo library.",
+  );
+  expect(JSON.stringify(config.plugins)).not.toContain("Allow T3 Code");
+  expect(JSON.stringify(config.plugins)).toContain(
+    "Allow Fork Code to access your Face ID biometric data.",
+  );
 });

@@ -20,6 +20,12 @@ export const HOSTED_APP_CHANNEL =
   hostedAppChannel === "latest" || hostedAppChannel === "nightly" ? hostedAppChannel : null;
 export const HOSTED_APP_CHANNEL_LABEL = resolveHostedAppChannelLabel(HOSTED_APP_CHANNEL);
 export const APP_BASE_NAME = injectedDesktopAppBranding?.baseName ?? "T3 Code";
+const [appBrandLead = APP_BASE_NAME, ...appBrandTail] = APP_BASE_NAME.split(" ");
+export const APP_BRAND = {
+  usesT3Wordmark: APP_BASE_NAME === "T3 Code",
+  lead: appBrandLead,
+  tail: appBrandTail.join(" "),
+};
 export const APP_STAGE_LABEL =
   injectedDesktopAppBranding?.stageLabel ??
   resolveWebAppStageLabel({

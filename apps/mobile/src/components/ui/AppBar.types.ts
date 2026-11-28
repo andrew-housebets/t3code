@@ -10,9 +10,13 @@ export interface AppBarAction {
   readonly loading?: boolean;
   readonly selected?: boolean;
   readonly tintColor?: ColorValue;
+  /** Something behind the action needs the user: a dot on Android, a warning tint on iOS. */
+  readonly attention?: boolean;
   /** Android overflow menu: the row's second line. */
   readonly subtitle?: string;
   readonly destructive?: boolean;
+  /** Android: scales the toolbar glyph, for one that overshoots its neighbours' bounds. */
+  readonly iconScale?: number;
   /** Android: always in the overflow menu, never a toolbar button. */
   readonly overflowOnly?: boolean;
   /** iOS: false shares one glass capsule with neighbouring items. Defaults to true. */

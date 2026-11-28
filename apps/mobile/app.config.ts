@@ -38,6 +38,32 @@ if (
   );
 }
 
+// Fork builds sign with their own paid team and never reuse upstream's Expo project or OTA channel.
+const forkTeamId = repoEnv.T3CODE_IOS_TEAM_ID?.trim() || undefined;
+const forkBundleIdentifier = repoEnv.T3CODE_IOS_BUNDLE_ID?.trim();
+const isForkBuild = forkTeamId !== undefined;
+const forkEasProjectId = repoEnv.T3CODE_EAS_PROJECT_ID?.trim() || undefined;
+
+if (
+  isForkBuild &&
+  (!forkBundleIdentifier || !IOS_BUNDLE_IDENTIFIER_PATTERN.test(forkBundleIdentifier))
+) {
+  throw new Error(
+    "T3CODE_IOS_BUNDLE_ID must be a reverse-DNS identifier such as com.example.t3code when T3CODE_IOS_TEAM_ID is set.",
+  );
+}
+const easProjectId = isForkBuild ? forkEasProjectId : "d763fcb8-d37c-41ea-a773-b54a0ab4a454";
+const expoOwner = isForkBuild ? repoEnv.T3CODE_EXPO_OWNER?.trim() || undefined : "pingdotgg";
+// A 1024px opaque PNG, relative to apps/mobile; replaces the Icon Composer bundle for fork builds.
+const forkAppIcon = isForkBuild ? repoEnv.T3CODE_APP_ICON?.trim() || undefined : undefined;
+// Names the app in permission prompts and widget descriptions; upstream text is unchanged.
+const appLabel = (isForkBuild && repoEnv.T3CODE_APP_NAME?.trim()) || "T3 Code";
+const forkSplashLogo = isForkBuild ? repoEnv.T3CODE_SPLASH_LOGO?.trim() || undefined : undefined;
+// The widgets tint this SVG as a template image and stretch it into a 1.5:1 frame.
+const forkWidgetLogoSvg = isForkBuild
+  ? repoEnv.T3CODE_WIDGET_LOGO_SVG?.trim() || undefined
+  : undefined;
+
 const DEVELOPMENT_ASSETS = {
   appIcon: fromRepoRoot(BRAND_ASSET_PATHS.developmentIosIconPng),
   iosIcon: fromRepoRoot(BRAND_ASSET_PATHS.developmentIconComposerProject),
@@ -122,12 +148,19 @@ const variant = VARIANT_CONFIG[APP_VARIANT];
 const HOSTED_APP_HOST = "app.t3.codes";
 const iosBundleIdentifier = isIosPersonalTeamBuild
   ? personalTeamBundleIdentifier!
-  : variant.iosBundleIdentifier;
+  : isForkBuild
+    ? forkBundleIdentifier!
+    : variant.iosBundleIdentifier;
 
 const dmSansFonts = {
   regular: "@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.ttf",
   medium: "@expo-google-fonts/dm-sans/500Medium/DMSans_500Medium.ttf",
   bold: "@expo-google-fonts/dm-sans/700Bold/DMSans_700Bold.ttf",
+} as const;
+
+const mesloFonts = {
+  regular: "./assets/fonts/MesloLGS-NF-Regular.ttf",
+  bold: "./assets/fonts/MesloLGS-NF-Bold.ttf",
 } as const;
 
 const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
@@ -143,7 +176,7 @@ const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
       {
         name: "SubscriptionUsage",
         displayName: "Subscription usage",
-        description: "Subscription quotas from your connected T3 Code environments.",
+        description: `Subscription quotas from your connected ${appLabel} environments.`,
         ios: {
           configuration: {
             title: "Subscription usage",
@@ -183,6 +216,8 @@ const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
         android: {
           minWidth: 250,
           minHeight: 180,
+          minResizeWidth: 180,
+          minResizeHeight: 130,
           targetCellWidth: 4,
           targetCellHeight: 3,
           resizeMode: "both",
@@ -193,7 +228,7 @@ const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
       {
         name: "AgentActivity",
         displayName: "Agent Activity",
-        description: "Shows the current state of active T3 Code agents.",
+        description: `Shows the current state of active ${appLabel} agents.`,
         android: null,
         ios: {
           supportedFamilies: ["systemSmall", "systemMedium", "accessoryRectangular"],
@@ -233,38 +268,41 @@ const sharingPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
 // Match iOS PostScript names on Android so RN and the native composer share fonts before runtime loading.
 
 const config: ExpoConfig = {
-  name: variant.appName,
+  name: repoEnv.T3CODE_APP_NAME?.trim() || variant.appName,
   slug: "t3-code",
   platforms: ["ios", "android"],
   scheme: variant.scheme,
-  version: repoEnv.T3CODE_MOBILE_VERSION ?? "2.3.0",
+  version: repoEnv.T3CODE_MOBILE_VERSION ?? "2.4.0",
   runtimeVersion: {
     // Skip costly fingerprinting on dev launches; preview and production OTAs require matching native projects.
     policy: runtimeVersionPolicy,
   },
   orientation: "portrait",
-  icon: variant.assets.appIcon,
+  icon: forkAppIcon ?? variant.assets.appIcon,
   userInterfaceStyle: "automatic",
   updates: {
-    enabled: repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0",
-    url: "https://u.expo.dev/d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+    enabled: easProjectId !== undefined && repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0",
+    ...(easProjectId ? { url: `https://u.expo.dev/${easProjectId}` } : {}),
     checkAutomatically: "ON_LOAD",
     fallbackToCacheTimeout: 0,
   },
   ios: {
-    icon: variant.assets.iosIcon,
+    icon: forkAppIcon ?? variant.assets.iosIcon,
+    ...(repoEnv.T3CODE_IOS_BUILD_NUMBER?.trim()
+      ? { buildNumber: repoEnv.T3CODE_IOS_BUILD_NUMBER.trim() }
+      : {}),
     supportsTablet: true,
     requireFullScreen: process.env.T3_SHOWCASE_CAPTURE_BUILD === "1",
     bundleIdentifier: iosBundleIdentifier,
     // Avoid Personal Team fallback: it cannot sign App Groups, Apple sign-in or push entitlements.
-    appleTeamId: "ARK85ZXQ4Z",
+    appleTeamId: forkTeamId ?? "ARK85ZXQ4Z",
     associatedDomains: [
       `applinks:${variant.relyingParty}`,
       `webcredentials:${variant.relyingParty}`,
       `applinks:${HOSTED_APP_HOST}`,
     ],
     entitlements: {
-      "keychain-access-groups": [`$(AppIdentifierPrefix)${variant.iosBundleIdentifier}`],
+      "keychain-access-groups": [`$(AppIdentifierPrefix)${iosBundleIdentifier}`],
     },
     infoPlist: {
       UISupportedInterfaceOrientations: [
@@ -275,9 +313,10 @@ const config: ExpoConfig = {
       NSAppTransportSecurity: {
         NSAllowsArbitraryLoads: true,
       },
-      NSLocalNetworkUsageDescription:
-        "Allow T3 Code to connect to T3 Code servers on your local network or tailnet.",
-      NSPhotoLibraryAddUsageDescription: "Allow T3 Code to save images to your photo library.",
+      NSLocalNetworkUsageDescription: `Allow ${appLabel} to connect to T3 Code servers on your local network or tailnet.`,
+      // Built with the iOS 27 SDK, only view controllers can hide or style the status bar.
+      UIViewControllerBasedStatusBarAppearance: true,
+      NSPhotoLibraryAddUsageDescription: `Allow ${appLabel} to save images to your photo library.`,
       // System picture in picture needs background audio to start and survive outside the app.
       UIBackgroundModes: ["audio"],
       ITSAppUsesNonExemptEncryption: false,
@@ -330,7 +369,13 @@ const config: ExpoConfig = {
       "expo-font",
       {
         ios: {
-          fonts: [dmSansFonts.regular, dmSansFonts.medium, dmSansFonts.bold],
+          fonts: [
+            dmSansFonts.regular,
+            dmSansFonts.medium,
+            dmSansFonts.bold,
+            mesloFonts.regular,
+            mesloFonts.bold,
+          ],
         },
         android: {
           fonts: [
@@ -344,13 +389,32 @@ const config: ExpoConfig = {
             },
             {
               fontFamily: "DMSans-Bold",
-              fontDefinitions: [{ path: dmSansFonts.bold, weight: 700 }],
+              // Android picks fallback glyphs (such as Vietnamese) at the requested weight, so bold text
+              // asks for 700; the 400 entry lets a relative bold step (Typeface.BOLD) land on 700 too.
+              fontDefinitions: [
+                { path: dmSansFonts.bold, weight: 400 },
+                { path: dmSansFonts.bold, weight: 700 },
+              ],
+            },
+            {
+              // One family for both weights, as on iOS, so fontWeight picks the bold file.
+              fontFamily: "MesloLGS-NF-Regular",
+              fontDefinitions: [
+                { path: mesloFonts.regular, weight: 400 },
+                { path: mesloFonts.bold, weight: 700 },
+              ],
             },
           ],
         },
       },
     ],
-    "expo-secure-store",
+    // Its default prompt names $(PRODUCT_NAME), which drops the space from a fork's app name.
+    isForkBuild
+      ? [
+          "expo-secure-store",
+          { faceIDPermission: `Allow ${appLabel} to access your Face ID biometric data.` },
+        ]
+      : "expo-secure-store",
     "expo-sqlite",
     ...(isIosPersonalTeamBuild
       ? [sharingPlugin]
@@ -383,7 +447,7 @@ const config: ExpoConfig = {
     [
       "expo-audio",
       {
-        microphonePermission: "Allow T3 Code to use your microphone for voice input.",
+        microphonePermission: `Allow ${appLabel} to use your microphone for voice input.`,
         recordAudioAndroid: true,
         enableBackgroundPlayback: false,
         enableBackgroundRecording: false,
@@ -392,7 +456,7 @@ const config: ExpoConfig = {
     [
       "expo-camera",
       {
-        cameraPermission: "Allow T3 Code to access your camera so you can scan pairing QR codes.",
+        cameraPermission: `Allow ${appLabel} to access your camera so you can scan pairing QR codes.`,
         microphonePermission: false,
         barcodeScannerEnabled: true,
         recordAudioAndroid: false,
@@ -403,18 +467,18 @@ const config: ExpoConfig = {
       {
         photosPermission: false,
         // `false` makes this plugin add RECORD_AUDIO to blockedPermissions, breaking Android dictation.
-        microphonePermission: "Allow T3 Code to use your microphone for voice input.",
+        microphonePermission: `Allow ${appLabel} to use your microphone for voice input.`,
       },
     ],
     [
       "expo-splash-screen",
       {
-        image: variant.assets.splashIcon,
+        image: forkSplashLogo ?? variant.assets.splashIcon,
         resizeMode: "contain",
         backgroundColor: "#ffffff",
         imageWidth: 220,
         dark: {
-          image: variant.assets.splashIcon,
+          image: forkSplashLogo ?? variant.assets.splashIcon,
           backgroundColor: "#0a0a0a",
         },
         android: {
@@ -450,7 +514,17 @@ const config: ExpoConfig = {
     // Compile out the unused pedometer to avoid an iOS motion purpose string.
     ["expo-sensors", { motionPermission: false }],
     // Mods run in reverse order; expo-widgets must create and wipe the target before assets are added.
-    ...(!isIosPersonalTeamBuild ? ["./plugins/withWidgetLogoAsset.cjs", widgetsPlugin] : []),
+    ...(!isIosPersonalTeamBuild
+      ? [
+          forkWidgetLogoSvg
+            ? (["./plugins/withWidgetLogoAsset.cjs", { svg: forkWidgetLogoSvg }] satisfies [
+                string,
+                { svg: string },
+              ])
+            : "./plugins/withWidgetLogoAsset.cjs",
+          widgetsPlugin,
+        ]
+      : []),
     "./plugins/withAndroidNetworkSecurityConfig.cjs",
     "./plugins/withAndroidGradleHeap.cjs",
     "./plugins/withAndroidInputBackground.cjs",
@@ -464,9 +538,6 @@ const config: ExpoConfig = {
   ],
   extra: {
     appVariant: APP_VARIANT,
-    secretsFeatureEnabled: ["1", "true"].includes(
-      process.env.T3CODE_FEATURE_SECRETS?.trim().toLowerCase() ?? "",
-    ),
     iosPersonalTeamBuild: isIosPersonalTeamBuild,
     relay: {
       url: repoEnv.T3CODE_RELAY_URL ?? null,
@@ -486,11 +557,11 @@ const config: ExpoConfig = {
       tracesToken: repoEnv.EXPO_PUBLIC_OTLP_TRACES_TOKEN ?? null,
     },
     eas: {
-      projectId: "d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+      ...(easProjectId ? { projectId: easProjectId } : {}),
       observe: { endpointUrl: observeEndpointUrl },
     },
   },
-  owner: "pingdotgg",
+  ...(expoOwner ? { owner: expoOwner } : {}),
   experiments: {
     // Metro only runs babel-plugin-react-compiler when this is set; see src/reactCompilerCoverage.test.ts.
     reactCompiler: true,

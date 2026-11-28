@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
-  BUILT_IN_THEME_IDS,
-  BUILT_IN_THEMES,
+  MOBILE_PALETTE_THEME_IDS,
+  MOBILE_PALETTE_THEMES,
   T3_CHAT_THEME,
   T3_CODE_LIGHT_THEME_COLORS,
   T3_CODE_DARK_THEME_COLORS,
@@ -69,7 +69,7 @@ describe("mobile themes", () => {
 
   it.each(MOBILE_THEME_IDS)("uses the web color roles for %s in both appearances", (themeId) => {
     for (const appearance of ["light", "dark"] as const) {
-      const theme = BUILT_IN_THEMES.find((candidate) => candidate.id === themeId);
+      const theme = MOBILE_PALETTE_THEMES.find((candidate) => candidate.id === themeId);
       const colors = theme
         ? getThemeColorsForAppearance(theme, appearance)!
         : appearance === "dark"
@@ -233,7 +233,7 @@ describe("mobile themes", () => {
       resolveMobileThemeIds({ themeId: "grove", lightThemeId: "iris", darkThemeId: "ocean" }),
     ).toEqual({ light: "iris", dark: "ocean" });
     expect(resolveMobileThemeIds({ themeId: "grove", lightThemeId: "missing" })).toEqual({
-      light: DEFAULT_MOBILE_THEME_ID,
+      light: "claude",
       dark: "grove",
     });
   });
@@ -259,7 +259,7 @@ describe("mobile themes", () => {
   });
 
   it("keeps placeholders and selected-row labels readable on their mobile surfaces", () => {
-    for (const themeId of BUILT_IN_THEME_IDS) {
+    for (const themeId of MOBILE_PALETTE_THEME_IDS) {
       for (const appearance of ["light", "dark"] as const) {
         const variables = getMobileThemeVariables(themeId, appearance);
         expect(
@@ -268,7 +268,7 @@ describe("mobile themes", () => {
       }
     }
 
-    for (const themeId of BUILT_IN_THEME_IDS) {
+    for (const themeId of MOBILE_PALETTE_THEME_IDS) {
       for (const appearance of ["light", "dark"] as const) {
         const variables = getMobileThemeVariables(themeId, appearance);
         expect(
@@ -294,6 +294,15 @@ describe("mobile themes", () => {
         expect(
           contrastRatio(variables["--color-md-user-fence-text"], fenceSurface),
         ).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  it("sends with the primary colour", () => {
+    for (const themeId of [DEFAULT_MOBILE_THEME_ID, ...MOBILE_PALETTE_THEME_IDS] as const) {
+      for (const appearance of ["light", "dark"] as const) {
+        const variables = getMobileThemeVariables(themeId, appearance);
+        expect(variables["--color-send"]).toBe(variables["--color-primary"]);
       }
     }
   });

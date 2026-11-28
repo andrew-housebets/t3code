@@ -1,3 +1,5 @@
+import { msg } from "gt-i18n";
+import { type MarkedText, markedTextEnglish } from "../errors/translatable.ts";
 import {
   type EnvironmentId,
   ProjectId,
@@ -74,7 +76,13 @@ export class ScratchProjectNotLoadedError extends Schema.TaggedError<ScratchProj
   { projectId: ProjectId },
 ) {
   override get message(): string {
-    return "The folder for threads without a project has not reached this device yet. Try again.";
+    return markedTextEnglish(this.i18nMessage);
+  }
+
+  get i18nMessage(): MarkedText {
+    return [
+      msg("The folder for threads without a project has not reached this device yet. Try again."),
+    ];
   }
 }
 
@@ -95,7 +103,9 @@ export function createProjectEnvironmentAtoms<R, E>(
   const readFile = createEnvironmentRpcQueryAtomFamily(runtime, {
     label: "environment-data:projects:read-file",
     tag: WS_METHODS.projectsReadFile,
-    staleTimeMs: 30_000,
+    // A file can change outside this client, so reopening it reads it again. The idle TTL only
+    // keeps the last contents on screen while that read runs.
+    staleTimeMs: 0,
     idleTtlMs: 5 * 60_000,
     onAnswer: (target, _value, registry): Effect.Effect<void> =>
       Effect.sync(() => {
@@ -107,12 +117,10 @@ export function createProjectEnvironmentAtoms<R, E>(
           registry.set(atom, null);
       }),
     execute: (input) =>
-      fileMetadata.seedAfterRead(
-        request(WS_METHODS.projectsReadFile, input),
-        (result, isCurrent) =>
-          result.exists === false
-            ? Effect.void
-            : fileMetadata.rememberFile(input.cwd, result, isCurrent),
+      fileMetadata.seedAfterRead(request(WS_METHODS.projectsReadFile, input), (result, isCurrent) =>
+        result.exists === false
+          ? Effect.void
+          : fileMetadata.rememberFile(input.cwd, result, isCurrent),
       ),
   });
   const projectConcurrency = {
@@ -156,6 +164,57 @@ export function createProjectEnvironmentAtoms<R, E>(
           request(WS_METHODS.projectsListEntries, input),
           (result, isCurrent) => fileMetadata.rememberEntries(input.cwd, result.entries, isCurrent),
         ),
+    }),
+    listArtifacts: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:projects:list-artifacts",
+      tag: WS_METHODS.projectContextListArtifacts,
+      staleTimeMs: 0,
+    }),
+    addLibraryFile: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:projects:add-library-file",
+      tag: WS_METHODS.projectContextAddLibraryFile,
+      scheduler: projectScheduler,
+      concurrency: {
+        mode: "serial",
+        key: ({ environmentId, input }) => JSON.stringify([environmentId, input.projectId]),
+      },
+    }),
+    removeLibraryFile: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:projects:remove-library-file",
+      tag: WS_METHODS.projectContextRemoveLibraryFile,
+      scheduler: projectScheduler,
+      concurrency: {
+        mode: "serial",
+        key: ({ environmentId, input }) => JSON.stringify([environmentId, input.projectId]),
+      },
+    }),
+    readModelDefaults: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:projects:read-model-defaults",
+      tag: WS_METHODS.projectContextReadModelDefaults,
+      staleTimeMs: 0,
+    }),
+    writeModelDefaults: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:projects:write-model-defaults",
+      tag: WS_METHODS.projectContextWriteModelDefaults,
+      scheduler: projectScheduler,
+      concurrency: {
+        mode: "serial",
+        key: ({ environmentId, input }) => JSON.stringify([environmentId, input.projectId]),
+      },
+    }),
+    readContext: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:projects:read-context",
+      tag: WS_METHODS.projectContextRead,
+      staleTimeMs: 0,
+    }),
+    writeContext: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:projects:write-context",
+      tag: WS_METHODS.projectContextWrite,
+      scheduler: projectScheduler,
+      concurrency: {
+        mode: "serial",
+        key: ({ environmentId, input }) => JSON.stringify([environmentId, input.projectId]),
+      },
     }),
     listIgnoredFiles: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:projects:list-ignored-files",

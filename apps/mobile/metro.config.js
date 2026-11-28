@@ -38,6 +38,31 @@ config.resolver = {
   },
 };
 
+// GT finds a translation by the hash of its source text, so a renamed build needs renamed catalogs.
+const brandEnv = ["T3CODE_APP_NAME", "T3CODE_CONNECT_NAME", "T3CODE_ACCOUNT_NAME"];
+if (brandEnv.some((name) => process.env[name]?.trim())) {
+  const {
+    brandNamesFromEnv,
+    renameBrandCatalogFile,
+  } = require("../../scripts/lib/connect-brand-plugin.ts");
+  const names = { ...brandNamesFromEnv(), cli: undefined };
+  const committedCatalogs = path.join(__dirname, "src", "i18n", "translations");
+  const renamedCatalogs = path.join(__dirname, ".generated", "brand-translations");
+  fs.mkdirSync(renamedCatalogs, { recursive: true });
+  for (const file of fs.readdirSync(committedCatalogs)) {
+    fs.writeFileSync(
+      path.join(renamedCatalogs, file),
+      renameBrandCatalogFile(path.join(committedCatalogs, file), names),
+    );
+  }
+  config.resolver.resolveRequest = (context, moduleName, platform) => {
+    const resolved = context.resolveRequest(context, moduleName, platform);
+    return resolved.type === "sourceFile" && path.dirname(resolved.filePath) === committedCatalogs
+      ? { ...resolved, filePath: path.join(renamedCatalogs, path.basename(resolved.filePath)) }
+      : resolved;
+  };
+}
+
 async function writeFileIfChanged(filePath, contents) {
   try {
     if ((await fs.promises.readFile(filePath, "utf8")) === contents) return;

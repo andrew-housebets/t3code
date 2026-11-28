@@ -8,6 +8,7 @@ import * as Layer from "effect/Layer";
 import { Argument, Command } from "effect/cli";
 import * as CliError from "effect/cli/CliError";
 
+import { CLI_COMMAND } from "@t3tools/shared/cliCommand";
 import * as NetService from "@t3tools/shared/Net";
 import packageJson from "../package.json" with { type: "json" };
 import { acpMcpBridgeCommand, acpMcpCallCommand } from "./cli/acpMcpBridge.ts";
@@ -20,7 +21,9 @@ import { hasCloudPublicConfig } from "./cloud/publicConfig.ts";
 import { extendConnectionAttemptTimeout, keepOutboundFetchOnHttp1 } from "./outboundHttp.ts";
 import { sharedServerCommandFlags } from "./cli/config.ts";
 import { projectCommand } from "./cli/project.ts";
+import { feedbackCommand } from "./cli/feedback.ts";
 import { threadCommand } from "./cli/thread.ts";
+import { workflowCommand } from "./cli/workflow.ts";
 import { runDefaultServerCommand, serveCommand, startCommand } from "./cli/server.ts";
 import { updateCommand } from "./cli/update.ts";
 import {
@@ -60,7 +63,7 @@ const connectUnavailableCommand = Command.make("connect", {
   Command.withHandler(() =>
     Effect.fail(
       new CliError.ShowHelp({
-        commandPath: ["t3", "connect"],
+        commandPath: [CLI_COMMAND, "connect"],
         errors: [new ConnectPublicConfigMissingError({ cause: connectPublicConfigMissingMessage })],
       }),
     ),
@@ -68,7 +71,7 @@ const connectUnavailableCommand = Command.make("connect", {
 );
 
 export const makeCli = ({ cloudEnabled = hasCloudPublicConfig } = {}) =>
-  Command.make("t3", { ...sharedServerCommandFlags }).pipe(
+  Command.make(CLI_COMMAND, { ...sharedServerCommandFlags }).pipe(
     Command.withDescription(
       "Run T3 Code in this terminal and open it in your browser. To use it from your other devices, run `t3 up`.",
     ),
@@ -77,7 +80,7 @@ export const makeCli = ({ cloudEnabled = hasCloudPublicConfig } = {}) =>
       Command.make("help").pipe(
         Command.withDescription("Show command help."),
         Command.withHandler(() =>
-          Effect.fail(new CliError.ShowHelp({ commandPath: ["t3"], errors: [] })),
+          Effect.fail(new CliError.ShowHelp({ commandPath: [CLI_COMMAND], errors: [] })),
         ),
       ),
       acpMcpBridgeCommand,
@@ -91,6 +94,8 @@ export const makeCli = ({ cloudEnabled = hasCloudPublicConfig } = {}) =>
       browserCommand,
       projectCommand,
       threadCommand,
+      feedbackCommand,
+      workflowCommand,
       upCommand,
       statusCommand,
       serviceCommand,

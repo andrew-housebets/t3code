@@ -7,6 +7,7 @@ import {
   type RuntimeMode,
   type ThreadId,
 } from "@t3tools/contracts";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
@@ -14,6 +15,7 @@ import * as Ref from "effect/Ref";
 import * as Struct from "effect/Struct";
 import type * as Layer from "effect/Layer";
 import type * as Scope from "effect/Scope";
+import { McpSchema } from "effect/ai";
 import type { Tool, Toolkit } from "effect/ai";
 
 import {
@@ -21,10 +23,18 @@ import {
   type DispatchModeRefusal,
 } from "../orchestration-v2/DispatchModeLimit.ts";
 import * as PeerForwarding from "../peer/PeerForwarding.ts";
-import { assertNotLinked, assertSameLink, callerLinkOrigin } from "./linkOrigin.ts";
+import {
+  assertFullAccessNamingLink,
+  assertNotLinked,
+  assertSameLink,
+  callerLinkOrigin,
+} from "./linkOrigin.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
 import { resolveInteractionMode, resolveRuntimeMode } from "./delegatedTaskModes.ts";
 import {
+  assertCoordinatorDelegated,
+  assertCoordinatorDelegatedThere,
+  assertBroadestAccess,
   assertFullAccess,
   assertLiveCaller,
   assertTargetWithinLimits,
@@ -52,10 +62,12 @@ let declare: <P, A, E, R>(
 /**
  * What a call bound for a linked environment checks here before it goes: the
  * caller, not the thread or project it names, which live there and are
- * checked there. `undefined` for tools that act as the calling thread itself.
+ * checked there, except that a coordinator may only name a task's thread it
+ * delegated there. `undefined` for tools that act as the calling thread itself.
  */
 type RemoteCheck<P> = (
   params: P,
+  environmentId: EnvironmentId,
 ) => Effect.Effect<unknown, OrchestratorMcpFailure, Effect.Services<typeof writingCaller>>;
 let remoteCheckOf: <Handler>(declaration: Declaration<Handler>) => RemoteCheck<never> | undefined;
 
@@ -183,6 +195,24 @@ export const writes = <P, A, E, R>(
     () => orchestratingCaller,
   );
 
+/**
+ * Drives work that runs for this environment's owner in modes its definition picks, such as a
+ * workflow run. `what` names it in a refusal, after "can" or "cannot".
+ */
+export const writesOwnerWork = <P, A, E, R>(
+  what: string,
+  handle: (params: P) => Effect.Effect<A, E, R>,
+) => {
+  const check = orchestratingCaller.pipe(
+    Effect.tap((caller) => assertNotLinked(caller, what)),
+    Effect.tap((caller) => assertBroadestAccess(caller, what)),
+  );
+  return declare(
+    (params: P) => check.pipe(Effect.flatMap(() => handle(params))),
+    () => check,
+  );
+};
+
 /** Requires handler capability checks, not thread control; linked work is refused the same way. */
 export const writesWithCapability = <P, A, E, R>(handle: (params: P) => Effect.Effect<A, E, R>) =>
   declare(
@@ -210,6 +240,7 @@ export const writesThreads = <P, A, E, R>(
           if (target !== null && target.deletedAt === null) {
             yield* assertTargetWithinLimits(caller.limits, target);
             yield* assertSameLink(caller, target);
+            yield* assertCoordinatorDelegated(caller, target);
           }
         }
         // Modes can rise after this check; the orchestrator rechecks under lock and records refusal before handlers wrap errors.
@@ -225,7 +256,12 @@ export const writesThreads = <P, A, E, R>(
           ),
         );
       }),
-    () => writingCaller,
+    (params: P, environmentId) =>
+      writingCaller.pipe(
+        Effect.tap((caller) =>
+          assertCoordinatorDelegatedThere(caller, environmentId, threads(params)),
+        ),
+      ),
   );
 
 const escalationDenied = (refusal: DispatchModeRefusal) =>
@@ -291,8 +327,8 @@ export const either = <P, A, E, R, A2, E2, R2>(
   return declare(
     (params: P): Effect.Effect<A | A2, E | E2, R | R2> =>
       useFirst(params) ? checkedHandler(first)(params) : checkedHandler(second)(params),
-    (params) =>
-      remotes[useFirst(params) ? 0 : 1]?.(params) ??
+    (params, environmentId) =>
+      remotes[useFirst(params) ? 0 : 1]?.(params, environmentId) ??
       Effect.fail(
         new OrchestratorMcpFailure({
           code: "invalid_request",
@@ -318,6 +354,7 @@ export const afterForwarding = <P, A, E, R, E2, R2>(
 
 const fullAccessRequired =
   "Changing projects or environment settings needs a live full-access/default calling thread or a full-access client.";
+const changesEnvironment = "change projects or environment settings";
 
 /** Recheck after waits before writing; caller modes may have changed. */
 export const writesEnvironment = <P, A, E, R>(
@@ -337,9 +374,11 @@ export const writesEnvironment = <P, A, E, R>(
     Effect.tap((caller) =>
       options?.linkedCallers === "allowed"
         ? Effect.void
-        : assertNotLinked(caller, "change projects or environment settings"),
+        : assertNotLinked(caller, changesEnvironment),
     ),
-    Effect.tap((caller) => assertFullAccess(caller, fullAccessRequired)),
+    Effect.tap((caller) =>
+      assertFullAccessNamingLink(caller, fullAccessRequired, changesEnvironment),
+    ),
   );
   return declare(
     (params: P) => check.pipe(Effect.flatMap(() => handle(params, check))),
@@ -404,6 +443,11 @@ const linksUnavailable = new OrchestratorMcpFailure({
   message: "This environment cannot reach linked environments.",
 });
 
+const THREAD_ONLY = new Set<unknown>([
+  McpInvocationContext.hiddenFromOutsideClients,
+  McpInvocationContext.hiddenWithoutBackgroundWait,
+]);
+
 /**
  * Every tool that takes a linked environment runs there the same way: its
  * declaration checks the caller here, and the same call goes to the other
@@ -420,8 +464,16 @@ const routed = Effect.fn("McpToolAccess.routed")(function* <Tools extends Record
   const handlers: Record<string, unknown> = { ...checked };
   for (const [name, declaration] of Object.entries<Declaration<unknown>>(declarations)) {
     const tool = toolkit.tools[name];
-    if (tool === undefined || !takesLinkedEnvironment(tool)) continue;
+    if (tool === undefined) continue;
     const remote = remoteCheckOf(declaration);
+    if (
+      remote === undefined &&
+      !THREAD_ONLY.has(Context.getOrUndefined(tool.annotations, McpSchema.EnabledWhen))
+    )
+      return yield* Effect.die(
+        `${name} acts as its calling thread, so outside clients must not be offered it.`,
+      );
+    if (!takesLinkedEnvironment(tool)) continue;
     const forwarded = forwardedOf(declaration) as
       | Forwarded<object, unknown, Tool.Failure<Tools[keyof Tools]>, never>
       | undefined;
@@ -438,7 +490,7 @@ const routed = Effect.fn("McpToolAccess.routed")(function* <Tools extends Record
         const target = PeerForwarding.remoteTarget(scope, environmentId);
         if (target === undefined) return yield* here(params);
         if (scope.linkedEnvironments === false) return yield* PeerForwarding.linkedEnvironmentsOff;
-        yield* (remote as RemoteCheck<typeof params>)(params);
+        yield* (remote as RemoteCheck<typeof params>)(params, target);
         if (Option.isNone(forwarding)) return yield* linksUnavailable;
         const result = yield* forwarding.value.call(scope, tool, target, {
           ...params,

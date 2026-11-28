@@ -1,3 +1,4 @@
+import { APP_BASE_NAME } from "../branding";
 import type { DesktopBridge, DesktopUpdateState } from "@t3tools/contracts";
 
 const FALLBACK_TRIAGE_COMMAND = "npx t3 triage";
@@ -105,7 +106,10 @@ export function buildErrorReport(error: unknown, environment: BootErrorEnvironme
   }
   let details = redact(parts.join("\n") || "(no error message)");
   if (details.length > MAX_ERROR_CHARS) {
-    details = `${details.slice(0, MAX_ERROR_CHARS)}\n[truncated]`;
+    let end = MAX_ERROR_CHARS;
+    const last = details.charCodeAt(end - 1);
+    if (last >= 0xd800 && last <= 0xdbff) end -= 1;
+    details = `${details.slice(0, end)}\n[truncated]`;
   }
   return [
     details,
@@ -274,7 +278,7 @@ export function showBootError(error: unknown) {
   };
 
   const message = element("div", {}, [
-    element("h1", { textContent: "T3 Code failed to start" }),
+    element("h1", { textContent: `${APP_BASE_NAME} failed to start` }),
     element("p", {
       textContent: offline
         ? "This browser appears to be offline. Check the connection, then reload."
@@ -297,9 +301,11 @@ export function showBootError(error: unknown) {
   const copyCommand = element("button", {
     className: "boot-error-icon",
     type: "button",
+    // oxlint-disable-next-line t3code/no-untranslated-copy -- boot failure page renders before the i18n runtime loads
     title: "Copy command",
     innerHTML: COPY_ICON,
   });
+  // oxlint-disable-next-line t3code/no-untranslated-copy -- boot failure page renders before the i18n runtime loads
   copyCommand.setAttribute("aria-label", "Copy command");
   copyCommand.addEventListener("click", () =>
     copyText(
@@ -307,7 +313,9 @@ export function showBootError(error: unknown) {
       () => {
         copyCommand.innerHTML = CHECK_ICON;
         copyCommand.title = "Copied";
+        // oxlint-disable-next-line t3code/no-untranslated-copy -- boot failure page renders before the i18n runtime loads
         copyCommand.setAttribute("aria-label", "Copied");
+        // oxlint-disable-next-line t3code/no-untranslated-copy -- boot failure page renders before the i18n runtime loads
         announce("Copied to clipboard.");
       },
       (hint) => {
@@ -333,6 +341,7 @@ export function showBootError(error: unknown) {
       details,
       () => {
         copyDetails.textContent = "Copied";
+        // oxlint-disable-next-line t3code/no-untranslated-copy -- boot failure page renders before the i18n runtime loads
         announce("Copied to clipboard.");
       },
       (hint) => {
@@ -360,14 +369,13 @@ export function showBootError(error: unknown) {
             nightly ? `${DOWNLOAD_URL}?channel=nightly` : DOWNLOAD_URL,
             nightly
               ? "Download and reinstall the latest nightly build"
-              : "Download and reinstall T3 Code",
+              : `Download and reinstall ${APP_BASE_NAME}`,
           ),
         ]
       : []),
     element("div", {}, [
       element("p", {
-        textContent:
-          "Run this on the computer that runs T3 Code. Your agent can check the local logs and help you file a bug report.",
+        textContent: `Run this on the computer that runs ${APP_BASE_NAME}. Your agent can check the local logs and help you file a bug report.`,
       }),
       element("div", { id: "boot-error-command" }, [command, copyCommand]),
     ]),

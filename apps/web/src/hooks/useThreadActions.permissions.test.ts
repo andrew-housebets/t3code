@@ -70,6 +70,8 @@ vi.mock("../state/session", () => ({
   environmentSession: { sessionStateAtom: "session" },
   readEnvironmentScope: (environmentId: string, scope: string) =>
     state.scopes.get(environmentId)?.has(scope) === true,
+  readEnvironmentScopeDenied: (environmentId: string, scope: string) =>
+    state.scopes.get(environmentId)?.has(scope) !== true,
 }));
 vi.mock("../state/use-atom-command", () => ({
   useAtomCommand:
@@ -121,6 +123,7 @@ vi.mock("../state/threads", () => ({
       "pin",
       "unpin",
       "reorderPin",
+      "setTag",
       "snooze",
       "unsnooze",
       "stopSession",
@@ -257,6 +260,10 @@ const operations = [
   {
     name: "reorderPin",
     run: (actions: ThreadActions, ref: ScopedThreadRef) => actions.reorderPinnedThread(ref, "b"),
+  },
+  {
+    name: "setTag",
+    run: (actions: ThreadActions, ref: ScopedThreadRef) => actions.setThreadCoordinator(ref, true),
   },
 ] as const;
 

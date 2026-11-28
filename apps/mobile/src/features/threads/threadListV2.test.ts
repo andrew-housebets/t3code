@@ -45,9 +45,10 @@ import {
   resolveThreadListV2WokeAt,
   threadListV2ListItemsAreEqual,
   threadListV2RowAccessibilityLabel,
-  threadHasUnseenCompletion,
+  threadListV2ShowMoreAccessibilityLabel,
   type ThreadListV2ListItem,
 } from "./threadListV2";
+import { threadHasUnseenCompletion } from "@t3tools/client-runtime/state/thread-inbox";
 
 const environmentId = EnvironmentId.make("environment-1");
 const decodeThreadShell = Schema.decodeUnknownSync(OrchestrationV2ThreadShell);
@@ -152,6 +153,74 @@ describe("layoutThreadListV2RowMenuActions", () => {
 });
 
 describe("resolveThreadListV2Status", () => {
+  it.each(["preparing", "queued", "starting", "running", "waiting"] as const)(
+    "qualifies a cached %s runtime while reconnecting",
+    (status) => {
+      const thread = presentThreadShell(
+        environmentId,
+        makeRawThreadShell({
+          status,
+          activeRunId: RunId.make("run-disconnected"),
+          latestRunId: RunId.make("run-disconnected"),
+        }),
+      );
+      expect(resolveThreadListV2Status({ ...thread, connectionPhase: "reconnecting" })).toBe(
+        "reconnecting",
+      );
+    },
+  );
+
+  it.each(["failed", "completed", "cancelled", "interrupted"] as const)(
+    "preserves a cached %s outcome while disconnected",
+    (status) => {
+      const thread = presentThreadShell(
+        environmentId,
+        makeRawThreadShell({
+          status,
+          latestRunId: RunId.make("run-ended"),
+          latestRunCompletedAt: DateTime.makeUnsafe(NOW),
+          lastVisitedAt: DateTime.makeUnsafe("2026-06-01T23:59:00.000Z"),
+        }),
+      );
+      const disconnected = { ...thread, connectionPhase: "reconnecting" as const };
+      expect(resolveThreadListV2Status(disconnected)).toBe(
+        status === "failed" ? "failed" : "ready",
+      );
+      expect(threadHasUnseenCompletion(disconnected)).toBe(threadHasUnseenCompletion(thread));
+    },
+  );
+
+  it.each([
+    ["connecting", "connecting"],
+    ["reconnecting", "reconnecting"],
+    ["offline", "offline"],
+    ["error", "offline"],
+    ["unsupported", "offline"],
+    ["available", "offline"],
+    ["connected", "working"],
+    [undefined, "working"],
+  ] as const)(
+    "presents cached running work with connection phase %s",
+    (connectionPhase, expected) => {
+      const thread = makeThread({
+        id: ThreadId.make("disconnected"),
+        title: "Disconnected",
+        runtime: {
+          status: "running",
+          activeRunId: RunId.make("run-disconnected"),
+          providerInstanceId: ProviderInstanceId.make("codex"),
+          providerName: "Codex",
+          lastError: null,
+          updatedAt: NOW,
+        },
+        connectionPhase,
+      });
+      expect(resolveThreadListV2Status(thread)).toBe(expected);
+      expect(resolveThreadListV2Status({ ...thread, hasPendingApprovals: true })).toBe("approval");
+      expect(resolveThreadListV2Status({ ...thread, hasPendingUserInput: true })).toBe("input");
+    },
+  );
+
   it("presents decoded thread waits as Waiting while preserving requests and older servers", () => {
     const raw = makeRawThreadShell({
       status: "running",
@@ -226,6 +295,33 @@ describe("resolveThreadListV2Status", () => {
       expect(threadHasUnseenCompletion(thread)).toBe(true);
     },
   );
+
+  it.each(["interrupted", "cancelled"] as const)(
+    "does not present a %s run as an unseen completion",
+    (status) => {
+      const thread = presentThreadShell(
+        environmentId,
+        makeRawThreadShell({
+          latestRunId: RunId.make("run-stopped"),
+          status,
+          latestRunCompletedAt: DateTime.makeUnsafe(NOW),
+          lastVisitedAt: DateTime.makeUnsafe("2026-06-01T23:59:00.000Z"),
+        }),
+      );
+
+      expect(threadHasUnseenCompletion(thread)).toBe(false);
+    },
+  );
+});
+
+describe("threadListV2ShowMoreAccessibilityLabel", () => {
+  it.each([
+    [1, "Show 1 more settled thread"],
+    [2, "Show 2 more settled threads"],
+    [26, "Show 25 more settled threads"],
+  ])("announces the next page for %i hidden settled threads", (hiddenCount, expected) => {
+    expect(threadListV2ShowMoreAccessibilityLabel(hiddenCount)).toBe(expected);
+  });
 });
 
 describe("threadListV2RowAccessibilityLabel", () => {
@@ -870,6 +966,9 @@ describe("buildThreadListV2ListItems", () => {
               : "settled-shelf",
       ),
     ).toEqual(["unsent", "queued-1", "queued-2", "active", "settled-shelf", "settled"]);
+    expect(threadJumpTarget(items, "thread.jump.1")).toMatchObject({
+      pendingTask: { draftKey: "new-task:unsent" },
+    });
     expect(
       items.flatMap((item) => (item.type === "v2-pending" ? [item.showPendingDivider] : [])),
     ).toEqual([true, false, false]);
@@ -918,9 +1017,142 @@ describe("buildThreadListV2ListItems", () => {
       "v2-settled-shelf",
       "v2-thread",
     ]);
-    expect(threadJumpTarget(items, "thread.jump.1")?.id).toBe("active");
-    expect(threadJumpTarget(items, "thread.jump.2")?.id).toBe("settled");
-    expect(threadJumpTarget(items, "thread.jump.3")).toBeNull();
+    expect(threadJumpTarget(items, "thread.jump.1")).toMatchObject({
+      type: "v2-pending",
+      pendingTask: { key: "pending-task:queued" },
+    });
+    expect(threadJumpTarget(items, "thread.jump.2")).toMatchObject({
+      item: { thread: { id: "active" } },
+    });
+    expect(threadJumpTarget(items, "thread.jump.3")).toMatchObject({
+      item: { thread: { id: "settled" } },
+    });
+    expect(threadJumpTarget(items, "thread.jump.4")).toBeNull();
+  });
+});
+
+describe("buildThreadListV2ListItems project grouping", () => {
+  const projectA = ProjectId.make("project-a");
+  const projectB = ProjectId.make("project-b");
+  const projectC = ProjectId.make("project-c");
+  const at = (minute: number) => `2026-06-01T10:${String(minute).padStart(2, "0")}:00.000Z`;
+  const thread = (
+    id: string,
+    projectId: ProjectId,
+    minute: number,
+    extra: Partial<EnvironmentThreadShell> = {},
+  ) =>
+    makeThread({
+      id: ThreadId.make(id),
+      title: id,
+      projectId,
+      updatedAt: at(minute),
+      latestUserMessageAt: at(minute),
+      ...extra,
+    });
+  const settled = (id: string, projectId: ProjectId, minute: number) =>
+    thread(id, projectId, minute, { settledOverride: "settled", settledAt: at(minute) });
+  const groupOf = (shell: EnvironmentThreadShell) =>
+    shell.projectId === projectC
+      ? null
+      : {
+          key: `group:${shell.projectId}`,
+          title: shell.projectId === projectA ? "Alpha" : "Beta",
+          environmentId,
+          projectId: shell.projectId,
+        };
+  const threads = [
+    thread("pinned-b", projectB, 1, { pinnedAt: at(1), pinOrderKey: "a0" }),
+    thread("active-a-old", projectA, 2),
+    thread("active-b", projectB, 5),
+    thread("active-a-new", projectA, 3),
+    settled("settled-b", projectB, 9),
+    settled("settled-a-new", projectA, 8),
+    settled("settled-c", projectC, 7),
+    settled("settled-a-old", projectA, 6),
+  ];
+  const describeItems = (items: ReadonlyArray<ThreadListV2ListItem>) =>
+    items.map((item) =>
+      item.type === "v2-thread"
+        ? item.item.thread.id
+        : item.type === "v2-project-label"
+          ? `[${item.section} ${item.title}]`
+          : item.type,
+    );
+  const build = (settledLimit?: number, projectGroupOf: typeof groupOf | null = groupOf) => {
+    const layout = buildThreadListV2Items({
+      threads,
+      environmentId: null,
+      searchQuery: "",
+      now: NOW,
+      ...(settledLimit === undefined ? {} : { settledLimit }),
+    });
+    return buildThreadListV2ListItems({
+      items: layout.items,
+      pendingTasks: [],
+      settledCount: layout.settledCount,
+      settledShelfHeaderIndex: layout.settledShelfHeaderIndex,
+      projectGroupOf,
+    });
+  };
+
+  it.each([
+    {
+      name: "groups Active and Settled under project labels, most recent project first",
+      settledLimit: undefined,
+      expected: [
+        "pinned-b",
+        "[active Beta]",
+        "active-b",
+        "[active Alpha]",
+        "active-a-new",
+        "active-a-old",
+        "v2-settled-shelf",
+        "[settled Beta]",
+        "settled-b",
+        "[settled Alpha]",
+        "settled-a-new",
+        "settled-a-old",
+        "[settled Other]",
+        "settled-c",
+      ],
+    },
+    {
+      name: "groups only the settled rows a page shows",
+      settledLimit: 2,
+      expected: [
+        "pinned-b",
+        "[active Beta]",
+        "active-b",
+        "[active Alpha]",
+        "active-a-new",
+        "active-a-old",
+        "v2-settled-shelf",
+        "[settled Beta]",
+        "settled-b",
+        "[settled Alpha]",
+        "settled-a-new",
+      ],
+    },
+  ])("$name", ({ settledLimit, expected }) => {
+    expect(describeItems(build(settledLimit))).toEqual(expected);
+  });
+
+  it("keeps rows ungrouped and without labels when grouping is off", () => {
+    expect(describeItems(build(undefined, null)).some((label) => label.startsWith("["))).toBe(
+      false,
+    );
+  });
+
+  it("treats rebuilt labels as equal and drops the divider above a label", () => {
+    const first = build();
+    const second = build();
+    const label = (items: ReadonlyArray<ThreadListV2ListItem>) =>
+      items.find((item) => item.type === "v2-project-label")!;
+    expect(threadListV2ListItemsAreEqual(label(first), label(second))).toBe(true);
+    const beforeAlpha =
+      first[first.findIndex((item) => item.key === "v2-project-label:active:group:project-a") - 1];
+    expect(beforeAlpha?.type === "v2-thread" && beforeAlpha.showTrailingDivider).toBe(false);
   });
 });
 
@@ -1171,11 +1403,12 @@ describe("thread drag destinations", () => {
         assignments,
       });
       expect(pending.orderedIds).toEqual([ids[3], ids[0], ids[1], ids[2]]);
+      const field = section === "pinned" ? "pinOrderKey" : "activeOrderKey";
       const confirmed = ordered.map((row) => ({
         ...row,
-        [section === "pinned" ? "pinOrderKey" : "activeOrderKey"]: assignments.find(
-          (a) => a.id === `${row.environmentId}:${row.id}`,
-        )!.orderKey,
+        [field]:
+          assignments.find((a) => a.id === `${row.environmentId}:${row.id}`)?.orderKey ??
+          row[field],
       }));
       expect(
         getThreadListV2OrderedSection({ threads: confirmed, section, now: NOW }).map(
@@ -1188,7 +1421,7 @@ describe("thread drag destinations", () => {
     },
   );
 
-  it("refuses a drop that would need to rewrite an old server's keyless row", () => {
+  it("moves past an old server's keyless row by writing only the moved row", () => {
     const old = EnvironmentId.make("old-server");
     const ordered = [environmentId, old, environmentId].map((env, index) =>
       makeThread({
@@ -1203,11 +1436,11 @@ describe("thread drag destinations", () => {
         section: "active",
         reorderableEnvironmentIds: new Set([environmentId]),
       })(`${environmentId}:2`, { targetId: `${environmentId}:0`, placement: "before" }),
-    ).toBeNull();
+    ).toEqual([{ id: `${environmentId}:2`, orderKey: expect.any(String) }]);
   });
 });
 
-it("allows a long drop past an old server even when both adjacent moves fail", () => {
+it("moves past an old server one step or in a long drop", () => {
   const old = EnvironmentId.make("old-server");
   const ordered = [
     makeThread({ id: ThreadId.make("a"), title: "a" }),
@@ -1222,7 +1455,7 @@ it("allows a long drop past an old server even when both adjacent moves fail", (
   });
   const movedId = `${environmentId}:a`;
   expect(planner(movedId, "up")).toBeNull();
-  expect(planner(movedId, "down")).toBeNull();
+  expect(planner(movedId, "down")?.map(({ id }) => id)).toEqual([movedId]);
   const assignments = planner(movedId, { targetId: `${environmentId}:d`, placement: "after" });
   expect(assignments).toHaveLength(1);
   expect(assignments![0]!.id).toBe(movedId);
@@ -1739,6 +1972,20 @@ describe("Working section beta", () => {
     const off = build({ workingShelfEnabled: false });
     expect(ids(off)).toContain("working");
     expect(off.workingCount).toBe(0);
+  });
+
+  it("preserves pins and Working membership across connection loss and recovery", () => {
+    const before = build({ workingShelfExpanded: true });
+    for (const connectionPhase of ["reconnecting", "offline", "connected"] as const) {
+      const layout = build({
+        workingShelfExpanded: true,
+        threads: threads.map((thread) => ({ ...thread, connectionPhase })),
+      });
+      expect(ids(layout)).toEqual(ids(before));
+      expect(layout.workingCount).toBe(before.workingCount);
+      expect(layout.items[0]?.thread.id).toBe("pinned-working");
+      expect(layout.items[0]?.thread.runtime?.status).toBe("running");
+    }
   });
 
   it("keeps an inactive row in Working during the shared grace and returns it on expiry", () => {

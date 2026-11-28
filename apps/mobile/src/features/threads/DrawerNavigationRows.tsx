@@ -1,0 +1,251 @@
+import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
+import { pinnedProjects, type PinnedProject } from "@t3tools/client-runtime/state/pinned-projects";
+import {
+  isAtomCommandInterrupted,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
+import { AuthOrchestrationOperateScope } from "@t3tools/contracts";
+import { useNavigation } from "@react-navigation/native";
+import { useGT } from "gt-react-native";
+import { useMemo, type ReactNode } from "react";
+import { Pressable, View } from "react-native";
+
+import { ProjectFavicon } from "../../components/ProjectFavicon";
+import { SymbolView, type AppSymbolName } from "../../components/ui/AppSymbol";
+import { AppText as Text } from "../../components/ui/AppText";
+import * as Dialog from "../../components/ui/Dialog";
+import { Menu } from "../../components/ui/Menu";
+import { cn } from "../../lib/cn";
+import { scopedThreadKey } from "../../lib/scopedEntities";
+import { useClaudeLook } from "../../lib/useClaudeLook";
+import { projectEnvironment } from "../../state/projects";
+import { readEnvironmentScope } from "../../state/session";
+import { environmentThreadShells } from "../../state/threads";
+import { useAtomCommand } from "../../state/use-atom-command";
+import { useAtomValueWhileVisible } from "../home/home-route-visibility";
+import type { HomeProjectScope } from "../home/homeThreadList";
+import { startProjectCoordinator } from "../overview/coordinator";
+import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
+import { openSettings } from "../settings/settings-navigation";
+
+type DrawerPinnedProject = PinnedProject<HomeProjectScope>;
+
+function DrawerRow(props: {
+  readonly label: string;
+  readonly icon: ReactNode;
+  readonly onPress: () => void;
+  readonly attention?: boolean;
+  readonly accessibilityHint?: string;
+}) {
+  const claudeLook = useClaudeLook();
+  const gt = useGT();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={
+        props.attention ? gt("{label}, needs you", { label: props.label }) : props.label
+      }
+      accessibilityHint={props.accessibilityHint}
+      onPress={props.onPress}
+      className={cn(
+        "flex-row items-center gap-3.5 px-3 active:bg-thread-hover",
+        claudeLook ? "min-h-11 rounded-lg" : "min-h-12 rounded-xl",
+      )}
+    >
+      <View className="w-6 items-center">{props.icon}</View>
+      <Text className="min-w-0 flex-1 text-base text-drawer-foreground" numberOfLines={1}>
+        {props.label}
+      </Text>
+      {props.attention ? <View className="size-2 rounded-full bg-warning-foreground" /> : null}
+    </Pressable>
+  );
+}
+
+/** Writes to every checkout of the project, stopping at the first failure, as Settings does. */
+function useUnpinProject() {
+  const updateProject = useAtomCommand(projectEnvironment.update, {
+    label: "project update",
+    reportFailure: false,
+  });
+  const gt = useGT();
+  return async (scope: HomeProjectScope) => {
+    for (const project of scope.projects) {
+      if (project.pinnedAt === null) continue;
+      if (!readEnvironmentScope(project.environmentId, AuthOrchestrationOperateScope)) {
+        Dialog.alert(gt("Failed to unpin project"), gt("This connection cannot change it."));
+        return;
+      }
+      const result = await updateProject({
+        environmentId: project.environmentId,
+        input: { projectId: project.id, pinned: false },
+      });
+      if (result._tag === "Failure") {
+        if (!isAtomCommandInterrupted(result)) {
+          const error = squashAtomCommandFailure(result);
+          Dialog.alert(
+            gt("Failed to unpin project"),
+            error instanceof Error ? error.message : gt("An error occurred."),
+          );
+        }
+        return;
+      }
+    }
+  };
+}
+
+const glyph = (name: AppSymbolName) => (
+  <SymbolView name={name} size={20} tintColorClassName="accent-drawer-foreground" />
+);
+
+export function DrawerSectionLabel({ label }: { readonly label: string }) {
+  return (
+    <Text
+      className="px-3 pb-1 pt-4 text-sm text-drawer-foreground-muted"
+      accessibilityRole="header"
+    >
+      {label}
+    </Text>
+  );
+}
+
+/**
+ * The thread list's top rows and pinned projects; hidden while searching. The pinned dot reads
+ * every live shell, delegated children included, which the list's own rows leave out.
+ */
+export function DrawerNavigationHeader(props: {
+  readonly threads: ReadonlyArray<EnvironmentThreadShell>;
+  readonly visible: boolean;
+  readonly projectScopes: ReadonlyArray<HomeProjectScope>;
+  readonly selectedProjectScope: HomeProjectScope | null;
+  readonly selectedThreadKey: string | null;
+  readonly hasPinnedThreads: boolean;
+  readonly searching: boolean;
+  readonly onSelectProjectKey: (key: string) => void;
+}) {
+  const navigation = useNavigation();
+  const selectDetail = useSelectWorkspaceDetail();
+  const { projectScopes, threads } = props;
+  const liveShells = useAtomValueWhileVisible(
+    environmentThreadShells.quietThreadShellsAtom,
+    props.visible,
+  );
+  const pinned = useMemo(
+    () => pinnedProjects(projectScopes, (scope) => scope.projects, liveShells),
+    [projectScopes, liveShells],
+  );
+  const unpinProject = useUnpinProject();
+  if (props.searching) return null;
+  const selectedThread =
+    props.selectedThreadKey === null
+      ? undefined
+      : threads.find(
+          (thread) => scopedThreadKey(thread.environmentId, thread.id) === props.selectedThreadKey,
+        );
+  const artifactsProject =
+    (props.selectedProjectScope?.projectRefs.length === 1
+      ? props.selectedProjectScope.projectRefs[0]
+      : undefined) ??
+    (selectedThread === undefined
+      ? undefined
+      : { environmentId: selectedThread.environmentId, projectId: selectedThread.projectId });
+  return (
+    <DrawerNavigationRows
+      onOpenProjects={() => openSettings(navigation, "SettingsProjectOverview")}
+      onOpenArtifacts={
+        artifactsProject === undefined
+          ? null
+          : () =>
+              navigation.navigate("ThreadOverview", {
+                environmentId: String(artifactsProject.environmentId),
+                projectId: String(artifactsProject.projectId),
+                tab: "library",
+              })
+      }
+      onOpenScheduled={() => openSettings(navigation, "SettingsScheduledTasks")}
+      pinnedProjects={pinned}
+      hasPinnedThreads={props.hasPinnedThreads}
+      onSelectPinnedProject={({ group, coordinator }) => {
+        void (async () => {
+          const threadRef = coordinator ?? (await startProjectCoordinator(group.representative));
+          if (threadRef === null) {
+            props.onSelectProjectKey(group.key);
+            return;
+          }
+          selectDetail({
+            name: "Thread",
+            params: {
+              environmentId: String(threadRef.environmentId),
+              threadId: threadRef.threadId,
+            },
+          });
+        })();
+      }}
+      onUnpinProject={(entry) => void unpinProject(entry.group)}
+    />
+  );
+}
+
+function DrawerNavigationRows(props: {
+  readonly onOpenProjects: () => void;
+  readonly onOpenArtifacts: (() => void) | null;
+  readonly onOpenScheduled: () => void;
+  readonly pinnedProjects: ReadonlyArray<DrawerPinnedProject>;
+  readonly hasPinnedThreads: boolean;
+  readonly onSelectPinnedProject: (entry: DrawerPinnedProject) => void;
+  readonly onUnpinProject: (entry: DrawerPinnedProject) => void;
+}) {
+  const gt = useGT();
+  return (
+    <View className="pb-1">
+      <DrawerRow label={gt("Projects")} icon={glyph("folder")} onPress={props.onOpenProjects} />
+      {props.onOpenArtifacts === null ? null : (
+        <DrawerRow
+          label={gt("Artifacts", { $context: "files and pages a project's threads produced" })}
+          icon={glyph("square.on.square")}
+          onPress={props.onOpenArtifacts}
+        />
+      )}
+      <DrawerRow
+        label={gt("Scheduled", { $context: "navigation row, scheduled tasks" })}
+        icon={glyph("clock")}
+        onPress={props.onOpenScheduled}
+      />
+      {props.pinnedProjects.length === 0 && !props.hasPinnedThreads ? null : (
+        <>
+          <DrawerSectionLabel label={gt("Pinned", { $context: "thread list section" })} />
+          {props.pinnedProjects.map((entry) => {
+            const project = entry.group.representative;
+            return (
+              <Menu
+                key={entry.group.key}
+                shouldOpenOnLongPress
+                title={entry.group.title}
+                actions={[{ id: "unpin", title: gt("Unpin project"), image: "pin.slash" }]}
+                onPressAction={({ nativeEvent }) => {
+                  if (nativeEvent.event === "unpin") props.onUnpinProject(entry);
+                }}
+              >
+                <DrawerRow
+                  label={entry.group.title}
+                  attention={entry.needsYou}
+                  accessibilityHint={gt("Long press to unpin.")}
+                  icon={
+                    <ProjectFavicon
+                      environmentId={project.environmentId}
+                      faviconPath={project.faviconPath}
+                      projectIcon={project.projectIcon}
+                      size={20}
+                      projectTitle={entry.group.title}
+                      workspaceRoot={project.workspaceRoot}
+                    />
+                  }
+                  onPress={() => props.onSelectPinnedProject(entry)}
+                />
+              </Menu>
+            );
+          })}
+        </>
+      )}
+    </View>
+  );
+}

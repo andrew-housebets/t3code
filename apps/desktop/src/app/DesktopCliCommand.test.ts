@@ -1,5 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
+import { CliCommandNames } from "@t3tools/shared/cliCommand";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -15,7 +16,13 @@ import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 
 const environmentFor = (
   path: Path.Path,
-  input: { home: string; baseDir: string; platform?: NodeJS.Platform; isPackaged?: boolean },
+  input: {
+    home: string;
+    baseDir: string;
+    platform?: NodeJS.Platform;
+    isPackaged?: boolean;
+    fork?: boolean;
+  },
 ) =>
   DesktopEnvironment.DesktopEnvironment.of({
     path,
@@ -27,6 +34,7 @@ const environmentFor = (
     desktopSettingsPath: path.join(input.baseDir, "userdata", "desktop-settings.json"),
     serverRoot: "/opt/T3 Code/resources/app.asar",
     appImagePath: Option.none(),
+    forkIdentity: input.fork ? Option.some({ appName: "Fork", dataName: "fork" }) : Option.none(),
   } as unknown as DesktopEnvironment.DesktopEnvironment["Service"]);
 
 const commandIn = (
@@ -35,7 +43,9 @@ const commandIn = (
     baseDir?: string;
     platform?: NodeJS.Platform;
     isPackaged?: boolean;
+    fork?: boolean;
     env?: NodeJS.ProcessEnv;
+    names?: (typeof CliCommandNames)["Service"];
   },
   spawner?: ChildProcessSpawner.ChildProcessSpawner["Service"],
 ) =>
@@ -51,9 +61,12 @@ const commandIn = (
       ),
       Effect.provideService(HostProcess.Environment, input.env ?? { PATH: "", SHELL: "/bin/zsh" }),
     );
-    return yield* spawner
-      ? make.pipe(Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner))
+    const named = input.names
+      ? make.pipe(Effect.provideService(CliCommandNames, input.names))
       : make;
+    return yield* spawner
+      ? named.pipe(Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner))
+      : named;
   });
 
 /** `inherited` stands in for the app's own environment, which `extendEnv` passes on. */
@@ -139,6 +152,17 @@ it.layer(NodeServices.layer)("DesktopCliCommand", (it) => {
       yield* command.installOnFirstLaunch;
       expect(yield* fs.exists(link)).toBe(false);
 
+      // A fork build never claims the shared t3 name on first launch.
+      const forkHome = yield* fs.makeTempDirectoryScoped();
+      const fork = yield* commandIn({
+        home: forkHome,
+        baseDir: path.join(forkHome, ".fork"),
+        fork: true,
+        env,
+      });
+      yield* fork.installOnFirstLaunch;
+      expect(yield* fs.exists(path.join(forkHome, ".local", "bin", "t3"))).toBe(false);
+
       // Also when first launch was put off (no shell PATH yet) and the user removed it meanwhile.
       const laterHome = yield* fs.makeTempDirectoryScoped();
       const later = yield* commandIn({ home: laterHome, env });
@@ -160,6 +184,50 @@ it.layer(NodeServices.layer)("DesktopCliCommand", (it) => {
         expect(yield* fs.exists(upgradedLink)).toBe(false);
         expect((yield* upgraded.install).installedPath).toBe(upgradedLink);
       }
+    }),
+  );
+
+  it.effect("links a renamed command and keeps the old name as an alias it owns", () =>
+    Effect.gen(function* () {
+      const env: NodeJS.ProcessEnv = { PATH: "", SHELL: "/bin/zsh" };
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const names = { command: "b4", aliases: ["t3"] };
+      const home = yield* fs.makeTempDirectoryScoped();
+      const bin = path.join(home, ".local", "bin");
+      const launcher = path.join(home, ".t3", "bin", "t3");
+      const renamed = yield* commandIn({ home, env, names, fork: true });
+
+      expect((yield* renamed.install).installedPath).toBe(path.join(bin, "b4"));
+      expect(yield* fs.readLink(path.join(bin, "b4"))).toBe(launcher);
+      expect(yield* fs.readLink(path.join(bin, "t3"))).toBe(launcher);
+      yield* renamed.uninstall;
+      expect(yield* fs.exists(path.join(bin, "b4"))).toBe(false);
+      expect(yield* fs.exists(path.join(bin, "t3"))).toBe(false);
+
+      // Someone else's t3 is neither replaced by the alias nor removed with it.
+      const foreignHome = yield* fs.makeTempDirectoryScoped();
+      const foreign = path.join(foreignHome, ".local", "bin", "t3");
+      yield* fs.makeDirectory(path.dirname(foreign), { recursive: true });
+      yield* fs.writeFileString(foreign, "#!/bin/sh\n");
+      const beside = yield* commandIn({ home: foreignHome, env, names, fork: true });
+      expect((yield* beside.install).installedPath).toBe(
+        path.join(foreignHome, ".local", "bin", "b4"),
+      );
+      yield* beside.uninstall;
+      expect(yield* fs.readFileString(foreign)).toBe("#!/bin/sh\n");
+
+      // A link made before the rename keeps working and gets the new name beside it at launch.
+      const upgradedHome = yield* fs.makeTempDirectoryScoped();
+      const upgradedBin = path.join(upgradedHome, ".local", "bin");
+      yield* (yield* commandIn({ home: upgradedHome, env, fork: true })).install;
+      const upgraded = yield* commandIn({ home: upgradedHome, env, names, fork: true });
+      expect((yield* upgraded.state).installedPath).toBe(null);
+      yield* upgraded.installOnFirstLaunch;
+      expect((yield* upgraded.state).installedPath).toBe(path.join(upgradedBin, "b4"));
+      expect(yield* fs.readLink(path.join(upgradedBin, "t3"))).toBe(
+        path.join(upgradedHome, ".t3", "bin", "t3"),
+      );
     }),
   );
 

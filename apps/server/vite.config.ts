@@ -4,6 +4,7 @@ import * as NodePath from "node:path";
 import { defineConfig, mergeConfig } from "vite-plus";
 
 import baseConfig from "../../vite.config.ts";
+import { connectBrandPlugin } from "../../scripts/lib/connect-brand-plugin.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 import { resolveTaggedSourceVersion } from "../../scripts/lib/tagged-source-version.ts";
 import rootPackageJson from "../../package.json" with { type: "json" };
@@ -89,10 +90,16 @@ export default mergeConfig(
           dependsOn: ["@t3tools/web#build"],
           cache: false,
         },
+        // A local tsbuildinfo is leftover build state, not a typecheck input.
+        typecheck: {
+          command: "effect-tsgo tsrs --noEmit",
+          cache: { input: [{ auto: true }, "!*.tsbuildinfo"] },
+        },
       },
     },
     pack: {
       plugins: [
+        connectBrandPlugin(),
         {
           // Every server module reads its version from this manifest import.
           name: "t3code:build-version",
@@ -105,7 +112,7 @@ export default mergeConfig(
           },
         },
       ],
-      // SEA embeds one entry; expose the history worker as a hidden subcommand.
+      // SEA embeds one entry; expose the workers as hidden subcommands.
       entry: packBootstrap
         ? ["src/bin.ts"]
         : packExecutable
